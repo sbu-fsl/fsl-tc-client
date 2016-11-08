@@ -6,7 +6,7 @@ add_definitions(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(tc_SRC
-  tc_impl.c
+  tc_impl.cpp
   tc_lib.cpp
 )
 
@@ -30,7 +30,12 @@ add_library(gmock "${GMOCK}/src/gmock-all.cc")
 add_library(gmock_main "${GMOCK}/src/gmock_main.cc")
 
 add_library(tc_impl STATIC ${tc_SRC})
-#target_link_libraries(tc_impl
+target_link_libraries(tc_impl
+  PocoUtil
+  PocoNet
+  PocoXML
+  PocoFoundation
+  PocoJSON)
   #support
   #log
   #config_parsing

@@ -60,6 +60,7 @@ void tc_iterate_counters(bool (*tfc_reader)(struct tc_func_counter *tfc,
 	struct timespec nm##_stop_tm;                                          \
 	static struct tc_func_counter nm##_tc_counter = { .name = #nm,         \
 							  .calls = 0,          \
+							  .failures = 0,       \
 							  .micro_ops = 0,      \
 							  .time_ns = 0,        \
 							  .next = NULL,        \

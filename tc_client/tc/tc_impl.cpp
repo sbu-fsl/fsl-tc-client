@@ -32,6 +32,9 @@
 #include "sys/stat.h"
 #include "tc_helper.h"
 
+#include "../tc_cache/TC_MetaDataCache.h"
+using namespace std;
+
 static tc_res TC_OKAY = { .index = -1, .err_no = 0, };
 
 static bool TC_IMPL_IS_NFS4 = false;
@@ -73,6 +76,17 @@ static void *output_tc_counters(void *arg)
 	return NULL;
 }
 
+bool on_remove_metadata(dirEntry *de)
+{
+	if (de) {
+		cout << "on_remove_metadata: " << de->path << "\n";
+		delete de;
+	} else {
+		cout << "on_remove_metadata: dirEntry is NULL\n";
+	}
+	return true;
+}
+
 /* Not thread-safe */
 void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 {
@@ -99,6 +113,8 @@ void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 		tc_deinit(context);
 		return NULL;
 	}
+
+	TC_MetaDataCache<string, dirEntry *> mdCache(2, 60, on_remove_metadata);
 
 	return context;
 }
@@ -141,8 +157,8 @@ tc_file *tc_openv(const char **paths, int count, int *flags, mode_t *modes)
 tc_file *tc_openv_simple(const char **paths, int count, int flags, mode_t mode)
 {
 	int i;
-	int *flag_array = alloca(count * sizeof(int));
-	mode_t *mode_array = alloca(count * sizeof(mode_t));
+	int *flag_array = (int*) alloca(count * sizeof(int));
+	mode_t *mode_array = (mode_t*) alloca(count * sizeof(mode_t));
 	for (i = 0; i < count; ++i) {
 		flag_array[i] = flags;
 		mode_array[i] = mode;
@@ -248,7 +264,7 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 	struct tc_attrs attrs[count];
 	int attrs_original_indices[count];
 	int attrs_count = 0;
-	const char **paths;
+	const char *paths[count];
 	int *paths_original_indices;
 	int path_count = 0;
 	char **bufs;
@@ -280,18 +296,18 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 		return false;
 	}
 
-	paths = alloca(sizeof(char *) * attrs_count);
+	//paths = alloca(sizeof(char *) * attrs_count);
 
-	bufs = alloca(sizeof(char *) * attrs_count);
-	bufsizes = alloca(sizeof(size_t) * attrs_count);
+	bufs = (char**) alloca(sizeof(char *) * attrs_count);
+	bufsizes = (size_t*) alloca(sizeof(size_t) * attrs_count);
 
-	paths_original_indices = alloca(sizeof(int) * attrs_count);
+	paths_original_indices = (int*) alloca(sizeof(int) * attrs_count);
 
 	for (i = 0; i < attrs_count; i++) {
 		if (S_ISLNK(attrs[i].mode))	{
 			paths[path_count] = attrs[i].file.path;
 
-			bufs[path_count] = malloc(sizeof(char) * PATH_MAX);
+			bufs[path_count] = (char*) malloc(sizeof(char) * PATH_MAX);
 			bufsizes[path_count] = PATH_MAX;
 
 			paths_original_indices[path_count] = i;
@@ -318,7 +334,7 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 		struct syminfo *sym =
 		    &syms[attrs_original_indices[paths_original_indices[i]]];
 		if (sym->src_path[0] == '/' && bufs[i][0] != '/') {
-			char *path = malloc(sizeof(char) * PATH_MAX);
+			char *path = (char*) malloc(sizeof(char) * PATH_MAX);
 			slice_t dirname = tc_path_dirname(strdup(sym->src_path));
 			((char*) dirname.data)[dirname.size] = '\0';
 			tc_path_join(dirname.data, bufs[i], path, PATH_MAX);
@@ -381,7 +397,7 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 
 			paths[link_count] = file.path;
 
-			bufs[link_count] = alloca(sizeof(char) * PATH_MAX);
+			bufs[link_count] = (char*) alloca(sizeof(char) * PATH_MAX);
 			bufsizes[link_count] = PATH_MAX;
 			original_indices[link_count] = i;
 
@@ -468,8 +484,8 @@ static int tc_stat_impl(tc_file tcf, struct stat *buf, bool readlink)
 
 	assert(tcf.type == TC_FILE_PATH);
 
-	linkbuf = alloca(PATH_MAX);
-	link_target = alloca(PATH_MAX);
+	linkbuf = (char*) alloca(PATH_MAX);
+	link_target = (char*) alloca(PATH_MAX);
 
 	while (S_ISLNK(tca.mode)) {
 		path = tca.file.path;
@@ -606,7 +622,7 @@ tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
 		assert(max_count > 0);
 		atarray.capacity = max_count;
 	}
-	atarray.attrs = calloc(atarray.capacity, sizeof(struct tc_attrs));
+	atarray.attrs = (tc_attrs*) calloc(atarray.capacity, sizeof(struct tc_attrs));
 	if (!atarray.attrs) {
 		return tc_failure(0, ENOMEM);
 	}
@@ -693,7 +709,7 @@ tc_res tc_unlinkv(const char **paths, int count)
 	int i = 0, r = 0;
 	tc_file *files;
 
-	files = (tc_file *)alloca(count * sizeof(tc_file));
+	files = (tc_file *) alloca(count * sizeof(tc_file));
 	for (i = 0; i < count; ++i) {
 		files[i] = tc_file_from_path(paths[i]);
 	}
@@ -759,7 +775,7 @@ static tc_res nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
 	int absent;
 	int i;
 
-	dirs = alloca(n * sizeof(*dirs));
+	dirs = (tc_attrs*) alloca(n * sizeof(*dirs));
 	dirs[0].file = tc_file_from_path(new_auto_str(comps[0]));
 	dirs[0].masks = TC_ATTRS_MASK_NONE;
 	dirs[0].masks.has_mode = true;
@@ -901,13 +917,13 @@ tc_res tc_ldupv(struct tc_extent_pair *pairs, int count, bool is_transaction)
 	struct tc_iovec *iovs;
 	int i;
 
-	iovs = malloc(count * sizeof(*iovs));
+	iovs = (tc_iovec*) malloc(count * sizeof(*iovs));
 	assert(iovs);
 	for (i = 0; i < count; ++i) {
 		iovs[i].file = tc_file_from_path(pairs[i].src_path);
 		iovs[i].offset = pairs[i].src_offset;
 		iovs[i].length = pairs[i].length;
-		iovs[i].data = malloc(pairs[i].length);
+		iovs[i].data = (char*) malloc(pairs[i].length);
 		iovs[i].is_creation = false;
 		iovs[i].is_failure = false;
 		iovs[i].is_eof = false;

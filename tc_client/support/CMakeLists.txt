@@ -2,6 +2,8 @@ include_directories(
   ${LIBTIRPC_INCLUDE_DIR}
 )
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
 if(USE_DBUS)
   include_directories(
     ${DBUS_INCLUDE_DIRS}
@@ -13,7 +15,7 @@ endif(USE_DBUS)
 
 set(string_utils_STAT_SRCS
    strlcpy.c
-   strnlen.c
+   strnlen.cpp
 )
 
 add_library(string_utils STATIC ${string_utils_STAT_SRCS})

@@ -561,17 +561,17 @@ extern const struct tc_attrs_masks TC_ATTRS_MASK_NONE;
 #define TC_MASK_INIT_ALL                                                       \
 	{                                                                      \
 		.has_mode = true, .has_size = true, .has_nlink = true,         \
-		.has_fileid = true, .has_uid = true, .has_gid = true,          \
-		.has_rdev = true, .has_atime = true, .has_mtime = true,        \
-		.has_ctime = true, .has_blocks = true                          \
+		.has_fileid = true, .has_blocks = true,                        \
+		.has_uid = true, .has_gid = true, .has_rdev = true,            \
+		.has_atime = true, .has_mtime = true, .has_ctime = true        \
 	}
 
 #define TC_MASK_INIT_NONE                                                      \
 	{                                                                      \
 		.has_mode = false, .has_size = false, .has_nlink = false,      \
-		.has_fileid = false, .has_uid = false, .has_gid = false,       \
-		.has_rdev = false, .has_atime = false, .has_mtime = false,     \
-		.has_ctime = false, .has_blocks = false                        \
+		.has_fileid = false, .has_blocks = false,                      \
+                .has_uid = false, .has_gid = false, .has_rdev = false,         \
+                .has_atime = false, .has_mtime = false, .has_ctime = false     \
 	}
 
 /**
