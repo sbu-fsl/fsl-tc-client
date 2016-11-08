@@ -42,6 +42,7 @@ static bool TC_IMPL_IS_NFS4 = false;
 static pthread_t tc_counter_thread;
 static const char *tc_counter_path = "/tmp/tc-counters.txt";
 static int tc_counter_running = 1;
+TC_MetaDataCache<string, dirEntry *> *mdCache = NULL;
 
 const struct tc_attrs_masks TC_ATTRS_MASK_ALL = TC_MASK_INIT_ALL;
 const struct tc_attrs_masks TC_ATTRS_MASK_NONE = TC_MASK_INIT_NONE;
@@ -80,6 +81,7 @@ bool on_remove_metadata(dirEntry *de)
 {
 	if (de) {
 		cout << "on_remove_metadata: " << de->path << "\n";
+		delete de->attrs;
 		delete de;
 	} else {
 		cout << "on_remove_metadata: dirEntry is NULL\n";
@@ -114,7 +116,7 @@ void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 		return NULL;
 	}
 
-	TC_MetaDataCache<string, dirEntry *> mdCache(2, 60, on_remove_metadata);
+	mdCache = new TC_MetaDataCache<string, dirEntry *> (2, 60, on_remove_metadata);
 
 	return context;
 }
@@ -367,6 +369,7 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	mode_t old_modes[count];
 	int mode_original_indices[count];
 	int original_indices[count];
+	dirEntry *de1 = NULL;
 
 	char *bufs[count];
 	size_t bufsizes[count];
@@ -386,6 +389,14 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 			mode_original_indices[old_mode_count] = i;
 			old_mode_count++;
 		}
+	}
+
+	/* Check if entry exists in cache */
+	Poco::SharedPtr<dirEntry*> ptrElem = mdCache->get(attrs[0].file.path);
+	if (ptrElem) {
+		attrs[0].size = (*ptrElem)->attrs->st_size;
+		res.err_no = 0;
+		return res;
 	}
 
 	res = tc_lgetattrsv(attrs, count, false);
@@ -413,6 +424,15 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	// if nothing was a symlink, then our prior call to tc_lgetattrsv()
 	// sufficed, so we're done
 	if (!tc_okay(res) || link_count == 0) {
+
+		if (tc_okay(res)) {
+			de1 = new dirEntry();
+			de1->path = attrs[0].file.path;
+			de1->attrs = new struct stat();
+			de1->attrs->st_size = attrs[0].size;
+			mdCache->add(de1->path, de1);
+		}
+
 		return res;
 	}
 
