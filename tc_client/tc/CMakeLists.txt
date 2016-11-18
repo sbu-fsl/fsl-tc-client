@@ -6,6 +6,7 @@ add_definitions(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(tc_SRC
+  tc_cache.cpp
   tc_impl.cpp
   tc_lib.cpp
 )

@@ -31,9 +31,7 @@
 #include "common_types.h"
 #include "sys/stat.h"
 #include "tc_helper.h"
-
-#include "../tc_cache/TC_MetaDataCache.h"
-using namespace std;
+#include "tc_nfs.h"
 
 static tc_res TC_OKAY = { .index = -1, .err_no = 0, };
 
@@ -42,7 +40,6 @@ static bool TC_IMPL_IS_NFS4 = false;
 static pthread_t tc_counter_thread;
 static const char *tc_counter_path = "/tmp/tc-counters.txt";
 static int tc_counter_running = 1;
-TC_MetaDataCache<string, dirEntry *> *mdCache = NULL;
 
 const struct tc_attrs_masks TC_ATTRS_MASK_ALL = TC_MASK_INIT_ALL;
 const struct tc_attrs_masks TC_ATTRS_MASK_NONE = TC_MASK_INIT_NONE;
@@ -77,18 +74,6 @@ static void *output_tc_counters(void *arg)
 	return NULL;
 }
 
-bool on_remove_metadata(dirEntry *de)
-{
-	if (de) {
-		cout << "on_remove_metadata: " << de->path << "\n";
-		delete de->attrs;
-		delete de;
-	} else {
-		cout << "on_remove_metadata: dirEntry is NULL\n";
-	}
-	return true;
-}
-
 /* Not thread-safe */
 void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 {
@@ -116,7 +101,7 @@ void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 		return NULL;
 	}
 
-	mdCache = new TC_MetaDataCache<string, dirEntry *> (2, 60, on_remove_metadata);
+	init_page_cache();
 
 	return context;
 }
@@ -147,7 +132,7 @@ tc_file *tc_openv(const char **paths, int count, int *flags, mode_t *modes)
 
 	TC_START_COUNTER(open);
 	if (TC_IMPL_IS_NFS4) {
-		tcfs = nfs4_openv(paths, count, flags, modes);
+		tcfs = nfs_openv(paths, count, flags, modes);
 	} else {
 		tcfs = posix_openv(paths, count, flags, modes);
 	}
@@ -175,7 +160,7 @@ tc_res tc_closev(tc_file *tcfs, int count)
 
 	TC_START_COUNTER(close);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_closev(tcfs, count);
+		tcres = nfs_closev(tcfs, count);
 	} else {
 		tcres = posix_closev(tcfs, count);
 	}
@@ -191,7 +176,7 @@ off_t tc_fseek(tc_file *tcf, off_t offset, int whence)
 
 	TC_START_COUNTER(seek);
 	if (TC_IMPL_IS_NFS4) {
-		res = nfs4_fseek(tcf, offset, whence);
+		res = nfs_fseek(tcf, offset, whence);
 	} else {
 		res = posix_fseek(tcf, offset, whence);
 	}
@@ -228,7 +213,7 @@ tc_res tc_readv(struct tc_iovec *reads, int count, bool is_transaction)
 	 * back-end file system.
 	 */
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_readv(reads, count, is_transaction);
+		tcres = nfs_readv(reads, count, is_transaction);
 	} else {
 		tcres = posix_readv(reads, count, is_transaction);
 	}
@@ -244,7 +229,7 @@ tc_res tc_writev(struct tc_iovec *writes, int count, bool is_transaction)
 
 	TC_START_COUNTER(write);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_writev(writes, count, is_transaction);
+		tcres = nfs_writev(writes, count, is_transaction);
 	} else {
 		tcres = posix_writev(writes, count, is_transaction);
 	}
@@ -369,7 +354,6 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	mode_t old_modes[count];
 	int mode_original_indices[count];
 	int original_indices[count];
-	dirEntry *de1 = NULL;
 
 	char *bufs[count];
 	size_t bufsizes[count];
@@ -389,14 +373,6 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 			mode_original_indices[old_mode_count] = i;
 			old_mode_count++;
 		}
-	}
-
-	/* Check if entry exists in cache */
-	Poco::SharedPtr<dirEntry*> ptrElem = mdCache->get(attrs[0].file.path);
-	if (ptrElem) {
-		attrs[0].size = (*ptrElem)->attrs->st_size;
-		res.err_no = 0;
-		return res;
 	}
 
 	res = tc_lgetattrsv(attrs, count, false);
@@ -424,15 +400,6 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	// if nothing was a symlink, then our prior call to tc_lgetattrsv()
 	// sufficed, so we're done
 	if (!tc_okay(res) || link_count == 0) {
-
-		if (tc_okay(res)) {
-			de1 = new dirEntry();
-			de1->path = attrs[0].file.path;
-			de1->attrs = new struct stat();
-			de1->attrs->st_size = attrs[0].size;
-			mdCache->add(de1->path, de1);
-		}
-
 		return res;
 	}
 
@@ -471,7 +438,7 @@ tc_res tc_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 
 	TC_START_COUNTER(lgetattrs);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_lgetattrsv(attrs, count, is_transaction);
+		tcres = nfs_lgetattrsv(attrs, count, is_transaction);
 	} else {
 		tcres = posix_lgetattrsv(attrs, count, is_transaction);
 	}
@@ -592,7 +559,7 @@ tc_res tc_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 
 	TC_START_COUNTER(lsetattrs);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_lsetattrsv(attrs, count, is_transaction);
+		tcres = nfs_lsetattrsv(attrs, count, is_transaction);
 	} else {
 		tcres = posix_lsetattrsv(attrs, count, is_transaction);
 	}
@@ -675,7 +642,7 @@ tc_res tc_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 
 	TC_START_COUNTER(listdir);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_listdirv(dirs, count, masks, max_entries, recursive,
+		tcres = nfs_listdirv(dirs, count, masks, max_entries, recursive,
 				     cb, cbarg, is_transaction);
 	} else {
 		tcres = posix_listdirv(dirs, count, masks, max_entries,
@@ -693,7 +660,7 @@ tc_res tc_renamev(tc_file_pair *pairs, int count, bool is_transaction)
 
 	TC_START_COUNTER(rename);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_renamev(pairs, count, is_transaction);
+		tcres = nfs_renamev(pairs, count, is_transaction);
 	} else {
 		tcres = posix_renamev(pairs, count, is_transaction);
 	}
@@ -709,7 +676,7 @@ tc_res tc_removev(tc_file *files, int count, bool is_transaction)
 
 	TC_START_COUNTER(remove);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_removev(files, count, is_transaction);
+		tcres = nfs_removev(files, count, is_transaction);
 	} else {
 		tcres = posix_removev(files, count, is_transaction);
 	}
@@ -748,7 +715,7 @@ tc_res tc_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction)
 		assert(dirs[i].masks.has_mode);
 	}
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_mkdirv(dirs, count, is_transaction);
+		tcres = nfs_mkdirv(dirs, count, is_transaction);
 	} else {
 		tcres = posix_mkdirv(dirs, count, is_transaction);
 	}
@@ -872,7 +839,7 @@ tc_res tc_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction)
 	TC_START_COUNTER(lcopy);
 
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_lcopyv(pairs, count, is_transaction);
+		tcres = nfs_lcopyv(pairs, count, is_transaction);
 	} else {
 		tcres = posix_lcopyv(pairs, count, is_transaction);
 	}
@@ -993,7 +960,7 @@ tc_res tc_hardlinkv(const char **oldpaths, const char **newpaths, int count,
 
 	TC_START_COUNTER(hardlink);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_hardlinkv(oldpaths, newpaths, count, istxn);
+		tcres = nfs_hardlinkv(oldpaths, newpaths, count, istxn);
 	} else {
 		tcres = posix_hardlinkv(oldpaths, newpaths, count, istxn);
 	}
@@ -1010,7 +977,7 @@ tc_res tc_symlinkv(const char **oldpaths, const char **newpaths, int count,
 
 	TC_START_COUNTER(symlink);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_symlinkv(oldpaths, newpaths, count, istxn);
+		tcres = nfs_symlinkv(oldpaths, newpaths, count, istxn);
 	} else {
 		tcres = posix_symlinkv(oldpaths, newpaths, count, istxn);
 	}
@@ -1027,7 +994,7 @@ tc_res tc_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
 
 	TC_START_COUNTER(readlink);
 	if (TC_IMPL_IS_NFS4) {
-		tcres = nfs4_readlinkv(paths, bufs, bufsizes, count, istxn);
+		tcres = nfs_readlinkv(paths, bufs, bufsizes, count, istxn);
 	} else {
 		tcres = posix_readlinkv(paths, bufs, bufsizes, count, istxn);
 	}
@@ -1045,7 +1012,7 @@ tc_res tc_write_adb(struct tc_adb *patterns, int count, bool is_transaction)
 int tc_chdir(const char *path)
 {
 	if (TC_IMPL_IS_NFS4) {
-		return nfs4_chdir(path);
+		return nfs_chdir(path);
 	} else {
 		return posix_chdir(path);
 	}
@@ -1054,7 +1021,7 @@ int tc_chdir(const char *path)
 char *tc_getcwd()
 {
 	if (TC_IMPL_IS_NFS4) {
-		return nfs4_getcwd();
+		return nfs_getcwd();
 	} else {
 		return posix_getcwd();
 	}
