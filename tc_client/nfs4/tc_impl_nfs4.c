@@ -618,13 +618,13 @@ void nfs4_close_all()
 	tc_for_each_fd(nfs4_close_impl, NULL);
 }
 
-static void nfs4_restore_tc_files(struct tc_attrs *attrs, int count,
+void nfs4_restore_tc_files(struct tc_attrs *attrs, int count,
 				  tc_file *saved_tcfs);
 
 /**
  * Translate FD to file handle and save the original tc_file.
  */
-static tc_file *nfs4_process_tc_files(struct tc_attrs *attrs, int count)
+tc_file *nfs4_process_tc_files(struct tc_attrs *attrs, int count)
 {
 	int i;
 	tc_file *saved_tcfs;
@@ -662,7 +662,7 @@ static tc_file *nfs4_process_tc_files(struct tc_attrs *attrs, int count)
 	return saved_tcfs;
 }
 
-static void nfs4_restore_tc_files(struct tc_attrs *attrs, int count,
+void nfs4_restore_tc_files(struct tc_attrs *attrs, int count,
 				  tc_file *saved_tcfs)
 {
 	int i;

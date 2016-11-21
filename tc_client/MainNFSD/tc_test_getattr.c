@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
 	/* Check results. */
 	if (tc_okay(res)) {
 		fprintf(stderr,
-			"Successfully sent getattr for %s"
+			"Successfully sent getattr for %s "
 			"size: %u\n", TC_TEST_NFS_FILE, attrs1.size);
 	} else {
 		fprintf(stderr,
@@ -98,15 +98,15 @@ int main(int argc, char *argv[])
 
 	attrs2.file = attrs1.file;
 	attrs2.masks = TC_ATTRS_MASK_NONE;
-	attrs2.masks.has_size = true;
+	attrs2.masks.has_fileid = true;
 
 	res = tc_getattrsv(&attrs2, 1, false);
 
 	/* Check results. */
 	if (tc_okay(res)) {
 		fprintf(stderr,
-			"Successfully sent getattr for %s"
-			"size: %u\n", TC_TEST_NFS_FILE, attrs2.size);
+			"Successfully sent getattr for %s "
+			"size: %u\n", TC_TEST_NFS_FILE, attrs2.fileid);
 	} else {
 		fprintf(stderr,
 			"Failed to getattr file \"%s\" at the %d-th operation "

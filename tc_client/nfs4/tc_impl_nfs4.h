@@ -134,6 +134,9 @@ int nfs4_chdir(const char *path);
 
 char *nfs4_getcwd();
 
+tc_file *nfs4_process_tc_files(struct tc_attrs *attrs, int count);
+void nfs4_restore_tc_files(struct tc_attrs *attrs, int count, tc_file *saved_tcfs);
+
 #ifdef __cplusplus
 }
 #endif

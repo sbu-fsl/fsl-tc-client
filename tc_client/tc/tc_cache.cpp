@@ -49,9 +49,122 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
 	return nfs4_writev(writes, write_count, is_transaction);
 }
 
+void fill_newAttr(struct tc_attrs *fAttrs, struct tc_attrs *sAttrs)
+{
+	memcpy((void *)&fAttrs->file, (void *)&sAttrs->file, sizeof(tc_file));
+}
+
+struct tc_attrs *nfs_check_pageCache(struct tc_attrs *sAttrs, int count,
+				     int *miss_count, bool *hitArray)
+{
+	struct tc_attrs *final_attrs = NULL;
+	struct tc_attrs *cur_sAttr = NULL;
+	struct tc_attrs *cur_fAttr = NULL;
+	
+	int i = 0;
+
+	final_attrs =
+	    (struct tc_attrs *)malloc(sizeof(struct tc_attrs) * count);
+	if (final_attrs == NULL)
+		return NULL;
+
+	while (i < count) {
+		cur_sAttr = sAttrs + i;
+		Poco::SharedPtr<dirEntry *> ptrElem =
+		    mdCache->get(cur_sAttr->file.path);
+		if (ptrElem) {
+			/* Cache hit */
+			tc_stat2attrs((*ptrElem)->attrs, cur_sAttr);
+			hitArray[count] = true;
+		} else {
+			/* fill final_array[miss_count] */
+			cur_fAttr = final_attrs + *miss_count;
+			fill_newAttr(cur_fAttr, cur_sAttr);
+			cur_fAttr->masks = TC_MASK_INIT_ALL;
+			(*miss_count)++;
+		}
+
+		i++;
+	}
+
+	return final_attrs;
+}
+
+void nfs_update_pageCache(struct tc_attrs *sAttrs, struct tc_attrs *final_attrs,
+			  int count, bool *hitArray)
+{
+	int i = 0;
+	int j = 0;
+	struct tc_attrs *cur_sAttr = NULL;
+	struct tc_attrs *cur_fAttr = NULL;
+	dirEntry *de1 = NULL;
+
+	while (i < count) {
+		cur_sAttr = sAttrs + i;
+		if (hitArray[i] == false) {
+			cur_fAttr = final_attrs + j;
+
+			de1 = new dirEntry();
+			de1->path = cur_sAttr->file.path;
+			de1->attrs = new struct stat();
+			tc_attrs2stat(cur_fAttr, de1->attrs);
+			mdCache->add(de1->path, de1);
+
+			tc_stat2attrs(de1->attrs, cur_sAttr);
+
+			j++;
+		}
+
+		i++;
+	}
+}
+
 tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 {
-	return nfs4_lgetattrsv(attrs, count, is_transaction);
+	tc_res tcres = { .index = count, .err_no = 0 };
+	tc_file *saved_tcfs = NULL;
+	struct tc_attrs *final_attrs = NULL;
+	int miss_count = 0;
+	bool *hitArray = NULL;
+
+	saved_tcfs = nfs4_process_tc_files(attrs, count);
+	if (!saved_tcfs) {
+		return tc_failure(0, ENOMEM);
+	}
+
+	hitArray = new bool[count]();
+	if (hitArray == NULL)
+		goto mem_failure;
+
+	std::fill_n(hitArray, count, false);
+
+	final_attrs = nfs_check_pageCache(attrs, count, &miss_count, hitArray);
+	if (final_attrs == NULL)
+		goto mem_failure2;
+
+	if (miss_count == 0) {
+		/* Full cache hit */
+		goto exit;
+	}
+	else {
+		tcres = nfs4_lgetattrsv(final_attrs, miss_count, is_transaction);
+	}
+
+	nfs_update_pageCache(attrs, final_attrs, count, hitArray);
+
+exit:
+	delete hitArray;
+	free(final_attrs);
+
+	nfs4_restore_tc_files(attrs, count, saved_tcfs);
+
+	return tcres;
+
+mem_failure2:
+	delete hitArray;
+mem_failure:
+	nfs4_restore_tc_files(attrs, count, saved_tcfs);
+	return tc_failure(0, ENOMEM);
 }
 
 tc_res nfs_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
