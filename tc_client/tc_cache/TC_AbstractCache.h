@@ -344,9 +344,12 @@ protected:
 		if (it != _data.end())
 		{
 			Remove.notify(this, it->first);
+#ifdef _DEBUG
 			if (_cb) {
+				std::cout << "removing it->second: " << (it->second).referenceCount() << std::endl;
 				_cb(*(it->second));
 			}
+#endif
 			_data.erase(it);
 #ifdef _DEBUG
 			std::cout << "removing it->first: " << it->first << std::endl;
