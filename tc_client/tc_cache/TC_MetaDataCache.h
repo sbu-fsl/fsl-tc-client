@@ -10,13 +10,44 @@
 #ifndef TC_MetaDataCache_INCLUDED
 #define TC_MetaDataCache_INCLUDED
 
+#include <string>
+#include <map>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "TC_AbstractCache.h"
 #include "Poco/StrategyCollection.h"
+#include "Poco/SharedPtr.h"
 #include "TC_ExpireStrategy.h"
 #include "TC_LRUStrategy.h"
 #include "TC_Debug.h"
 
+using namespace std;
 using namespace Poco;
+
+class DirEntry {
+public:
+	string path;
+	void *fh;
+	struct stat *attrs;
+	SharedPtr<DirEntry> parent;
+	unordered_map<string, SharedPtr<DirEntry>> childrens;
+
+	DirEntry(string p, void *f = nullptr, struct stat *a = nullptr) : path(p) {
+// #ifdef _DEBUG
+		cout << "DirEntry: constructor \n";
+// #endif
+	}
+
+	~DirEntry() {
+// #ifdef _DEBUG
+		cout << "DirEntry: destructor \n";
+// #endif
+		if (attrs != nullptr) {
+			cout << "~DirEntry: attrs should be released \n";
+			delete attrs;
+		}
+	}
+};
 
 template < 
 	class TKey,

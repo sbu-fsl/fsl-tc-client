@@ -4,45 +4,25 @@
 
 using namespace std;
 
-/*
- * This definition is defined in TC_AbstractCache.h
-struct dirEntry {
-	string path;
-	void *fh;
-	struct stat *attrs;
-	struct dirEntry *parent;
-	unordered_map<string, dirEntry*> childrens;
-};
-*/
-
-bool on_remove_metadata(dirEntry *de) {
-	if (de) {
-		cout << "on_remove_metadata: " << de->path << "\n";
-		delete de;
-	} else {
-		cout << "on_remove_metadata: dirEntry is NULL\n";
-	}
-	return true;
+bool on_remove_metadata(SharedPtr<DirEntry> de) {
+        cout << "on_remove_metadata: is deprecated \n";
+        return true;
 }
 
 int main() {
-	TC_MetaDataCache<string, dirEntry*> mdCache(2, 60, on_remove_metadata);
+	TC_MetaDataCache<string, SharedPtr<DirEntry>> mdCache(2, 60, on_remove_metadata);
 	cout << "main: created mdCache(2, 60, on_remove_metadata)\n";
 
-	dirEntry *de1 = new dirEntry();
-	de1->path = "/tmp/1";
 	cout << "main: adding first element /tmp/1\n";
-	mdCache.add(de1->path, de1);
+	mdCache.add("/tmp/1", new DirEntry("/tmp/1"));
 	cout << "main: added /tmp/1\n";
 
 	cout << "main: sleeping for 30 ms\n";
 	usleep(30000);
 	cout << "main: woke up from 30 ms sleep\n";
 
-	dirEntry *de2 = new dirEntry();
-	de2->path = "/tmp/2";	
 	cout << "main: adding second element /tmp/2\n";
-	mdCache.add(de2->path, de2);
+	mdCache.add("/tmp/2", new DirEntry("/tmp/2"));
 	cout << "main: added /tmp/2\n";
 
 	cout << "main: sleeping for 30 ms\n";

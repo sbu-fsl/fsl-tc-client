@@ -276,7 +276,7 @@ protected:
 		/// If for the key already an entry exists, it will be overwritten.
 	{
 #ifdef _DEBUG
-		std::cout << "TC_AbstractCache - doAdd \n";
+		std::cout << "TC_AbstractCache - doAdd shared ptr \n";
 #endif
 		Iterator it = _data.find(key);
 		doRemove(it);
@@ -446,15 +446,6 @@ protected:
 private:
 	TC_AbstractCache(const TC_AbstractCache& aCache);
 	TC_AbstractCache& operator = (const TC_AbstractCache& aCache);
-};
-
-
-struct dirEntry {
-        std::string path;
-        void *fh;
-        struct stat *attrs;
-        struct dirEntry *parent;
-        std::unordered_map<std::string, dirEntry*> childrens;
 };
 
 #endif // TC_AbstractCache_INCLUDED
