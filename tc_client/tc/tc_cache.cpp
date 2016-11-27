@@ -4,24 +4,18 @@
 #include "../tc_cache/TC_MetaDataCache.h"
 using namespace std;
 
-TC_MetaDataCache<string, dirEntry *> *mdCache = NULL;
+TC_MetaDataCache<string, SharedPtr<DirEntry> > *mdCache = NULL;
 
-bool on_remove_metadata(dirEntry *de)
+bool on_remove_metadata(SharedPtr<DirEntry> de)
 {
-	if (de) {
-		cout << "on_remove_metadata: " << de->path << "\n";
-		delete de->attrs;
-		delete de;
-	} else {
-		cout << "on_remove_metadata: dirEntry is NULL\n";
-	}
+	cout << "on_remove_metadata: is deprecated \n";
 	return true;
 }
 
 void init_page_cache()
 {
-	mdCache =
-	    new TC_MetaDataCache<string, dirEntry *>(2, 60, on_remove_metadata);
+	mdCache = new TC_MetaDataCache<string, SharedPtr<DirEntry> >(
+	    2, 60, on_remove_metadata);
 }
 
 tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
@@ -70,7 +64,7 @@ struct tc_attrs *nfs_check_pageCache(struct tc_attrs *sAttrs, int count,
 
 	while (i < count) {
 		cur_sAttr = sAttrs + i;
-		Poco::SharedPtr<dirEntry *> ptrElem =
+		SharedPtr<DirEntry> *ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
 		if (ptrElem) {
 			/* Cache hit */
@@ -97,15 +91,13 @@ void nfs_update_pageCache(struct tc_attrs *sAttrs, struct tc_attrs *final_attrs,
 	int j = 0;
 	struct tc_attrs *cur_sAttr = NULL;
 	struct tc_attrs *cur_fAttr = NULL;
-	dirEntry *de1 = NULL;
 
 	while (i < count) {
 		cur_sAttr = sAttrs + i;
 		if (hitArray[i] == false) {
 			cur_fAttr = final_attrs + j;
 
-			de1 = new dirEntry();
-			de1->path = cur_sAttr->file.path;
+			SharedPtr<DirEntry> de1(new DirEntry(cur_sAttr->file.path));
 			de1->attrs = new struct stat();
 			tc_attrs2stat(cur_fAttr, de1->attrs);
 			mdCache->add(de1->path, de1);
