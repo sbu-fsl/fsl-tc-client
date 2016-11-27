@@ -44,5 +44,16 @@ int main() {
 		cout << "main: " << *it << endl;
 	}
 
+	cout << "main: clearing cache\n";
+	mdCache.clear();
+	cout << "main: cache cleared\n";
+	
+	cout << "main: getting all keys after clearing cache\n";
+	keys = mdCache.getAllKeys();
+	for (it = keys.begin(); it != keys.end(); ++it) {
+		cout << "main: " << *it << endl;
+	}
+	
+	cout << "main: Ends here\n";
 	return 0;
 }
