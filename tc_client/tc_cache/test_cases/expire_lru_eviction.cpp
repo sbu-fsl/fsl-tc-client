@@ -4,14 +4,9 @@
 
 using namespace std;
 
-bool on_remove_metadata(SharedPtr<DirEntry> de) {
-        cout << "on_remove_metadata: is deprecated \n";
-        return true;
-}
-
 int main() {
-	TC_MetaDataCache<string, SharedPtr<DirEntry>> mdCache(2, 60, on_remove_metadata);
-	cout << "main: created mdCache(2, 60, on_remove_metadata)\n";
+	TC_MetaDataCache<string, SharedPtr<DirEntry>> mdCache(2, 60);
+	cout << "main: created mdCache(2, 60)\n";
 
 	cout << "main: adding first element /tmp/1\n";
 	mdCache.add("/tmp/1", new DirEntry("/tmp/1"));

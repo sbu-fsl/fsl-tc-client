@@ -45,7 +45,6 @@ public:
 	typedef typename DataHolder::iterator       Iterator;
 	typedef typename DataHolder::const_iterator ConstIterator;
 	typedef std::set<TKey>                      KeySet;
-	typedef bool (*on_remove_callback_func)(TValue);
 
 	TC_AbstractCache()
 	{
@@ -59,14 +58,6 @@ public:
 	{
 #ifdef _DEBUG
 		std::cout << "TC_AbstractCache - strategy constructor \n";
-#endif
-		initialize();
-	}
-
-	TC_AbstractCache(const TStrategy& strat, on_remove_callback_func cb_func): _strategy(strat), _cb(cb_func)
-	{
-#ifdef _DEBUG
-		std::cout << "TC_AbstractCache - strategy + remove callback constructor \n";
 #endif
 		initialize();
 	}
@@ -344,17 +335,11 @@ protected:
 		if (it != _data.end())
 		{
 			Remove.notify(this, it->first);
-#ifdef _DEBUG
-			if (_cb) {
-				std::cout << "removing it->second: " << (it->second).referenceCount() << std::endl;
-				_cb(*(it->second));
-			}
+#ifndef _DEBUG
+			std::cout << "removing " << (*(it->second))->path  << ", new ref count: " \
+				  << (it->second).referenceCount() << std::endl;
 #endif
 			_data.erase(it);
-#ifdef _DEBUG
-			std::cout << "removing it->first: " << it->first << std::endl;
-			std::cout << "removing it->second: " << (*(it->second))->path << std::endl;
-#endif
 		}
 	}
 
@@ -417,7 +402,6 @@ protected:
 		static EventArgs _emptyArgs;
 		Clear.notify(this, _emptyArgs);
 		_data.clear();
-		//TODO: How to handle mem-deallocation here?
 	}
 
 	void doReplace()
@@ -441,7 +425,6 @@ protected:
 	TStrategy		_strategy;
 	mutable DataHolder	_data;
 	mutable TMutex		_mutex;
-	on_remove_callback_func	_cb;
 
 private:
 	TC_AbstractCache(const TC_AbstractCache& aCache);

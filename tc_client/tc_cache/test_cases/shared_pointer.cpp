@@ -5,12 +5,7 @@
 
 using namespace std;
 
-bool on_remove_metadata(SharedPtr<DirEntry> de) {
-	cout << "on_remove_metadata: is deprecated \n";
-        return true;
-}
-
-TC_MetaDataCache<string, SharedPtr<DirEntry>> mdCache(1, 1000, on_remove_metadata);
+TC_MetaDataCache<string, SharedPtr<DirEntry>> mdCache(1, 1000);
 
 void action0(void) {
 	SharedPtr<DirEntry> de1(new DirEntry("/tmp/1"));
@@ -37,7 +32,7 @@ int main() {
 	int i;
 	thread myThreads[2];
 
-	cout << "main: created mdCache(1, 1000, on_remove_metadata)\n";
+	cout << "main: created mdCache(1, 1000)\n";
 
 	myThreads[0] = thread(action0);	// adds and item
 	sleep(2);
