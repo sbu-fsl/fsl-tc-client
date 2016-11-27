@@ -6,16 +6,15 @@ using namespace std;
 
 TC_MetaDataCache<string, SharedPtr<DirEntry> > *mdCache = NULL;
 
-bool on_remove_metadata(SharedPtr<DirEntry> de)
-{
-	cout << "on_remove_metadata: is deprecated \n";
-	return true;
-}
-
 void init_page_cache()
 {
 	mdCache = new TC_MetaDataCache<string, SharedPtr<DirEntry> >(
-	    2, 60, on_remove_metadata);
+	    2, 60);
+}
+
+void deinit_page_cache()
+{
+	mdCache->clear();
 }
 
 tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
@@ -48,7 +47,7 @@ void fill_newAttr(struct tc_attrs *fAttrs, struct tc_attrs *sAttrs)
 	memcpy((void *)&fAttrs->file, (void *)&sAttrs->file, sizeof(tc_file));
 }
 
-struct tc_attrs *nfs_check_pageCache(struct tc_attrs *sAttrs, int count,
+struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 				     int *miss_count, bool *hitArray)
 {
 	struct tc_attrs *final_attrs = NULL;
@@ -68,7 +67,12 @@ struct tc_attrs *nfs_check_pageCache(struct tc_attrs *sAttrs, int count,
 		    mdCache->get(cur_sAttr->file.path);
 		if (ptrElem) {
 			/* Cache hit */
+			pthread_rwlock_rdlock(&((*ptrElem)->attrLock));
+
 			tc_stat2attrs((*ptrElem)->attrs, cur_sAttr);
+
+			pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+
 			hitArray[count] = true;
 		} else {
 			/* fill final_array[miss_count] */
@@ -84,7 +88,7 @@ struct tc_attrs *nfs_check_pageCache(struct tc_attrs *sAttrs, int count,
 	return final_attrs;
 }
 
-void nfs_update_pageCache(struct tc_attrs *sAttrs, struct tc_attrs *final_attrs,
+void getattr_update_pageCache(struct tc_attrs *sAttrs, struct tc_attrs *final_attrs,
 			  int count, bool *hitArray)
 {
 	int i = 0;
@@ -97,12 +101,20 @@ void nfs_update_pageCache(struct tc_attrs *sAttrs, struct tc_attrs *final_attrs,
 		if (hitArray[i] == false) {
 			cur_fAttr = final_attrs + j;
 
-			SharedPtr<DirEntry> de1(new DirEntry(cur_sAttr->file.path));
+			SharedPtr<DirEntry> de1(
+			    new DirEntry(cur_sAttr->file.path));
 			de1->attrs = new struct stat();
 			tc_attrs2stat(cur_fAttr, de1->attrs);
+
+			pthread_rwlock_wrlock(&(de1->attrLock));
+
 			mdCache->add(de1->path, de1);
 
+			// Do we need to perform this with outside the
+			// write lock?
 			tc_stat2attrs(de1->attrs, cur_sAttr);
+
+			pthread_rwlock_unlock(&(de1->attrLock));
 
 			j++;
 		}
@@ -130,7 +142,7 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 
 	std::fill_n(hitArray, count, false);
 
-	final_attrs = nfs_check_pageCache(attrs, count, &miss_count, hitArray);
+	final_attrs = getattr_check_pageCache(attrs, count, &miss_count, hitArray);
 	if (final_attrs == NULL)
 		goto mem_failure2;
 
@@ -138,11 +150,12 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 		/* Full cache hit */
 		goto exit;
 	}
-	else {
-		tcres = nfs4_lgetattrsv(final_attrs, miss_count, is_transaction);
-	}
 
-	nfs_update_pageCache(attrs, final_attrs, count, hitArray);
+	tcres = nfs4_lgetattrsv(final_attrs, miss_count, is_transaction);
+
+	if (tc_okay(tcres)) {
+		getattr_update_pageCache(attrs, final_attrs, count, hitArray);
+	}
 
 exit:
 	delete hitArray;
@@ -159,9 +172,40 @@ mem_failure:
 	return tc_failure(0, ENOMEM);
 }
 
+void setattr_update_pageCache(struct tc_attrs *sAttrs, int count)
+{
+	int i = 0;
+	struct tc_attrs *cur_sAttr = NULL;
+
+	while (i < count) {
+		cur_sAttr = sAttrs + i;
+
+		SharedPtr<DirEntry> *ptrElem =
+		    mdCache->get(cur_sAttr->file.path);
+		if (ptrElem) {
+			/* Update cache */
+			pthread_rwlock_wrlock(&((*ptrElem)->attrLock));
+
+			tc_attrs2stat(cur_sAttr, (*ptrElem)->attrs);
+
+			pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+		}
+
+		i++;
+	}
+}
+
 tc_res nfs_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 {
-	return nfs4_lsetattrsv(attrs, count, is_transaction);
+	tc_res tcres = { .index = count, .err_no = 0 };
+
+	tcres = nfs4_lsetattrsv(attrs, count, is_transaction);
+
+	if (tc_okay(tcres)) {
+		setattr_update_pageCache(attrs, count);
+	}
+
+	return tcres;
 }
 
 tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,

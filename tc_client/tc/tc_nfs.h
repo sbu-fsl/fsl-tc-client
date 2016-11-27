@@ -12,10 +12,15 @@
  * implementation, the page cache will be used/updated in nfs_* functions.
  */
 
-/* 
+/*
  * Initialize POCO page cache
  */
 void init_page_cache();
+
+/*
+ * De-Initialize POCO page cache
+ */
+void deinit_page_cache();
 
 tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes);
 

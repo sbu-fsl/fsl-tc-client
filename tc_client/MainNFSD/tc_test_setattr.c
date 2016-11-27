@@ -74,6 +74,28 @@ int main(int argc, char *argv[])
 		return EIO;
 	}
 
+/*
+	attrs1.file = tc_file_from_path(TC_TEST_NFS_FILE);
+	attrs1.masks = TC_ATTRS_MASK_NONE;
+	attrs1.masks.has_size = true;
+	attrs1.size = 2742;
+
+	res = tc_setattrsv(&attrs1, 1, false);
+
+	if (tc_okay(res)) {
+		fprintf(stderr,
+			"Successfully sent setattr for %s "
+			"size: %u\n", TC_TEST_NFS_FILE, attrs1.size);
+	} else {
+		fprintf(stderr,
+			"Failed to getattr file \"%s\" at the %d-th operation "
+			"with error code %d (%s). See log file for details: "
+			"%s\n",
+			TC_TEST_NFS_FILE, res.index, res.err_no,
+			strerror(res.err_no), DEFAULT_LOG_FILE);
+	}
+*/
+
 	attrs1.file = tc_file_from_path(TC_TEST_NFS_FILE);
 	attrs1.masks = TC_ATTRS_MASK_NONE;
 	attrs1.masks.has_size = true;
@@ -84,6 +106,26 @@ int main(int argc, char *argv[])
 	if (tc_okay(res)) {
 		fprintf(stderr,
 			"Successfully sent getattr for %s "
+			"size: %u\n", TC_TEST_NFS_FILE, attrs1.size);
+	} else {
+		fprintf(stderr,
+			"Failed to getattr file \"%s\" at the %d-th operation "
+			"with error code %d (%s). See log file for details: "
+			"%s\n",
+			TC_TEST_NFS_FILE, res.index, res.err_no,
+			strerror(res.err_no), DEFAULT_LOG_FILE);
+	}
+
+	attrs1.file = tc_file_from_path(TC_TEST_NFS_FILE);
+	attrs1.masks = TC_ATTRS_MASK_NONE;
+	attrs1.masks.has_size = true;
+	attrs1.size = 2742;
+
+	res = tc_setattrsv(&attrs1, 1, false);
+
+	if (tc_okay(res)) {
+		fprintf(stderr,
+			"Successfully sent setattr for %s "
 			"size: %u\n", TC_TEST_NFS_FILE, attrs1.size);
 	} else {
 		fprintf(stderr,

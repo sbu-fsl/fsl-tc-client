@@ -120,6 +120,8 @@ void tc_deinit(void *module)
 	fwrite(pbuf->data, 1, pbuf->size, pfile);
 	fclose(pfile);
 
+	deinit_page_cache();
+
 	if (TC_IMPL_IS_NFS4) {
 		nfs4_deinit(module);
 	}

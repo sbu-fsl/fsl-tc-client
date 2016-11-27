@@ -31,11 +31,13 @@ public:
 	struct stat *attrs;
 	SharedPtr<DirEntry> parent;
 	unordered_map<string, SharedPtr<DirEntry>> childrens;
+	pthread_rwlock_t attrLock;
 
 	DirEntry(string p, void *f = nullptr, struct stat *a = nullptr) : path(p) {
 // #ifdef _DEBUG
 		cout << "DirEntry: constructor \n";
 // #endif
+ 		pthread_rwlock_init(&attrLock, NULL);
 	}
 
 	~DirEntry() {
@@ -46,6 +48,7 @@ public:
 			cout << "~DirEntry: attrs should be released \n";
 			delete attrs;
 		}
+		pthread_rwlock_destroy(&attrLock);
 	}
 };
 
