@@ -34,18 +34,20 @@ public:
 	pthread_rwlock_t attrLock;
 
 	DirEntry(string p, void *f = nullptr, struct stat *a = nullptr) : path(p) {
-// #ifdef _DEBUG
+#ifdef _DEBUG
 		cout << "DirEntry: constructor \n";
-// #endif
+#endif
  		pthread_rwlock_init(&attrLock, NULL);
 	}
 
 	~DirEntry() {
-// #ifdef _DEBUG
+#ifdef _DEBUG
 		cout << "DirEntry: destructor \n";
-// #endif
+#endif
 		if (attrs != nullptr) {
+#ifdef _DEBUG
 			cout << "~DirEntry: attrs should be released \n";
+#endif
 			delete attrs;
 		}
 		pthread_rwlock_destroy(&attrLock);

@@ -335,7 +335,7 @@ protected:
 		if (it != _data.end())
 		{
 			Remove.notify(this, it->first);
-#ifndef _DEBUG
+#ifdef _DEBUG
 			std::cout << "removing " << (*(it->second))->path  << ", new ref count: " \
 				  << (it->second).referenceCount() << std::endl;
 #endif
