@@ -91,3 +91,6 @@ target_link_libraries(tc_rw_files gflags ${tc_LIBS})
 
 add_executable(tc_append tc_append.cpp)
 target_link_libraries(tc_append gflags ${tc_LIBS})
+
+add_executable(tc_test_getattrs tc_test_getattrs.cpp)
+target_link_libraries(tc_test_getattrs ${tc_LIBS})

@@ -9,7 +9,7 @@ TC_MetaDataCache<string, SharedPtr<DirEntry> > *mdCache = NULL;
 void init_page_cache()
 {
 	mdCache = new TC_MetaDataCache<string, SharedPtr<DirEntry> >(
-	    2, 60);
+	    100, 60);
 }
 
 void deinit_page_cache()
