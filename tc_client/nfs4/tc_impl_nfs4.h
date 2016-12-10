@@ -34,6 +34,12 @@
 extern "C" {
 #endif
 
+struct cache_context {
+	void *context;
+	uint64_t cache_size;
+	uint64_t cache_expiration;
+};
+
 void *nfs4_init(const char *config_path, const char *log_path,
 		uint16_t exprot_id);
 

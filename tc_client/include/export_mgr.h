@@ -128,6 +128,10 @@ struct gsh_export {
 	int32_t expire_time_attr;
 	/** Export_Id for this export */
 	uint16_t export_id;
+	/** Cache size for this tc cache */
+	uint64_t cache_size;
+	/** Cache expiration time for this tc cache */
+	uint64_t cache_expiration;
 };
 
 void export_pkginit(void);

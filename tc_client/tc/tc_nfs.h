@@ -15,7 +15,7 @@
 /*
  * Initialize POCO page cache
  */
-void init_page_cache();
+void init_page_cache(uint64_t size, uint64_t time);
 
 /*
  * De-Initialize POCO page cache

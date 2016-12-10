@@ -1147,6 +1147,10 @@ static struct config_item export_params[] = {
 	CONF_RELAX_BLOCK("FSAL", fsal_params,
 			 fsal_init, fsal_commit,
 			 gsh_export, fsal_export),
+	CONF_ITEM_UI64("CacheSize", 0, 10000000, 0,
+			gsh_export, cache_size),
+	CONF_ITEM_UI64("CacheExpiration", 0, 10000000, 60000,
+			gsh_export, cache_expiration),
 	CONFIG_EOL
 };
 

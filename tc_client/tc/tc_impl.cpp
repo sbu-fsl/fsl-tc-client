@@ -101,7 +101,8 @@ void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 		return NULL;
 	}
 
-	init_page_cache();
+	init_page_cache(((struct cache_context*)context)->cache_size,
+			((struct cache_context*)context)->cache_expiration);
 
 	return context;
 }

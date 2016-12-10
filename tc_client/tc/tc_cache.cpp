@@ -6,10 +6,10 @@ using namespace std;
 
 TC_MetaDataCache<string, SharedPtr<DirEntry> > *mdCache = NULL;
 
-void init_page_cache()
+void init_page_cache(uint64_t size, uint64_t time)
 {
 	mdCache = new TC_MetaDataCache<string, SharedPtr<DirEntry> >(
-	    100, 60);
+	    size, time);
 }
 
 void deinit_page_cache()

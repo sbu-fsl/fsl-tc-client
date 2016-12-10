@@ -49,6 +49,7 @@ void *nfs4_init(const char *config_path, const char *log_path,
 	struct gsh_export *exp = NULL;
 	int rc;
 	config_file_t config_struct;
+	struct cache_context *ctx;
 	nfs_start_info_t my_nfs_start_info = { .dump_default_config = false,
 					       .lw_mark_trigger = false };
 
@@ -160,11 +161,24 @@ void *nfs4_init(const char *config_path, const char *log_path,
 	op_ctx->export = exp;
 	op_ctx->fsal_export = exp->fsal_export;
 
+	LogCrit(COMPONENT_INIT, "Cache size: %d & expiration: %d",
+				exp->cache_size, exp->cache_expiration);
+
 	rc = nfs4_chdir(exp->fullpath);
 	assert(rc == 0);
 
 	tc_init_fds();
-	return (void*)new_module;
+
+	ctx = calloc(1, sizeof(struct cache_context *));
+	if (ctx == NULL) {
+		LogDebug(COMPONENT_FSAL, "No memory for ctx\n");
+		return NULL;
+	}
+
+	ctx->context = (void*)new_module;
+	ctx->cache_size = op_ctx->export->cache_size;
+	ctx->cache_expiration = op_ctx->export->cache_expiration;
+	return (void*)ctx;
 }
 
 /*
@@ -187,14 +201,18 @@ void nfs4_deinit(void *arg)
 		op_ctx = NULL;
 	}
 
-	module = (struct fsal_module*) arg;
-	if (module != NULL) {
-		LogDebug(COMPONENT_FSAL, "Dereferencing tc_client module\n");
-		// In tc_init(), two references of the module are taken, one by
-		// load_fsal() called via commit_fsal() during config loading,
-		// and lookup_fsal() explicitly in tc_init().
-		fsal_put(module);  /* for lookup_fsal() */
-		fsal_put(module);  /* for load_fsal() */
+	if (arg != NULL) {
+		module = (struct fsal_module*)((struct cache_context*)arg)->context;
+		if (module != NULL) {
+			LogDebug(COMPONENT_FSAL, "Dereferencing tc_client module\n");
+			// In tc_init(), two references of the module are taken, one by
+			// load_fsal() called via commit_fsal() during config loading,
+			// and lookup_fsal() explicitly in tc_init().
+			fsal_put(module);  /* for lookup_fsal() */
+			fsal_put(module);  /* for load_fsal() */
+		}
+		free(arg);
+		arg = NULL;
 	}
 }
 
