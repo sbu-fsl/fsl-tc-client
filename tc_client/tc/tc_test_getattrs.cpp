@@ -15,6 +15,8 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301 USA
+ *
+ * This is for benchmarking of tc metadata cache using getattr ops
  */
 
 #include <error.h>
@@ -40,7 +42,7 @@
 #include <boost/accumulators/statistics/variance.hpp>
 #include <functional>
 
-// #define DEBUG 1
+#define DEBUG 0
 
 using namespace std;
 using namespace  boost::accumulators;
@@ -48,19 +50,26 @@ using namespace std::placeholders;
 
 const size_t BUFSIZE = 4096;
 
+/* need to deinit cache before every repetition */
 extern void deinit_page_cache();
+extern int get_miss_count();
+extern void reset_miss_count();
 
-// Generates path name in using gamma-distributed
-static vector<const char *> NewPaths(const char *format, int n)
+/* Generates path name in using gamma-distributed
+ * n is number of required path names
+ * l is the number of loops
+ */
+static vector<const char *> NewPaths(const char *format, int n, int l)
 {
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 	std::default_random_engine generator(seed);
-	std::gamma_distribution<double> distribution (2.0,2.0);
+	std::gamma_distribution<double> distribution (7.0,13.0);
+	int m = n * l;	// to define the range of file to be selected for benchmarking
 
 	vector<const char *> paths(n);
 	for (int i = 0; i < n; ++i) {
 		char *p = (char *)malloc(PATH_MAX);
-		int d = int(distribution(generator)) % n;
+		int d = int(distribution(generator)) % m;
 		assert(p);
 		snprintf(p, PATH_MAX, format, d);
 		paths[i] = p;
@@ -93,9 +102,9 @@ static void FreeIovecs(vector<tc_iovec> *iovs)
 		free((char *)iov.data);
 }
 
-static vector<tc_attrs> NewTcAttrs(size_t nfiles, tc_attrs *values = nullptr)
+static vector<tc_attrs> NewTcAttrs(size_t nfiles, int nloop, tc_attrs *values = nullptr)
 {
-	vector<const char *> paths = NewPaths("tc_cache/file-%d", nfiles);
+	vector<const char *> paths = NewPaths("tc_cache/file-%d", nfiles, nloop);
 	vector<tc_attrs> attrs(nfiles);
 
 #if DEBUG
@@ -171,7 +180,7 @@ static void TearDown(void *context)
 	tc_deinit(context);
 }
 
-double test_getattrs(size_t nfiles, int l) {
+double test_getattrs(size_t n, int l) {
 	int i;
 	long seconds, useconds;
 	double duration = 0.0;
@@ -179,11 +188,14 @@ double test_getattrs(size_t nfiles, int l) {
 	timeval start, end;
 
 	for (i = 0; i < l; ++i) {
-		vector<tc_attrs> attrs = NewTcAttrs(nfiles);
+		/* generate a vector of n tc_attrs, having random file paths
+		 * ranges from 0 to n * l, using gamma distribution
+		 */
+		vector<tc_attrs> attrs = NewTcAttrs(n, l);
 
 		gettimeofday(&start, 0);
 
-		tc_res tcres = tc_getattrsv(attrs.data(), nfiles, false);
+		tc_res tcres = tc_getattrsv(attrs.data(), n, false);
 		assert(tc_okay(tcres));
 
 		gettimeofday(&end, 0);
@@ -204,18 +216,24 @@ double test_getattrs(size_t nfiles, int l) {
 	return agg_duration;
 }
 
-void tc_getattrs_bench(size_t nfiles, int l, int r) {
+void tc_getattrs_bench(size_t n, int l, int r) {
 	int i;
 	vector<double> time_taken(r);
 	accumulator_set<double, stats<tag::variance> > acc;
+	vector<int> miss_count(r);
+	accumulator_set<int, stats<tag::variance> > acc_m;
 
 	for (i = 0; i < r; ++i) {
 		deinit_page_cache();	// clear cache before each repetitions
-		time_taken[i] = test_getattrs(nfiles, l);
+		reset_miss_count();	// reset miss counter
+		time_taken[i] = test_getattrs(n, l);	// time taken during this iteration
+		miss_count[i] = get_miss_count();		// counter for misses in the cache
 	}
 
 	for_each(time_taken.begin(), time_taken.end(), bind<void>(ref(acc), _1));
-	cout << " mean: " << mean(acc) << " SD: " << sqrt(variance(acc)) << endl;
+	cout << "Time taken: mean: " << mean(acc) << " SD: " << sqrt(variance(acc)) << endl;
+	for_each(miss_count.begin(), miss_count.end(), bind<void>(ref(acc_m), _1));
+	cout << "Miss counts: mean: " << mean(acc_m) << " SD: " << sqrt(variance(acc_m)) << endl;
 
 #if DEBUG
 	vector<double>::iterator it;
@@ -230,9 +248,9 @@ int main(int argc, char **argv)
 	extern char *optarg;
 	extern int optind, optopt;
 	int c, r;
-	size_t nfiles = 1;
-	int repetitions = 1;
-	int nloops = 1;
+	size_t nfiles = 1;	// no of ops in the vector of tc_attrs
+	int repetitions = 1;	// no of repetitions for the experiment
+	int nloops = 1;		// no of loops per repetition
 	void *context = SetUp();
 
 	while ((c = getopt(argc, argv, "l:n:r:")) != -1) {

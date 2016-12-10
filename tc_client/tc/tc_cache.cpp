@@ -5,6 +5,15 @@
 using namespace std;
 
 TC_MetaDataCache<string, SharedPtr<DirEntry> > *mdCache = NULL;
+int g_miss_count = 0;
+
+void reset_miss_count() {
+	g_miss_count = 0;
+}
+
+int get_miss_count() {
+	return g_miss_count;
+}
 
 void init_page_cache(uint64_t size, uint64_t time)
 {
@@ -146,6 +155,7 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	if (final_attrs == NULL)
 		goto mem_failure2;
 
+	g_miss_count += miss_count;
 	if (miss_count == 0) {
 		/* Full cache hit */
 		goto exit;
