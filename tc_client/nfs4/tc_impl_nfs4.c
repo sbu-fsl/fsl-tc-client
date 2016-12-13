@@ -686,12 +686,12 @@ void nfs4_restore_tc_files(struct tc_attrs *attrs, int count,
 	int i;
 
 	for (i = 0; i < count; ++i) {
-		if (saved_tcfs[i].type != attrs[i].file.type &&
+		if (saved_tcfs[i].type == TC_FILE_DESCRIPTOR &&
 		    attrs[i].file.type == TC_FILE_HANDLE) {
 			del_file_handle(
 			    (struct file_handle *)attrs[i].file.handle);
+			attrs[i].file = saved_tcfs[i];
 		}
-		attrs[i].file = saved_tcfs[i];
 	}
 	free(saved_tcfs);
 }

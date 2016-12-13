@@ -3946,6 +3946,7 @@ static tc_res tc_nfs4_lgetattrsv(struct tc_attrs *attrs, int count)
 	int j = 0;	 /* index of NFS operations */
 	char *fattr_blobs; /* an array of FATTR_BLOB_SZ-sized buffers */
 	struct bitmap4 *bitmaps;
+	char *fh_buffers;
 	bool r;
 	int saved_opcnt;
 
@@ -3955,12 +3956,14 @@ static tc_res tc_nfs4_lgetattrsv(struct tc_attrs *attrs, int count)
 	fattr_blobs = (char *)malloc(count * FATTR_BLOB_SZ);
 	assert(fattr_blobs);
 	bitmaps = malloc(count * sizeof(*bitmaps));
+	fh_buffers = malloc(count * NFS4_FHSIZE);
 
 	for (i = 0; i < count; ++i) {
                 saved_opcnt = opcnt;
 		tc_attr_masks_to_bitmap(&attrs[i].masks, bitmaps + i);
 		r = tc_set_current_fh(&attrs[i].file, &name, true) &&
 		    tc_prepare_lookups(&name, 1) &&
+		    tc_prepare_getfh(fh_buffers + i * NFS4_FHSIZE) &&
 		    tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
 				       bitmaps + i);
 		if (!r) {
@@ -3987,17 +3990,27 @@ static tc_res tc_nfs4_lgetattrsv(struct tc_attrs *attrs, int count)
 			tcres = tc_failure(i, nfsstat4_to_errno(op_status));
                         goto exit;
                 }
-                if (resoparray[j].resop != NFS4_OP_GETATTR)
-                        continue;
-		atok =
-		    &resoparray[j].nfs_resop4_u.opgetattr.GETATTR4res_u.resok4;
-		fattr4_to_tc_attrs(&atok->obj_attributes, attrs + i);
-		++i;
+		switch (resoparray[j].resop) {
+		case NFS4_OP_GETFH:
+			tc_file_set_handle(&attrs[i].file,
+					   &resoparray[j]
+						.nfs_resop4_u.opgetfh
+						.GETFH4res_u.resok4.object);
+			break;
+		case NFS4_OP_GETATTR:
+			atok =
+			    &resoparray[j]
+				 .nfs_resop4_u.opgetattr.GETATTR4res_u.resok4;
+			fattr4_to_tc_attrs(&atok->obj_attributes, attrs + i);
+			++i;
+			break;
+		}
 	}
 
 exit:
 	free(bitmaps);
 	free(fattr_blobs);
+	free(fh_buffers);
 	return tcres;
 }
 

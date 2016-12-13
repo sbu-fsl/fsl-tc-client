@@ -50,6 +50,9 @@ public:
 #endif
 			delete attrs;
 		}
+		if (fh != NULL) {
+			free(fh);
+		}
 		pthread_rwlock_destroy(&attrLock);
 	}
 };
