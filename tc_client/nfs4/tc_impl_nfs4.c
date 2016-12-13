@@ -690,6 +690,7 @@ void nfs4_restore_tc_files(struct tc_attrs *attrs, int count,
 		    attrs[i].file.type == TC_FILE_HANDLE) {
 			del_file_handle(
 			    (struct file_handle *)attrs[i].file.handle);
+			// Restore only if we have type FD
 			attrs[i].file = saved_tcfs[i];
 		}
 	}
