@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "successfully created %d directories\n", NDIRS);
 	} else {
 		fprintf(stderr, "failed to create directories\n");
-		goto exit;
+		//goto exit;
 	}
 
 	/* create 5 files in each directories */
@@ -122,8 +122,35 @@ int main(int argc, char *argv[])
 			NDIRS * NFILES);
 	} else {
 		fprintf(stderr, "failed to create files\n");
+		//goto exit;
+	}
+
+	for (i = 0; i < NDIRS; ++i) {
+		dirs[i].file = tc_file_from_path(DIR_PATHS[i]);
+		dirs[i].masks = TC_ATTRS_MASK_NONE;
+		dirs[i].masks.has_size = true;
+	}
+
+	tcres = tc_getattrsv(dirs, NDIRS, false);
+	if (tc_okay(tcres)) {
+		fprintf(stderr, "successfully sent getattrs for %d directories\n",
+			NDIRS);
+	} else {
+		fprintf(stderr, "failed to send getattrs for directories\n");
 		goto exit;
 	}
+
+	tcres = tc_listdirv(DIR_PATHS, 2, masks, 0, false, process_direntry,
+			    NULL, false);
+	if (tc_okay(tcres)) {
+		fprintf(stderr, "successfully listed %d files\n",
+			NDIRS * NFILES);
+	} else {
+		fprintf(stderr, "failed to list files\n");
+		goto exit;
+	}
+
+	fprintf(stderr, "Sending second listdirs\n"); 
 
 	tcres = tc_listdirv(DIR_PATHS, NDIRS, masks, 0, false, process_direntry,
 			    NULL, false);
@@ -134,6 +161,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "failed to list files\n");
 		goto exit;
 	}
+
 
 exit:
 	tc_deinit(context);

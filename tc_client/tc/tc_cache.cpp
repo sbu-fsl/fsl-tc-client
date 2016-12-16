@@ -389,12 +389,168 @@ tc_res nfs_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	return tcres;
 }
 
+struct listDirPxy
+{
+	tc_listdirv_cb cb;
+	void *cbarg;
+	struct tc_attrs_masks masks;
+};
+
+static bool poco_direntry(const struct tc_attrs *dentry, const char *dir,
+			     void *cbarg)
+{
+	struct listDirPxy *temp = (struct listDirPxy *)cbarg;
+	struct tc_attrs finalDentry;
+
+	SharedPtr<DirEntry> *parentElem = mdCache->get(dir);
+	if (parentElem) {
+		SharedPtr<DirEntry> *ptrElem = mdCache->get(dentry->file.path);
+		if (!ptrElem) {
+			SharedPtr<DirEntry> de1(
+			    new DirEntry(dentry->file.path));
+			de1->attrs = new struct stat();
+			tc_attrs2stat(dentry, de1->attrs);
+
+			pthread_rwlock_wrlock(&(de1->attrLock));
+
+			mdCache->add(de1->path, de1);
+			de1->parent = parentElem;
+			pthread_rwlock_unlock(&(de1->attrLock));
+			ptrElem = mdCache->get(dentry->file.path);
+		} else {
+			pthread_rwlock_wrlock(&((*ptrElem)->attrLock));
+			tc_attrs2stat(dentry, (*ptrElem)->attrs);
+			(*ptrElem)->parent = parentElem;
+			pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+		}
+
+		pthread_rwlock_wrlock(&((*parentElem)->attrLock));
+		(*parentElem)->children[dentry->file.path] = ptrElem;
+		pthread_rwlock_unlock(&((*parentElem)->attrLock));
+	}
+
+	finalDentry.masks = temp->masks;
+	tc_attrs2attrs(&finalDentry, dentry);
+	(temp->cb)(&finalDentry, dir, temp->cbarg);
+
+	return true;
+}
+
+const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int count,
+			       int *miss_count, SharedPtr<DirEntry> **dirElem)
+{
+	const char **finalDirs;
+	int i = 0;
+	int j = 0;
+	const char *curDir = NULL;
+	SharedPtr<DirEntry> *curElem = NULL;
+
+	finalDirs = (const char**)malloc(count * sizeof(char*));
+	if (!finalDirs) {
+		return NULL;
+	}
+
+	while (i < count) {
+		curDir = dirs[i];
+		curElem = mdCache->get(curDir);
+		if (curElem == NULL || !(*curElem)->has_listdir) {
+			(*miss_count)++;
+			finalDirs[j++] = curDir;
+			// We need to update has_listdir later
+			dirElem[i] = curElem;
+		} else {
+			hitArray[i] = true;
+			dirElem[i] = curElem;
+		}
+
+		i++;
+	}
+
+	return finalDirs;
+}
+
+void invoke_callback(const char *curDir, SharedPtr<DirEntry> *curElem, tc_listdirv_cb cb,
+		     void *cbarg, struct tc_attrs_masks masks)
+{
+	SharedPtr<DirEntry> *fileEntry = NULL;
+	struct tc_attrs finalDentry;
+
+	for (const auto &mypair : (*curElem)->children) {
+		fileEntry = mypair.second;
+		finalDentry.masks = masks;
+		finalDentry.file = tc_file_from_path((*fileEntry)->path.c_str());
+		tc_stat2attrs((*fileEntry)->attrs, &finalDentry);
+
+		cb(&finalDentry, curDir, cbarg);
+	}
+}
+
+void reply_from_pagecache(const char **dirs, int count, bool *hitArray,
+			  SharedPtr<DirEntry> **dirElem, tc_listdirv_cb cb,
+			  void *cbarg, struct tc_attrs_masks masks)
+{
+	int i = 0;
+	SharedPtr<DirEntry> *curElem = NULL;
+
+	while (i < count) {
+		curElem = dirElem[i];
+		if (curElem != NULL) {
+			(*curElem)->has_listdir = true;
+			if (hitArray[i] == true) {
+				invoke_callback(dirs[i], curElem, cb, cbarg, masks);
+			}
+		}
+
+		i++;
+	}
+}
+
 tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 		    int max_entries, bool recursive, tc_listdirv_cb cb,
 		    void *cbarg, bool is_transaction)
 {
-	return nfs4_listdirv(dirs, count, masks, max_entries, recursive, cb,
-			     cbarg, is_transaction);
+	tc_res tcres = { .index = count, .err_no = 0 };
+	struct listDirPxy *temp = NULL;
+	const char **finalDirs;
+	int miss_count;
+	bool *hitArray = NULL;
+	SharedPtr<DirEntry> **dirElem;
+
+	temp = new listDirPxy;
+	if (temp == NULL)
+		goto failure;
+
+	hitArray = new bool[count]();
+	if (hitArray == NULL)
+		goto bool_failure;
+
+	dirElem = new SharedPtr<DirEntry> *[count]();
+	if (dirElem == NULL)
+		goto dir_failure;
+
+	std::fill_n(hitArray, count, false);
+
+	finalDirs = listdir_check_pagecache(hitArray, dirs, count, &miss_count, dirElem);
+
+	if (miss_count > 0) {
+		temp->cb = cb;
+		temp->cbarg = cbarg;
+		temp->masks = masks;
+		masks = TC_MASK_INIT_ALL;
+		tcres = nfs4_listdirv(finalDirs, miss_count, masks, max_entries,
+				      recursive, poco_direntry, temp,
+				      is_transaction);
+	}
+
+	reply_from_pagecache(dirs, count, hitArray, dirElem, cb, cbarg, masks);
+
+	delete dirElem;
+dir_failure:
+	delete hitArray;
+bool_failure:
+	delete temp;
+failure:
+	return tcres;
 }
 
 /**

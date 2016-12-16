@@ -29,8 +29,9 @@ public:
 	string path;
 	void *fh;
 	struct stat *attrs;
-	SharedPtr<DirEntry> parent;
-	unordered_map<string, SharedPtr<DirEntry>> childrens;
+	SharedPtr<DirEntry> *parent;
+	bool has_listdir;
+	unordered_map<string, SharedPtr<DirEntry>*> children;
 	pthread_rwlock_t attrLock;
 
 	DirEntry(string p, void *f = nullptr, struct stat *a = nullptr) : path(p) {
@@ -38,6 +39,7 @@ public:
 		cout << "DirEntry: constructor \n";
 #endif
  		pthread_rwlock_init(&attrLock, NULL);
+		has_listdir = false;
 	}
 
 	~DirEntry() {

@@ -529,6 +529,41 @@ static inline void tc_stat2attrs(const struct stat *st, struct tc_attrs *attrs)
 	}
 }
 
+static inline void tc_attrs2attrs(struct tc_attrs *dstAttrs, const struct tc_attrs *srcAttrs)
+{
+	memcpy(&dstAttrs->file, &srcAttrs->file, sizeof(tc_file));
+
+	if (dstAttrs->masks.has_mode)
+		dstAttrs->mode = srcAttrs->mode;
+	if (dstAttrs->masks.has_size)
+		dstAttrs->size = srcAttrs->size;
+	if (dstAttrs->masks.has_nlink)
+		dstAttrs->nlink = srcAttrs->nlink;
+	if (dstAttrs->masks.has_fileid)
+		dstAttrs->fileid = srcAttrs->fileid;
+	if (dstAttrs->masks.has_uid)
+		dstAttrs->uid = srcAttrs->uid;
+	if (dstAttrs->masks.has_gid)
+		dstAttrs->gid = srcAttrs->gid;
+	if (dstAttrs->masks.has_rdev)
+		dstAttrs->rdev = srcAttrs->rdev;
+	if (dstAttrs->masks.has_blocks)
+		dstAttrs->blocks = srcAttrs->blocks;
+	if (dstAttrs->masks.has_atime) {
+		dstAttrs->atime.tv_sec = srcAttrs->atime.tv_sec;
+		dstAttrs->atime.tv_nsec = srcAttrs->atime.tv_nsec;
+	}
+	if (dstAttrs->masks.has_mtime) {
+		dstAttrs->mtime.tv_sec = srcAttrs->mtime.tv_sec;
+		dstAttrs->mtime.tv_nsec = srcAttrs->mtime.tv_nsec;
+	}
+	if (dstAttrs->masks.has_ctime) {
+		dstAttrs->ctime.tv_sec = srcAttrs->ctime.tv_sec;
+		dstAttrs->ctime.tv_nsec = srcAttrs->ctime.tv_nsec;
+	}
+}
+
+
 static inline void tc_attrs2stat(const struct tc_attrs *attrs, struct stat *st)
 {
 	if (attrs->masks.has_mode)
