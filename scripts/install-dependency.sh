@@ -71,5 +71,16 @@ if [ ! -d gmock-1.7.0 ]; then
   make
 fi
 
+# install poco
+POCO_VER='1.7.8'
+wget https://pocoproject.org/releases/poco-${POCO_VER}/poco-${POCO_VER}-all.tar.gz
+tar -xzf poco-${POCO_VER}-all.tar.gz
+cd poco-${POCO_VER}-all
+./configure --omit=Data/ODBC,Data/MySQL
+make -j2
+make install
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+
 echo "GOOGLE_MOCK is installed at /opt/gmock-1.7.0"
 echo "GOOGLE_TEST is installed at /opt/gmock-1.7.0/gtest"
