@@ -9,6 +9,13 @@ procedures, which is currently under-utilized as we found in our SIGMETRICS'15
 paper "Newer Is Sometimes Better: An Evaluation of NFSv4.1". Available at
 https://www.fsl.cs.sunysb.edu/docs/nfs4perf/nfs4perf-sigm15.pdf
 
+This project exposes a vectorized file-system API that is discussed in a
+[FAST2017 paper][vNFS-talk] entitled ["vNFS: Maximizing NFS Performance with
+Compounds and Vectorized I/O"][vNFS-pdf].  In the vNFS paper, the names of the
+API functions are in the form of ``vread`` instead of ``tc_readv`` (as in this
+repository) to avoid discussion of transaction (which is not part of the
+vNFS paper).
+
 In a nutshell, the biggest reason why compound procedures are practically
 ineffective is the lower-level nature of POSIX file-system API.  Therefore, in
 this project, we will supplement POSIX with higher-level APIs that can take
@@ -34,7 +41,7 @@ NFS-Server, the in-kernel file-system, or the storage devices.
 Get Started
 ===========
 Note: Currently, the project has only been tested under Linux, or more
-specifically, CentOS 7.
+specifically, CentOS 7 and Ubuntu 16.
 
 Prerequisite
 ------------
@@ -46,7 +53,9 @@ So, the simplest way is to use the public Docker image built for this project
 in [Docker Hub](https://hub.docker.com/r/mingchen/tc-client/)
 
 Alternatively, we can create a CentOS VM, and then execute
-[`scripts/install-dependency.sh`](scripts/install-dependency.sh)
+[`scripts/install-dependency.sh`](scripts/install-dependency.sh).  A similar
+script exists for Ubuntu 16 at
+[`scripts/install-dependency-ubuntu16.sh`](scripts/install-dependency-ubuntu16.sh).
 
 Build
 -----
@@ -139,3 +148,6 @@ Contribution
 ============
 The project is in a very early stage; any help is greatly appreciated.
 Looking forward to your git push notification :-)
+
+[vNFS-talk]: https://www.usenix.org/conference/fast17/technical-sessions/presentation/chen
+[vNFS-pdf]: http://www.fsl.cs.sunysb.edu/docs/nfs4perf/vnfs-fast17.pdf

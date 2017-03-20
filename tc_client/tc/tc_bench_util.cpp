@@ -30,6 +30,8 @@
 
 #include <string>
 #include <vector>
+#include <memory>
+#include <iostream>
 
 using std::vector;
 
@@ -57,6 +59,15 @@ void FreePaths(vector<const char *> *paths)
 {
 	for (auto p : *paths)
 		free((char *)p);
+}
+
+vector<tc_file> Paths2Files(const vector<const char *>& paths)
+{
+	vector<tc_file> files(paths.size());
+	for (int i = 0; i < files.size(); ++i) {
+		files[i] = tc_file_from_path(paths[i]);
+	}
+	return files;
 }
 
 vector<tc_iovec> NewIovecs(tc_file *files, int n, size_t offset)
@@ -136,18 +147,19 @@ void CreateFiles(vector<const char *>& paths)
 	FreeIovecs(&iovs);
 }
 
-vector<tc_extent_pair> NewFilePairsToCopy(size_t nfiles)
+std::vector<tc_extent_pair> NewFilePairsToCopy(const char *src_format,
+					       const char *dst_format,
+					       size_t nfiles, size_t start)
 {
-	vector<const char *> srcs = NewPaths("file-%d", nfiles);
-	CreateFiles(srcs);
-	vector<const char *> dsts = NewPaths("dst-%d", nfiles);
+	auto srcs = NewPaths(src_format, nfiles, start);
+	auto dsts = NewPaths(dst_format, nfiles, start);
 	vector<tc_extent_pair> pairs(nfiles);
 	for (size_t i = 0; i < nfiles; ++i) {
 		pairs[i].src_path = srcs[i];
 		pairs[i].dst_path = dsts[i];
 		pairs[i].src_offset = 0;
 		pairs[i].dst_offset = 0;
-		pairs[i].length = BUFSIZE;
+		pairs[i].length = 0;
 	}
 	return pairs;
 }
@@ -207,4 +219,28 @@ void* SetUp(bool istc)
 void TearDown(void *context)
 {
 	tc_deinit(context);
+}
+
+off_t ConvertSize(const char *size_str)
+{
+	double size = atof(size_str);
+	char unit = size_str[strlen(size_str) - 1];
+	off_t scale = 1;
+	if (unit == 'k' || unit == 'K') {
+		scale <<= 10;
+	} else if (unit == 'm' || unit == 'M') {
+		scale <<= 20;
+	} else if (unit == 'g' || unit == 'G') {
+		scale <<= 30;
+	}
+	return (off_t)(scale * size);
+}
+
+off_t GetFileSize(const char *file_path)
+{
+	struct stat file_status;
+	if (tc_stat(file_path, &file_status) < 0) {
+		error(1, errno, "Could not get size of %s", file_path);
+	}
+	return file_status.st_size;
 }
