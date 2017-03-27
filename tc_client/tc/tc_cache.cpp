@@ -60,6 +60,11 @@ void update_file(tc_file *tcf)
 
 	pthread_rwlock_rdlock(&((*ptrElem)->attrLock));
 	curHandle = (struct file_handle *)(*ptrElem)->fh;
+	if(!curHandle) {
+		pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+		return;
+	}
+
 	h = copyFH(curHandle);
 	pthread_rwlock_unlock(&((*ptrElem)->attrLock));
 
@@ -232,6 +237,15 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 
 	while (i < count) {
 		cur_sAttr = sAttrs + i;
+		if (cur_sAttr->file.type != TC_FILE_PATH) {
+			/* fill final_array[miss_count] */
+			cur_fAttr = final_attrs + *miss_count;
+			fill_newAttr(cur_fAttr, cur_sAttr);
+			cur_fAttr->masks = TC_MASK_INIT_ALL;
+			(*miss_count)++;
+			i++;
+			continue;
+		}
 		SharedPtr<DirEntry> *ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
 		if (ptrElem) {
@@ -242,7 +256,7 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 
 			pthread_rwlock_unlock(&((*ptrElem)->attrLock));
 
-			hitArray[count] = true;
+			hitArray[i] = true;
 		} else {
 			/* fill final_array[miss_count] */
 			cur_fAttr = final_attrs + *miss_count;
@@ -268,7 +282,7 @@ void getattr_update_pageCache(struct tc_attrs *sAttrs,
 
 	while (i < count) {
 		cur_sAttr = sAttrs + i;
-		if (hitArray[i] == false) {
+		if (hitArray[i] == false && cur_sAttr->file.type == TC_FILE_PATH) {
 			cur_fAttr = final_attrs + j;
 
 			SharedPtr<DirEntry> de1(
@@ -289,6 +303,11 @@ void getattr_update_pageCache(struct tc_attrs *sAttrs,
 
 			j++;
 		}
+		else if (hitArray[i] == false) {
+			cur_fAttr = final_attrs + j;
+			tc_attrs2attrs(cur_sAttr, cur_fAttr); 
+			j++;
+		}
 
 		i++;
 	}
@@ -302,14 +321,9 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	int miss_count = 0;
 	bool *hitArray = NULL;
 
-	saved_tcfs = nfs_updateAttr_FilenameToFh(attrs, count);
-	if (!saved_tcfs) {
-		return tc_failure(0, ENOMEM);
-	}
-
 	hitArray = new bool[count]();
 	if (hitArray == NULL)
-		goto mem_failure;
+		return tc_failure(0, ENOMEM);
 
 	std::fill_n(hitArray, count, false);
 
@@ -319,7 +333,7 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 
 	g_miss_count += miss_count;
 	if (miss_count == 0) {
-		/* Full cache hit */
+	/* Full cache hit */
 		goto exit;
 	}
 
@@ -333,14 +347,10 @@ exit:
 	delete hitArray;
 	free(final_attrs);
 
-	nfs_restoreAttr_FhToFilename(attrs, count, saved_tcfs);
-
 	return tcres;
 
 mem_failure2:
 	delete hitArray;
-mem_failure:
-	nfs_restoreAttr_FhToFilename(attrs, count, saved_tcfs);
 	return tc_failure(0, ENOMEM);
 }
 
@@ -351,7 +361,10 @@ void setattr_update_pageCache(struct tc_attrs *sAttrs, int count)
 
 	while (i < count) {
 		cur_sAttr = sAttrs + i;
-
+		if (cur_sAttr->file.type != TC_FILE_PATH) {
+			i++;
+			continue;
+		}
 		SharedPtr<DirEntry> *ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
 		if (ptrElem) {
@@ -379,13 +392,11 @@ tc_res nfs_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	}
 
 	tcres = nfs4_lsetattrsv(attrs, count, is_transaction);
-
+	nfs_restoreAttr_FhToFilename(attrs, count, saved_tcfs);
 	if (tc_okay(tcres)) {
 		setattr_update_pageCache(attrs, count);
 	}
 	
-	nfs_restoreAttr_FhToFilename(attrs, count, saved_tcfs);
-
 	return tcres;
 }
 
@@ -409,6 +420,7 @@ static bool poco_direntry(const struct tc_attrs *dentry, const char *dir,
 			SharedPtr<DirEntry> de1(
 			    new DirEntry(dentry->file.path));
 			de1->attrs = new struct stat();
+			de1->fh = NULL;
 			tc_attrs2stat(dentry, de1->attrs);
 
 			pthread_rwlock_wrlock(&(de1->attrLock));
@@ -697,6 +709,11 @@ tc_res nfs_removev(tc_file *tc_files, int count, bool is_transaction)
 
 	nfs_restoreFile_FhToFilename(tc_files, count, saved_tcfs);
 
+	if (tc_okay(tcres)) {
+		for (int i = 0; i < count; i++) {
+			mdCache->remove(tc_files[i].path);
+		}
+	}
 	return tcres;
 }
 
