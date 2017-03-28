@@ -28,10 +28,10 @@ class DirEntry {
 public:
 	string path;
 	void *fh;
-	struct stat *attrs;
-	SharedPtr<DirEntry> *parent;
+	struct stat attrs;
+	SharedPtr<DirEntry> parent;
 	bool has_listdir;
-	unordered_map<string, SharedPtr<DirEntry>*> children;
+	unordered_map<string, SharedPtr<DirEntry>> children;
 	pthread_rwlock_t attrLock;
 
 	DirEntry(string p, void *f = nullptr, struct stat *a = nullptr) : path(p) {
@@ -46,12 +46,12 @@ public:
 #ifdef _DEBUG
 		cout << "DirEntry: destructor \n";
 #endif
-		if (attrs != nullptr) {
+		/*if (attrs != nullptr) {
 #ifdef _DEBUG
 			cout << "~DirEntry: attrs should be released \n";
 #endif
 			delete attrs;
-		}
+		}*/
 		if (fh != NULL) {
 			free(fh);
 		}

@@ -5,7 +5,7 @@
 #include "../tc_cache/TC_MetaDataCache.h"
 using namespace std;
 
-TC_MetaDataCache<string, SharedPtr<DirEntry> > *mdCache = NULL;
+TC_MetaDataCache<string, DirEntry > *mdCache = NULL;
 int g_miss_count = 0;
 
 void reset_miss_count() {
@@ -18,7 +18,7 @@ int get_miss_count() {
 
 void init_page_cache(uint64_t size, uint64_t time)
 {
-	mdCache = new TC_MetaDataCache<string, SharedPtr<DirEntry> >(
+	mdCache = new TC_MetaDataCache<string, DirEntry>(
 	    size, time);
 }
 
@@ -53,20 +53,20 @@ void update_file(tc_file *tcf)
 	struct file_handle *curHandle;
 	struct file_handle *h;
 
-	SharedPtr<DirEntry> *ptrElem = mdCache->get(tcf->path);
-	if (!ptrElem) {
+	SharedPtr<DirEntry> ptrElem = mdCache->get(tcf->path);
+	if (ptrElem.isNull()) {
 		return;
 	}
 
-	pthread_rwlock_rdlock(&((*ptrElem)->attrLock));
-	curHandle = (struct file_handle *)(*ptrElem)->fh;
+	pthread_rwlock_rdlock(&((ptrElem)->attrLock));
+	curHandle = (struct file_handle *)(ptrElem)->fh;
 	if(!curHandle) {
-		pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+		pthread_rwlock_unlock(&((ptrElem)->attrLock));
 		return;
 	}
 
 	h = copyFH(curHandle);
-	pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+	pthread_rwlock_unlock(&((ptrElem)->attrLock));
 
 	tcf->type = TC_FILE_HANDLE;
 	tcf->handle = h;
@@ -246,15 +246,15 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 			i++;
 			continue;
 		}
-		SharedPtr<DirEntry> *ptrElem =
+		SharedPtr<DirEntry> ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
-		if (ptrElem) {
+		if (!ptrElem.isNull()) {
 			/* Cache hit */
-			pthread_rwlock_rdlock(&((*ptrElem)->attrLock));
+			pthread_rwlock_rdlock(&((ptrElem)->attrLock));
 
-			tc_stat2attrs((*ptrElem)->attrs, cur_sAttr);
+			tc_stat2attrs(&(ptrElem)->attrs, cur_sAttr);
 
-			pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+			pthread_rwlock_unlock(&((ptrElem)->attrLock));
 
 			hitArray[i] = true;
 		} else {
@@ -285,21 +285,19 @@ void getattr_update_pageCache(struct tc_attrs *sAttrs,
 		if (hitArray[i] == false && cur_sAttr->file.type == TC_FILE_PATH) {
 			cur_fAttr = final_attrs + j;
 
-			SharedPtr<DirEntry> de1(
-			    new DirEntry(cur_sAttr->file.path));
-			de1->attrs = new struct stat();
-			tc_attrs2stat(cur_fAttr, de1->attrs);
-			de1->fh = copyFH(cur_fAttr->file.handle);
+			DirEntry de1(cur_sAttr->file.path);
+			tc_attrs2stat(cur_fAttr, &de1.attrs);
+			de1.fh = NULL;
 
-			pthread_rwlock_wrlock(&(de1->attrLock));
+			pthread_rwlock_wrlock(&(de1.attrLock));
 
-			mdCache->add(de1->path, de1);
+			mdCache->add(de1.path, de1);
 
 			// Do we need to perform this with outside the
 			// write lock?
-			tc_stat2attrs(de1->attrs, cur_sAttr);
+			tc_stat2attrs(&de1.attrs, cur_sAttr);
 
-			pthread_rwlock_unlock(&(de1->attrLock));
+			pthread_rwlock_unlock(&(de1.attrLock));
 
 			j++;
 		}
@@ -365,16 +363,16 @@ void setattr_update_pageCache(struct tc_attrs *sAttrs, int count)
 			i++;
 			continue;
 		}
-		SharedPtr<DirEntry> *ptrElem =
+		SharedPtr<DirEntry> ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
-		if (ptrElem) {
+		if (!ptrElem.isNull()) {
 			/* Update cache */
-			pthread_rwlock_wrlock(&((*ptrElem)->attrLock));
+			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
 
-			tc_attrs2stat(cur_sAttr, (*ptrElem)->attrs);
+			tc_attrs2stat(cur_sAttr, &(ptrElem)->attrs);
 			// Do we need to update FH??
 
-			pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+			pthread_rwlock_unlock(&((ptrElem)->attrLock));
 		}
 
 		i++;
@@ -413,32 +411,30 @@ static bool poco_direntry(const struct tc_attrs *dentry, const char *dir,
 	struct listDirPxy *temp = (struct listDirPxy *)cbarg;
 	struct tc_attrs finalDentry;
 
-	SharedPtr<DirEntry> *parentElem = mdCache->get(dir);
-	if (parentElem) {
-		SharedPtr<DirEntry> *ptrElem = mdCache->get(dentry->file.path);
-		if (!ptrElem) {
-			SharedPtr<DirEntry> de1(
-			    new DirEntry(dentry->file.path));
-			de1->attrs = new struct stat();
-			de1->fh = NULL;
-			tc_attrs2stat(dentry, de1->attrs);
+	SharedPtr<DirEntry> parentElem = mdCache->get(dir);
+	if (!parentElem.isNull()) {
+		SharedPtr<DirEntry> ptrElem = mdCache->get(dentry->file.path);
+		if (ptrElem.isNull()) {
+			DirEntry de1(dentry->file.path);
+			de1.fh = NULL;
+			tc_attrs2stat(dentry, &de1.attrs);
 
-			pthread_rwlock_wrlock(&(de1->attrLock));
-
-			mdCache->add(de1->path, de1);
-			de1->parent = parentElem;
-			pthread_rwlock_unlock(&(de1->attrLock));
+			pthread_rwlock_wrlock(&(de1.attrLock));
+			
+			mdCache->add(de1.path, de1);
+			de1.parent = parentElem;
+			pthread_rwlock_unlock(&(de1.attrLock));
 			ptrElem = mdCache->get(dentry->file.path);
 		} else {
-			pthread_rwlock_wrlock(&((*ptrElem)->attrLock));
-			tc_attrs2stat(dentry, (*ptrElem)->attrs);
-			(*ptrElem)->parent = parentElem;
-			pthread_rwlock_unlock(&((*ptrElem)->attrLock));
+			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
+			tc_attrs2stat(dentry, &(ptrElem)->attrs);
+			(ptrElem)->parent = parentElem;
+			pthread_rwlock_unlock(&((ptrElem)->attrLock));
 		}
 
-		pthread_rwlock_wrlock(&((*parentElem)->attrLock));
-		(*parentElem)->children[dentry->file.path] = ptrElem;
-		pthread_rwlock_unlock(&((*parentElem)->attrLock));
+		pthread_rwlock_wrlock(&((parentElem)->attrLock));
+		(parentElem)->children[dentry->file.path] = ptrElem;
+		pthread_rwlock_unlock(&((parentElem)->attrLock));
 	}
 
 	finalDentry.masks = temp->masks;
@@ -449,13 +445,13 @@ static bool poco_direntry(const struct tc_attrs *dentry, const char *dir,
 }
 
 const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int count,
-			       int *miss_count, SharedPtr<DirEntry> **dirElem)
+			       int *miss_count)
 {
 	const char **finalDirs;
 	int i = 0;
 	int j = 0;
 	const char *curDir = NULL;
-	SharedPtr<DirEntry> *curElem = NULL;
+	SharedPtr<DirEntry> curElem;
 
 	finalDirs = (const char**)malloc(count * sizeof(char*));
 	if (!finalDirs) {
@@ -465,14 +461,11 @@ const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int coun
 	while (i < count) {
 		curDir = dirs[i];
 		curElem = mdCache->get(curDir);
-		if (curElem == NULL || !(*curElem)->has_listdir) {
+		if (curElem.isNull() || !(curElem)->has_listdir) {
 			(*miss_count)++;
 			finalDirs[j++] = curDir;
-			// We need to update has_listdir later
-			dirElem[i] = curElem;
 		} else {
 			hitArray[i] = true;
-			dirElem[i] = curElem;
 		}
 
 		i++;
@@ -481,33 +474,35 @@ const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int coun
 	return finalDirs;
 }
 
-void invoke_callback(const char *curDir, SharedPtr<DirEntry> *curElem, tc_listdirv_cb cb,
+void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem, tc_listdirv_cb cb,
 		     void *cbarg, struct tc_attrs_masks masks)
 {
-	SharedPtr<DirEntry> *fileEntry = NULL;
+	SharedPtr<DirEntry> fileEntry = NULL;
 	struct tc_attrs finalDentry;
 
-	for (const auto &mypair : (*curElem)->children) {
+	for (const auto &mypair : (curElem)->children) {
 		fileEntry = mypair.second;
 		finalDentry.masks = masks;
-		finalDentry.file = tc_file_from_path((*fileEntry)->path.c_str());
-		tc_stat2attrs((*fileEntry)->attrs, &finalDentry);
+		finalDentry.file = tc_file_from_path((fileEntry)->path.c_str());
+		tc_stat2attrs(&(fileEntry)->attrs, &finalDentry);
 
 		cb(&finalDentry, curDir, cbarg);
 	}
 }
 
 void reply_from_pagecache(const char **dirs, int count, bool *hitArray,
-			  SharedPtr<DirEntry> **dirElem, tc_listdirv_cb cb,
+			  tc_listdirv_cb cb,
 			  void *cbarg, struct tc_attrs_masks masks)
 {
 	int i = 0;
-	SharedPtr<DirEntry> *curElem = NULL;
+	SharedPtr<DirEntry> curElem;
+	const char *curDir = NULL;
 
 	while (i < count) {
-		curElem = dirElem[i];
-		if (curElem != NULL) {
-			(*curElem)->has_listdir = true;
+		curDir = dirs[i];
+		curElem = mdCache->get(curDir);
+		if (!curElem.isNull()) {
+			(curElem)->has_listdir = true;
 			if (hitArray[i] == true) {
 				invoke_callback(dirs[i], curElem, cb, cbarg, masks);
 			}
@@ -526,8 +521,11 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 	const char **finalDirs;
 	int miss_count;
 	bool *hitArray = NULL;
-	SharedPtr<DirEntry> **dirElem;
+	const char **_dirs = (const char**)malloc(count * sizeof(char*));;
 
+	for (int i = 0; i < count; i++) {
+		_dirs[i] = dirs[i];
+	}
 	temp = new listDirPxy;
 	if (temp == NULL)
 		goto failure;
@@ -536,13 +534,9 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 	if (hitArray == NULL)
 		goto bool_failure;
 
-	dirElem = new SharedPtr<DirEntry> *[count]();
-	if (dirElem == NULL)
-		goto dir_failure;
-
 	std::fill_n(hitArray, count, false);
 
-	finalDirs = listdir_check_pagecache(hitArray, dirs, count, &miss_count, dirElem);
+	finalDirs = listdir_check_pagecache(hitArray, _dirs, count, &miss_count);
 
 	if (miss_count > 0) {
 		temp->cb = cb;
@@ -554,9 +548,8 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 				      is_transaction);
 	}
 
-	reply_from_pagecache(dirs, count, hitArray, dirElem, cb, cbarg, masks);
+	reply_from_pagecache(_dirs, count, hitArray, cb, cbarg, masks);
 
-	delete dirElem;
 dir_failure:
 	delete hitArray;
 bool_failure:
