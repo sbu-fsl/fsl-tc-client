@@ -242,6 +242,14 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 			cur_fAttr = final_attrs + *miss_count;
 			fill_newAttr(cur_fAttr, cur_sAttr);
 			cur_fAttr->masks = TC_MASK_INIT_ALL;
+			if (hitArray[i-1] == true &&
+				cur_fAttr->file.type == TC_FILE_CURRENT) {
+				char *new_path = (char *) malloc(strlen(sAttrs[i-1].file.path) +
+						strlen(sAttrs[i].file.path) + 2);
+				sprintf(new_path, "%s/%s", sAttrs[i-1].file.path, sAttrs[i].file.path);
+				cur_fAttr->file.path = new_path;
+				cur_fAttr->file.type = TC_FILE_PATH;
+			}
 			(*miss_count)++;
 			i++;
 			continue;
@@ -318,6 +326,7 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	struct tc_attrs *final_attrs = NULL;
 	int miss_count = 0;
 	bool *hitArray = NULL;
+	int j = 0;
 
 	hitArray = new bool[count]();
 	if (hitArray == NULL)
@@ -342,6 +351,14 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	}
 
 exit:
+	for (int i = 0; i < count; i++) {
+		if (hitArray[i] == false) {
+			if (attrs[i].file.type == TC_FILE_CURRENT &&
+				final_attrs[j].file.type == TC_FILE_PATH)
+				free((void *) final_attrs[j].file.path);
+			j++;
+		}
+	}
 	delete hitArray;
 	free(final_attrs);
 

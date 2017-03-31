@@ -516,16 +516,16 @@ static inline void tc_stat2attrs(const struct stat *st, struct tc_attrs *attrs)
 	if (attrs->masks.has_blocks)
 		attrs->blocks = st->st_blocks;
 	if (attrs->masks.has_atime) {
-		attrs->atime.tv_sec = st->st_atime;
-		attrs->atime.tv_nsec = 0;
+		attrs->atime.tv_sec = st->st_atim.tv_sec;
+		attrs->atime.tv_nsec = st->st_atim.tv_nsec;
 	}
 	if (attrs->masks.has_mtime) {
-		attrs->mtime.tv_sec = st->st_mtime;
-		attrs->mtime.tv_nsec = 0;
+		attrs->mtime.tv_sec = st->st_mtim.tv_sec;
+		attrs->mtime.tv_nsec = st->st_mtim.tv_nsec;
 	}
 	if (attrs->masks.has_ctime) {
-		attrs->ctime.tv_sec = st->st_ctime;
-		attrs->ctime.tv_nsec = 0;
+		attrs->ctime.tv_sec = st->st_ctim.tv_sec;
+		attrs->ctime.tv_nsec = st->st_ctim.tv_nsec;;
 	}
 }
 
@@ -582,12 +582,18 @@ static inline void tc_attrs2stat(const struct tc_attrs *attrs, struct stat *st)
 		st->st_gid = attrs->gid;
 	if (attrs->masks.has_rdev)
 		st->st_rdev = attrs->rdev;
-	if (attrs->masks.has_atime)
-		st->st_atime = attrs->atime.tv_sec;
-	if (attrs->masks.has_mtime)
-		st->st_mtime = attrs->mtime.tv_sec;
-	if (attrs->masks.has_ctime)
-		st->st_ctime = attrs->ctime.tv_sec;
+	if (attrs->masks.has_atime) {
+		st->st_atim.tv_sec = attrs->atime.tv_sec;
+		st->st_atim.tv_nsec = attrs->atime.tv_nsec;
+	}
+	if (attrs->masks.has_mtime) {
+		st->st_mtim.tv_sec = attrs->mtime.tv_sec;
+		st->st_mtim.tv_nsec = attrs->mtime.tv_nsec;
+	}
+	if (attrs->masks.has_ctime) {
+		st->st_ctim.tv_sec = attrs->ctime.tv_sec;
+		st->st_ctim.tv_nsec = attrs->ctime.tv_nsec;
+	}
 }
 
 extern const struct tc_attrs_masks TC_ATTRS_MASK_ALL;
