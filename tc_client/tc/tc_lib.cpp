@@ -404,6 +404,7 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 	struct rm_cb_args cbargs;
 	cbargs.dirs = &dirs;
 	cbargs.files = &files_to_remove;
+	const char **dirs_p;
 
 	// initialize "dirs"
 	{
@@ -448,7 +449,11 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 		free_paths(&files_to_remove);
 
 		int n = dirs.size() - emptied;
-		tcres = tc_listdirv(dirs.data() + emptied, n, listdir_mask, 0,
+		dirs_p = (const char**)malloc(n * sizeof(char*));
+		for (int i = 0; i < n; i++) {
+			dirs_p[i] = *(dirs.data() + emptied + i);
+		}
+		tcres = tc_listdirv(dirs_p, n, listdir_mask, 0,
 				    false, rm_list_callback, &cbargs, false);
 		if (!tc_okay(tcres)) {
 			return tcres;

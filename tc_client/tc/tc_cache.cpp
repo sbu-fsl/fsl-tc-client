@@ -538,11 +538,6 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 	const char **finalDirs;
 	int miss_count;
 	bool *hitArray = NULL;
-	const char **_dirs = (const char**)malloc(count * sizeof(char*));;
-
-	for (int i = 0; i < count; i++) {
-		_dirs[i] = dirs[i];
-	}
 	temp = new listDirPxy;
 	if (temp == NULL)
 		goto failure;
@@ -553,7 +548,7 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 
 	std::fill_n(hitArray, count, false);
 
-	finalDirs = listdir_check_pagecache(hitArray, _dirs, count, &miss_count);
+	finalDirs = listdir_check_pagecache(hitArray, dirs, count, &miss_count);
 
 	if (miss_count > 0) {
 		temp->cb = cb;
@@ -565,7 +560,7 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 				      is_transaction);
 	}
 
-	reply_from_pagecache(_dirs, count, hitArray, cb, cbarg, masks);
+	reply_from_pagecache(dirs, count, hitArray, cb, cbarg, masks);
 
 dir_failure:
 	delete hitArray;
