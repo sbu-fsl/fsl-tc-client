@@ -621,7 +621,7 @@ enqueue_dir_to_list(struct glist_head *dir_queue, const char *path,
 
 static int posix_listdir(struct glist_head *dir_queue, const char *dir,
 			 struct tc_attrs_masks masks, int index, int *limit,
-			 bool recursive, tc_listdirv_cb cb, void *cbarg)
+			 bool recursive, vec_listdir_cb cb, void *cbarg)
 {
 	DIR *dir_fd;
 	struct tc_attrs cur_attr;
@@ -689,7 +689,7 @@ exit:
 }
 
 tc_res posix_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
-		      int max_entries, bool recursive, tc_listdirv_cb cb,
+		      int max_entries, bool recursive, vec_listdir_cb cb,
 		      void *cbarg, bool istxn)
 {
 	tc_res tcres = { .err_no = 0 };

@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
 	assert(read_iovec[3].data);
 
 	/* Read the file; nfs4_readv() will open it first if needed. */
-	res = tc_readv(read_iovec, 4, false);
+	res = vec_read(read_iovec, 4, false);
 
 	/* Check results. */
 	if (tc_okay(res)) {

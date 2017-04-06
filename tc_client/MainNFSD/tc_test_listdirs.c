@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
 	for (i = 0; i < NDIRS; ++i) {
 		tc_set_up_creation(&dirs[i], DIR_PATHS[i], 0755);
 	}
-	tcres = tc_mkdirv(dirs, NDIRS, false);
+	tcres = vec_mkdir(dirs, NDIRS, false);
 	if (tc_okay(tcres)) {
 		fprintf(stderr, "successfully created %d directories\n", NDIRS);
 	} else {
@@ -115,8 +115,8 @@ int main(int argc, char *argv[])
 				i * NFILES + j, path, DIR_PATHS[i]);
 		}
 	}
-	/* FIXME: use tc_writev() to create files instead of directories */
-	tcres = tc_mkdirv(files, NDIRS * NFILES, false);
+	/* FIXME: use vec_write() to create files instead of directories */
+	tcres = vec_mkdir(files, NDIRS * NFILES, false);
 	if (tc_okay(tcres)) {
 		fprintf(stderr, "successfully created %d files\n",
 			NDIRS * NFILES);
@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 		goto exit;
 	}
 
-	tcres = tc_listdirv(DIR_PATHS, NDIRS, masks, 0, false, process_direntry,
+	tcres = vec_listdir(DIR_PATHS, NDIRS, masks, 0, false, process_direntry,
 			    NULL, false);
 	if (tc_okay(tcres)) {
 		fprintf(stderr, "successfully listed %d files\n",

@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 		/* Write the file using NFS compounds; nfs4_writev() will open
 		 * the file with CREATION flag, write to it, and then close it.
 		 * */
-		res = tc_writev(&write_iovec, 1, false);
+		res = vec_write(&write_iovec, 1, false);
 
 		/* Check results. */
 		if (tc_okay(res)) {

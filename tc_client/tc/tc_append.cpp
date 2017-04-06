@@ -90,7 +90,7 @@ void Run(const char *dir)
 		iov.is_eof = false;
 	}
 
-	tc_res tcres = tc_writev(iovs.data(), iovs.size(), false);
+	tc_res tcres = vec_write(iovs.data(), iovs.size(), false);
 	if (!tc_okay(tcres)) {
 		error(1, tcres.err_no, "failed to append %s",
 		      iovs[tcres.index].file.path);

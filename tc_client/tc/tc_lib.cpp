@@ -109,7 +109,7 @@ static tc_res tc_cp_mkdirs(const char *src_dir, const char **dirs, int count,
 		attrs[i].masks.has_mode = true;
 		attrs[i].mode = 0755;
 	}
-	tc_res res = tc_mkdirv(attrs.data(), count, false);
+	tc_res res = vec_mkdir(attrs.data(), count, false);
 	if (!tc_okay(res)) {
 		printf("mkdirv-failed: %s (%d-th %s)\n", strerror(res.err_no),
 		       res.index, attrs[res.index].file.path);
@@ -133,10 +133,10 @@ static tc_res tc_symlink_objs(const vector<const char *> &srcs,
 		dst_paths[i] = new_cp_target_path(srcs[i], src_dir, dst_dir);
 	}
 
-	tcres = tc_symlinkv((const char **)(src_paths.data()), dst_paths.data(),
+	tcres = vec_symlink((const char **)(src_paths.data()), dst_paths.data(),
 			    count, false);
 	if (!tc_okay(tcres)) {
-		fprintf(stderr, "tc_symlinkv: %s (%s -> %s)\n",
+		fprintf(stderr, "vec_symlink: %s (%s -> %s)\n",
 			strerror(tcres.err_no), src_paths[tcres.index],
 			dst_paths[tcres.index]);
 	}
@@ -161,9 +161,9 @@ static tc_res tc_cp_files(vector<struct tc_attrs> &srcs, const char *src_dir,
 		pairs[i].dst_offset = 0;
 		pairs[i].length = 0;
 	}
-	tcres = tc_lcopyv(pairs.data(), count, false);
+	tcres = vec_lcopy(pairs.data(), count, false);
 	if (!tc_okay(tcres)) {
-		fprintf(stderr, "tc_lcopyv: %s (%s)\n", strerror(tcres.err_no),
+		fprintf(stderr, "vec_lcopy: %s (%s)\n", strerror(tcres.err_no),
 			pairs[tcres.index].src_path);
 	}
 
@@ -186,7 +186,7 @@ static tc_res tc_dup_files(const vector<struct tc_attrs> &srcs,
 		attrs[i].masks.has_size = true;
 	}
 
-	tc_res tcres = tc_lgetattrsv(attrs.data(), count, false);
+	tc_res tcres = vec_lgetattrs(attrs.data(), count, false);
 	if (!tc_okay(tcres)) {
 		fprintf(stderr, "failed to getattrsv");
 		return tcres;
@@ -220,7 +220,7 @@ static tc_res tc_dup_files(const vector<struct tc_attrs> &srcs,
 		       n++ < 64) {
 			bytes += small_files[i + n].length;
 		}
-		tcres = tc_ldupv(small_files.data() + i, n, false);
+		tcres = vec_ldup(small_files.data() + i, n, false);
 		if (!tc_okay(tcres)) {
 			fprintf(stderr, "failed to duplicate file %s to %s: %s",
 				small_files[i + tcres.index].src_path,
@@ -242,7 +242,7 @@ static tc_res tc_dup_files(const vector<struct tc_attrs> &srcs,
 			ext.dst_offset = offset;
 			ext.length = std::min<size_t>(attrs[i].size - offset,
 						      kSizeLimit);
-			tcres = tc_ldupv(&ext, 1, false);
+			tcres = vec_ldup(&ext, 1, false);
 			if (!tc_okay(tcres)) {
 				fprintf(stderr, "failed to duplicate file %s "
 						"to %s at offset %s: %s",
@@ -266,18 +266,18 @@ static tc_res tc_cp_setattrs(const vector<struct tc_attrs> &srcs,
 	vector<struct tc_attrs> dsts(srcs);
 	for (int i = 0; i < srcs.size(); i++) {
 		// Workaround -- was getting invalid argument error from
-		// lsetattrsv().  The issue was that tc_listdirv() was not
+		// lsetattrsv().  The issue was that vec_listdir() was not
 		// honoring the mask I gave it, meaning the tc_attrs in the
 		// srcs vector had incorrect masks set.  So here, we explicitly
 		// override those incorrect masks with what we want to set.
 		dsts[i].masks = TC_ATTRS_MASK_NONE;
-		dsts[i].mode &= ~(S_IFMT);  // TODO: do this in tc_lsetattrsv()
+		dsts[i].mode &= ~(S_IFMT);  // TODO: do this in vec_lsetattrs()
 		dsts[i].masks.has_mode = true;
 
 		dsts[i].file = tc_file_from_path(
 		    new_cp_target_path(srcs[i].file.path, src_dir, dst_dir));
 	}
-	tc_res tcres = tc_lsetattrsv(dsts.data(), dsts.size(), false);
+	tc_res tcres = vec_lsetattrs(dsts.data(), dsts.size(), false);
 	free_attrs(&dsts);
 	return tcres;
 }
@@ -294,10 +294,10 @@ tc_res tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 	for (size_t i = 0; i < count; ++i) {
 		bufs[i] = linkbufs + i * PATH_MAX;
 	}
-	tc_res tcres = tc_readlinkv((const char **)(links.data()), bufs.data(),
+	tc_res tcres = vec_readlink((const char **)(links.data()), bufs.data(),
 				    bufsizes.data(), count, false);
 	if (!tc_okay(tcres)) {
-		fprintf(stderr, "tc_readlinkv failed: %s at %d (%s)\n",
+		fprintf(stderr, "vec_readlink failed: %s at %d (%s)\n",
 			tcres.index, strerror(tcres.err_no),
 			links[tcres.index]);
 		free(linkbufs);
@@ -308,10 +308,10 @@ tc_res tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 	for (size_t i = 0; i < count; ++i) {
 		newlinks[i] = new_cp_target_path(links[i], src_dir, dst_dir);
 	}
-	tcres = tc_symlinkv((const char **)bufs.data(), newlinks.data(), count,
+	tcres = vec_symlink((const char **)bufs.data(), newlinks.data(), count,
 			    false);
 	if (!tc_okay(tcres)) {
-		fprintf(stderr, "tc_readlinkv failed: %s at %d (%s)\n",
+		fprintf(stderr, "vec_readlink failed: %s at %d (%s)\n",
 			tcres.index, strerror(tcres.err_no),
 			links[tcres.index]);
 	}
@@ -340,7 +340,7 @@ tc_res tc_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 	int created = 0;  // index to directories created so far
 	while (created < dirs.size() || !files_to_copy.empty()) {
 		int n = dirs.size() - created;
-		tcres = tc_listdirv(dirs.data() + created, n, listdir_mask, 0,
+		tcres = vec_listdir(dirs.data() + created, n, listdir_mask, 0,
 				    false, cp_list_callback, &cbargs, false);
 		if (!tc_okay(tcres)) {
 			break;
@@ -415,7 +415,7 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 		}
 
 		for (int i = 0; i < attrs.size(); ) {
-			tc_res tcres = tc_getattrsv(attrs.data() + i,
+			tc_res tcres = vec_getattrs(attrs.data() + i,
 						    attrs.size() - i, false);
 			if (tc_okay(tcres)) {
 				break;
@@ -440,7 +440,7 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 	int emptied = 0;  // index to directories emptied so far
 	while (emptied < dirs.size() || !files_to_remove.empty()) {
 		tc_res tcres =
-		    tc_unlinkv(files_to_remove.data(), files_to_remove.size());
+		    vec_unlink(files_to_remove.data(), files_to_remove.size());
 		if (!tc_okay(tcres)) {
 			return tcres;
 		}
@@ -448,7 +448,7 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 		free_paths(&files_to_remove);
 
 		int n = dirs.size() - emptied;
-		tcres = tc_listdirv(dirs.data() + emptied, n, listdir_mask, 0,
+		tcres = vec_listdir(dirs.data() + emptied, n, listdir_mask, 0,
 				    false, rm_list_callback, &cbargs, false);
 		if (!tc_okay(tcres)) {
 			return tcres;
@@ -459,7 +459,7 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 
 	while (!dirs.empty()) {
 		vector<const char*> dirs_to_remove(dirs.rbegin(), dirs.rend());
-		tc_res tcres = tc_unlinkv(dirs_to_remove.data(), dirs.size());
+		tc_res tcres = vec_unlink(dirs_to_remove.data(), dirs.size());
 		if (!tc_okay(tcres)) {
 			return tcres;
 		}

@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
 
 	/* Write the file using NFS compounds; nfs4_writev() will open the file
 	 * with CREATION flag, write to it, and then close it. */
-	res = tc_writev(iov, 4, false);
+	res = vec_write(iov, 4, false);
 
 	/* Check results. */
 	if (tc_okay(res)) {
@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
 	pairs[1].dst_offset = 0;
 	pairs[1].length = iov[1].length;
 
-	res = tc_copyv(pairs, 2, false);
+	res = vec_copy(pairs, 2, false);
 
 	if (!tc_okay(res)) {
 		fprintf(stderr,

@@ -61,9 +61,9 @@ static void OpenClose(int start, int csize, int flags)
 	    NewPaths("Bench-Files/file-%d", csize, start);
 
 	// NOTE on the limit of #files we can open per process.
-	tc_file *files = tc_openv_simple(paths.data(), csize, flags, 0644);
+	tc_file *files = vec_open_simple(paths.data(), csize, flags, 0644);
 	assert(files);
-	tc_res tcres = tc_closev(files, csize);
+	tc_res tcres = vec_close(files, csize);
 	assert(tc_okay(tcres));
 
 	FreePaths(&paths);
@@ -87,7 +87,7 @@ static void BM2_Append(int start, int csize)
 	vector<tc_file> files = Paths2Files(paths);
 	auto iovs = NewIovecs(files.data(), csize, TC_OFFSET_END);
 
-	tc_res tcres = tc_writev(iovs.data(), csize, false);
+	tc_res tcres = vec_write(iovs.data(), csize, false);
 	assert(tc_okay(tcres));
 
 	FreePaths(&paths);
@@ -99,7 +99,7 @@ static void BM2_SSCopy(int start, int csize)
 	auto pairs = NewFilePairsToCopy(FLAGS_copy_from.c_str(),
 					FLAGS_copy_to.c_str(), csize, start);
 
-	tc_res tcres = tc_copyv(pairs.data(), csize, false);
+	tc_res tcres = vec_copy(pairs.data(), csize, false);
 	assert(tc_okay(tcres));
 
 	FreeFilePairsToCopy(&pairs);
@@ -113,7 +113,7 @@ static void BM2_Symlink(int start, int csize)
 	vector<const char *> links =
 	    NewPaths("Bench-Symlinks/link-%d", csize, start);
 
-	tc_res tcres = tc_symlinkv(files.data(), links.data(), csize, false);
+	tc_res tcres = vec_symlink(files.data(), links.data(), csize, false);
 	assert(tc_okay(tcres));
 
 	FreePaths(&files);
@@ -131,7 +131,7 @@ static void BM2_Readlink(int start, int csize)
 		bufs[i] = (char *)malloc(PATH_MAX);
 	}
 
-	tc_res tcres = tc_readlinkv(links.data(), bufs.data(), buf_sizes.data(),
+	tc_res tcres = vec_readlink(links.data(), bufs.data(), buf_sizes.data(),
 				    csize, false);
 	assert(tc_okay(tcres));
 
@@ -152,7 +152,7 @@ static void BM2_MkdirWithContents(int start, int csize)
 static void BM2_Listdir(int start, int csize)
 {
 	vector<const char *> dirs = NewPaths("Bench-Dirs/dir-%d", csize, start);
-	tc_res tcres = tc_listdirv(dirs.data(), csize, TC_ATTRS_MASK_ALL, 0,
+	tc_res tcres = vec_listdir(dirs.data(), csize, TC_ATTRS_MASK_ALL, 0,
 				   false, DummyListDirCb, NULL, false);
 	assert(tc_okay(tcres));
 	FreePaths(&dirs);
@@ -160,7 +160,7 @@ static void BM2_Listdir(int start, int csize)
 
 static void BenchmarkAttrs(int start, int csize, struct tc_attrs *values, bool getattr)
 {
-	auto fn = getattr ? tc_getattrsv : tc_setattrsv;
+	auto fn = getattr ? vec_getattrs : vec_setattrs;
 	vector<tc_attrs> attrs = NewTcAttrs(csize, values, start);
 	tc_res tcres = fn(attrs.data(), csize, false);
 	assert(tc_okay(tcres));
@@ -199,7 +199,7 @@ static void BM2_Setattr4(int start, int csize)
 static void BM2_Remove(int start, int csize)
 {
 	vector<const char *> paths = NewPaths("Bench-Files/file-%d", csize, start);
-	tc_res tcres = tc_unlinkv(paths.data(), csize);
+	tc_res tcres = vec_unlink(paths.data(), csize);
 	assert(tc_okay(tcres));
 	FreePaths(&paths);
 }
@@ -212,7 +212,7 @@ static void BM2_Mkdir(int start, int csize)
 	for (size_t i = 0; i < csize; ++i) {
 		tc_set_up_creation(&dirs[i], paths[i], 0755);
 	}
-	tc_res tcres = tc_mkdirv(dirs.data(), csize, false);
+	tc_res tcres = vec_mkdir(dirs.data(), csize, false);
 	assert(tc_okay(tcres));
 
 	FreePaths(&paths);
@@ -229,7 +229,7 @@ static void BM2_Rename(int start, int csize)
 		pairs[i].dst_file = tc_file_from_path(dsts[i]);
 	}
 
-	tc_res tcres = tc_renamev(pairs.data(), csize, false);
+	tc_res tcres = vec_rename(pairs.data(), csize, false);
 	assert(tc_okay(tcres));
 
 	FreePaths(&srcs);

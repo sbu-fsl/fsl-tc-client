@@ -138,12 +138,12 @@ void CreateFiles(vector<const char *>& paths)
 {
 	const size_t nfiles = paths.size();
 	tc_file *files =
-	    tc_openv_simple(paths.data(), nfiles, O_WRONLY | O_CREAT, 0644);
+	    vec_open_simple(paths.data(), nfiles, O_WRONLY | O_CREAT, 0644);
 	assert(files);
 	vector<tc_iovec> iovs = NewIovecs(files, nfiles);
-	tc_res tcres = tc_writev(iovs.data(), nfiles, false);
+	tc_res tcres = vec_write(iovs.data(), nfiles, false);
 	assert(tc_okay(tcres));
-	tc_closev(files, nfiles);
+	vec_close(files, nfiles);
 	FreeIovecs(&iovs);
 }
 
@@ -190,7 +190,7 @@ void CreateDirsWithContents(vector<const char *>& dirs)
 	for (size_t i = 0; i < dirs.size(); ++i) {
 		tc_set_up_creation(&attrs[i], dirs[i], 0755);
 	}
-	tc_res tcres = tc_mkdirv(attrs.data(), dirs.size(), false);
+	tc_res tcres = vec_mkdir(attrs.data(), dirs.size(), false);
 	assert(tc_okay(tcres));
 
 	for (size_t i = 0; i < dirs.size(); ++i) {

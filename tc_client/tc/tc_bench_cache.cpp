@@ -40,7 +40,7 @@ static const char *filepath;
 static void ReadWriteSingle(benchmark::State &state, bool is_read)
 {
 	off_t filesize = GetFileSize(filepath);
-	auto fn = is_read ? tc_readv : tc_writev;
+	auto fn = is_read ? vec_read : vec_write;
 	struct tc_iovec iov;
 	iov.file = tc_file_from_path(filepath);
 	iov.data = (char *)malloc(filesize);

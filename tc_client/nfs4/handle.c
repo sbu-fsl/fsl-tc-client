@@ -4262,7 +4262,7 @@ static int tc_parse_dir_entries(struct glist_head *dir_queue,
 				struct tc_dir_to_list *parent,
 				const entry4 *entries, int *limit,
                                 bool recursive, bool has_mode,
-                                tc_listdirv_cb cb, void *cbarg)
+                                vec_listdir_cb cb, void *cbarg)
 {
 	bool success;
 	char *path;
@@ -4312,7 +4312,7 @@ static int tc_parse_dir_entries(struct glist_head *dir_queue,
 
 static tc_res tc_do_listdirv(struct glist_head *dir_queue, int *limit,
                              struct tc_attrs_masks masks, bool recursive,
-			     tc_listdirv_cb cb, void *cbarg)
+			     vec_listdir_cb cb, void *cbarg)
 {
 	struct tc_dir_to_list *next_dle;
 	struct tc_dir_to_list *dle;
@@ -4443,7 +4443,7 @@ exit:
 
 tc_res tc_nfs4_listdirv(const char **dirs, int count,
 			struct tc_attrs_masks masks, int max_entries,
-			bool recursive, tc_listdirv_cb cb, void *cbarg)
+			bool recursive, vec_listdir_cb cb, void *cbarg)
 {
         int i = 0;
 	tc_res tcres = { .err_no = 0 };
@@ -4927,24 +4927,24 @@ void fs_handle_ops_init(struct fsal_obj_ops *ops)
 	ops->handle_digest = fs_handle_digest;
 	ops->handle_to_key = fs_handle_to_key;
 	ops->status = fs_status;
-	ops->tc_readv = tc_nfs4_readv;
-	ops->tc_writev = tc_nfs4_writev;
-        ops->tc_lgetattrsv = tc_nfs4_lgetattrsv;
-        ops->tc_lsetattrsv = tc_nfs4_lsetattrsv;
-        ops->tc_mkdirv = tc_nfs4_mkdirv;
-        ops->tc_listdirv = tc_nfs4_listdirv;
-        ops->tc_renamev = tc_nfs4_renamev;
-        ops->tc_removev = tc_nfs4_removev;
-        ops->tc_lcopyv = tc_nfs4_lcopyv;
-        ops->tc_hardlinkv = tc_nfs4_hardlinkv;
-        ops->tc_symlinkv = tc_nfs4_symlinkv;
-        ops->tc_readlinkv = tc_nfs4_readlinkv;
+	ops->vec_read = tc_nfs4_readv;
+	ops->vec_write = tc_nfs4_writev;
+        ops->vec_lgetattrs = tc_nfs4_lgetattrsv;
+        ops->vec_lsetattrs = tc_nfs4_lsetattrsv;
+        ops->vec_mkdir = tc_nfs4_mkdirv;
+        ops->vec_listdir = tc_nfs4_listdirv;
+        ops->vec_rename = tc_nfs4_renamev;
+        ops->vec_remove = tc_nfs4_removev;
+        ops->vec_lcopy = tc_nfs4_lcopyv;
+        ops->vec_hardlink = tc_nfs4_hardlinkv;
+        ops->vec_symlink = tc_nfs4_symlinkv;
+        ops->vec_readlink = tc_nfs4_readlinkv;
         ops->tc_chdir = tc_nfs4_chdir;
         ops->tc_getcwd = tc_nfs4_getcwd;
 	ops->tc_destroysession = fs_destroy_session;
 	ops->root_lookup = fs_root_lookup;
-        ops->tc_openv = tc_nfs4_openv;
-        ops->tc_closev = tc_nfs4_closev;
+        ops->vec_open = tc_nfs4_openv;
+        ops->vec_close = tc_nfs4_closev;
 }
 
 #ifdef PROXY_HANDLE_MAPPING

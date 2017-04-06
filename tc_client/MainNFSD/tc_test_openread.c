@@ -83,10 +83,10 @@ int main(int argc, char *argv[])
 	tc_iov2current(&read_iovec[3], 16384, 16384, malloc(16384));
 	assert(read_iovec[3].data);
 
-        res = tc_writev(read_iovec, 4, false);
+        res = vec_write(read_iovec, 4, false);
 
         /* Read the file; nfs4_readv() will open it first if needed. */
-        res = tc_readv(read_iovec, 4, false);
+        res = vec_read(read_iovec, 4, false);
 
 
         /* Check results. */

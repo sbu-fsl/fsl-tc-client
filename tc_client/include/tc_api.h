@@ -168,7 +168,7 @@ static inline tc_file tc_file_from_cfh(const char *relpath) {
  * Open a tc_file using path.  Similar to "openat(2)".
  *
  * NOTE: It is not necessary that a tc_file have to be open before reading
- * from/writing to it.  We recommend using tc_readv() and tc_writev() to
+ * from/writing to it.  We recommend using vec_read() and vec_write() to
  * implicitly open a file when necessary.
  */
 tc_file* tc_open_by_path(int dirfd, const char *pathname, int flags,
@@ -338,11 +338,11 @@ static inline tc_res tc_failure(int i, int err) {
 	return res;
 }
 
-tc_file *tc_openv(const char **paths, int count, int *flags, mode_t *modes);
+tc_file *vec_open(const char **paths, int count, int *flags, mode_t *modes);
 
-tc_file *tc_openv_simple(const char **paths, int count, int flags, mode_t mode);
+tc_file *vec_open_simple(const char **paths, int count, int flags, mode_t mode);
 
-tc_res tc_closev(tc_file *files, int count);
+tc_res vec_close(tc_file *files, int count);
 
 /**
  * Reposition read/write file offset.
@@ -359,11 +359,11 @@ off_t tc_fseek(tc_file *tcf, off_t offset, int whence);
  * @count: the count of reads in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res tc_readv(struct tc_iovec *reads, int count, bool is_transaction);
+tc_res vec_read(struct tc_iovec *reads, int count, bool is_transaction);
 
 static inline bool tx_readv(struct tc_iovec *reads, int count)
 {
-	return tc_okay(tc_readv(reads, count, true));
+	return tc_okay(vec_read(reads, count, true));
 }
 
 /**
@@ -375,11 +375,11 @@ static inline bool tx_readv(struct tc_iovec *reads, int count)
  * @count: the count of writes in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res tc_writev(struct tc_iovec *writes, int count, bool is_transaction);
+tc_res vec_write(struct tc_iovec *writes, int count, bool is_transaction);
 
 static inline bool tx_writev(struct tc_iovec *writes, int count)
 {
-	return tc_okay(tc_writev(writes, count, true));
+	return tc_okay(vec_write(writes, count, true));
 }
 
 /**
@@ -581,17 +581,17 @@ extern const struct tc_attrs_masks TC_ATTRS_MASK_NONE;
  * @count: the count of tc_attrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
-tc_res tc_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+tc_res vec_getattrs(struct tc_attrs *attrs, int count, bool is_transaction);
+tc_res vec_lgetattrs(struct tc_attrs *attrs, int count, bool is_transaction);
 
 static inline bool tx_getattrsv(struct tc_attrs *attrs, int count)
 {
-	return tc_okay(tc_getattrsv(attrs, count, true));
+	return tc_okay(vec_getattrs(attrs, count, true));
 }
 
 static inline bool tx_lgetattrsv(struct tc_attrs *attrs, int count)
 {
-	return tc_okay(tc_lgetattrsv(attrs, count, true));
+	return tc_okay(vec_lgetattrs(attrs, count, true));
 }
 
 int tc_stat(const char *path, struct stat *buf);
@@ -611,18 +611,18 @@ static inline bool tc_exists(const char *path)
  * @count: the count of tc_attrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res tc_setattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+tc_res vec_setattrs(struct tc_attrs *attrs, int count, bool is_transaction);
 
 static inline bool tx_setattrsv(struct tc_attrs *attrs, int count)
 {
-	return tc_okay(tc_setattrsv(attrs, count, true));
+	return tc_okay(vec_setattrs(attrs, count, true));
 }
 
-tc_res tc_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+tc_res vec_lsetattrs(struct tc_attrs *attrs, int count, bool is_transaction);
 
 static inline bool tx_lsetattrsv(struct tc_attrs *attrs, int count)
 {
-	return tc_okay(tc_lsetattrsv(attrs, count, true));
+	return tc_okay(vec_lsetattrs(attrs, count, true));
 }
 
 /**
@@ -640,16 +640,16 @@ tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
 		  bool recursive, struct tc_attrs **contents, int *count);
 
 /**
- * Callback of tc_listdirv().
+ * Callback of vec_listdir().
  *
  * @entry [IN]: the current directory entry listed
  * @dir [IN]: the parent directory of @entry as provided in the first argument
- * of tc_listdirv().
+ * of vec_listdir().
  * @cbarg [IN/OUT]: any extra user arguments or context of the callback.
  *
- * Return whether tc_listdirv() should continue the processing or stop.
+ * Return whether vec_listdir() should continue the processing or stop.
  */
-typedef bool (*tc_listdirv_cb)(const struct tc_attrs *entry, const char *dir,
+typedef bool (*vec_listdir_cb)(const struct tc_attrs *entry, const char *dir,
 			       void *cbarg);
 /**
  * List the content of the specified directories.
@@ -662,8 +662,8 @@ typedef bool (*tc_listdirv_cb)(const struct tc_attrs *entry, const char *dir,
  * @cb [IN}: the callback function to be applied to each listed entry
  * @cbarg [IN/OUT]: private arguments for the callback
  */
-tc_res tc_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
-		   int max_entries, bool recursive, tc_listdirv_cb cb,
+tc_res vec_listdir(const char **dirs, int count, struct tc_attrs_masks masks,
+		   int max_entries, bool recursive, vec_listdir_cb cb,
 		   void *cbarg, bool is_transaction);
 
 /**
@@ -701,22 +701,22 @@ typedef struct tc_file_pair
  * @count: the count of the preceding "tc_file_pair" array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res tc_renamev(struct tc_file_pair *pairs, int count, bool is_transaction);
+tc_res vec_rename(struct tc_file_pair *pairs, int count, bool is_transaction);
 
 static inline bool tx_renamev(tc_file_pair *pairs, int count)
 {
-	return tc_okay(tc_renamev(pairs, count, true));
+	return tc_okay(vec_rename(pairs, count, true));
 }
 
-tc_res tc_removev(tc_file *files, int count, bool is_transaction);
+tc_res vec_remove(tc_file *files, int count, bool is_transaction);
 
 static inline bool tx_removev(tc_file *files, int count)
 {
-	return tc_okay(tc_removev(files, count, true));
+	return tc_okay(vec_remove(files, count, true));
 }
 
 int tc_unlink(const char *pathname);
-tc_res tc_unlinkv(const char **pathnames, int count);
+tc_res vec_unlink(const char **pathnames, int count);
 
 /**
  * Create one or more directories.
@@ -727,12 +727,12 @@ tc_res tc_unlinkv(const char **pathnames, int count);
  * @count [IN]: the count of the preceding "dirs" array
  * @is_transaction [IN]: whether to execute the compound as a transaction
  */
-tc_res tc_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction);
+tc_res vec_mkdir(struct tc_attrs *dirs, int count, bool is_transaction);
 
 static inline bool tx_mkdirv(struct tc_attrs *dirs, int count,
 			     bool is_transaction)
 {
-	return tc_okay(tc_mkdirv(dirs, count, is_transaction));
+	return tc_okay(vec_mkdir(dirs, count, is_transaction));
 }
 
 struct tc_extent_pair
@@ -767,28 +767,28 @@ static inline void tc_fill_extent_pair(struct tc_extent_pair *tcep,
  * @count: the count of the preceding "tc_extent_pair" array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res tc_copyv(struct tc_extent_pair *pairs, int count, bool is_transaction);
-tc_res tc_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction);
+tc_res vec_copy(struct tc_extent_pair *pairs, int count, bool is_transaction);
+tc_res vec_lcopy(struct tc_extent_pair *pairs, int count, bool is_transaction);
 
 static inline bool tx_copyv(struct tc_extent_pair *pairs, int count)
 {
-	return tc_okay(tc_copyv(pairs, count, true));
+	return tc_okay(vec_copy(pairs, count, true));
 }
 
 /**
  * Copy the data from "src_path" to "dst_path" by reading from "src_path" and
  * then writing to "dst_path".
  */
-tc_res tc_dupv(struct tc_extent_pair *pairs, int count, bool is_transaction);
-tc_res tc_ldupv(struct tc_extent_pair *pairs, int count, bool is_transaction);
+tc_res vec_dup(struct tc_extent_pair *pairs, int count, bool is_transaction);
+tc_res vec_ldup(struct tc_extent_pair *pairs, int count, bool is_transaction);
 
-tc_res tc_hardlinkv(const char **oldpaths, const char **newpaths, int count,
+tc_res vec_hardlink(const char **oldpaths, const char **newpaths, int count,
 		    bool istxn);
 
 static inline bool tx_hardlinkv(const char **oldpaths, const char **newpaths,
 				int count, bool istxn)
 {
-	return tc_okay(tc_hardlinkv(oldpaths, newpaths, count, true));
+	return tc_okay(vec_hardlink(oldpaths, newpaths, count, true));
 }
 
 /**
@@ -797,32 +797,32 @@ static inline bool tx_hardlinkv(const char **oldpaths, const char **newpaths,
  * @oldpaths: an array of source paths
  * @newpaths: an array of dest paths
  */
-tc_res tc_symlinkv(const char **oldpaths, const char **newpaths, int count,
+tc_res vec_symlink(const char **oldpaths, const char **newpaths, int count,
 		   bool istxn);
 
 static inline bool tx_symlinkv(const char **oldpaths, const char **newpaths,
 			       int count)
 {
-	return tc_okay(tc_symlinkv(oldpaths, newpaths, count, true));
+	return tc_okay(vec_symlink(oldpaths, newpaths, count, true));
 }
 
-tc_res tc_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
+tc_res vec_readlink(const char **paths, char **bufs, size_t *bufsizes,
 		    int count, bool istxn);
 
 static inline bool tx_readlinkv(const char **paths, char **bufs,
 				size_t *bufsizes, int count)
 {
-	return tc_okay(tc_readlinkv(paths, bufs, bufsizes, count, true));
+	return tc_okay(vec_readlink(paths, bufs, bufsizes, count, true));
 }
 
 static inline int tc_symlink(const char *oldpath, const char *newpath)
 {
-	return tc_symlinkv(&oldpath, &newpath, 1, false).err_no;
+	return vec_symlink(&oldpath, &newpath, 1, false).err_no;
 }
 
 static inline int tc_readlink(const char *path, char *buf, size_t bufsize)
 {
-	return tc_readlinkv(&path, &buf, &bufsize, 1, false).err_no;
+	return vec_readlink(&path, &buf, &bufsize, 1, false).err_no;
 }
 
 /**

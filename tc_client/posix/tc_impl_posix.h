@@ -101,7 +101,7 @@ tc_res posix_renamev(tc_file_pair *pairs, int count, bool is_transaction);
 tc_res posix_removev(tc_file *tc_files, int count, bool is_transaction);
 
 tc_res posix_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
-		      int max_entries, bool recursive, tc_listdirv_cb cb,
+		      int max_entries, bool recursive, vec_listdir_cb cb,
 		      void *cbarg, bool istxn);
 
 tc_res posix_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction);

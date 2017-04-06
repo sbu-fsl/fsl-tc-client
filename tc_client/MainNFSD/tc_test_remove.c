@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 
 	/* Write the file using NFS compounds; nfs4_writev() will open the file
 	 * with CREATION flag, write to it, and then close it. */
-	res = tc_writev(file_iov, N, false);
+	res = vec_write(file_iov, N, false);
 	if (tc_okay(res)) {
 		fprintf(stderr, "Successfully created %d test files\n", N);
 	} else {
@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
 		goto exit;
 	}
 
-	res = tc_removev(files, N, false);
+	res = vec_remove(files, N, false);
 	if (tc_okay(res)) {
 		fprintf(stderr, "Successfully removed %d test files\n", N);
 	} else {

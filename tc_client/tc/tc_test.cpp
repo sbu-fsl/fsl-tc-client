@@ -80,7 +80,7 @@ void DoParallel(int nthread, std::function<void(int)> worker)
  * Ensure files or directories do not exist before test.
  */
 bool Removev(const char **paths, int count) {
-	return tc_okay(tc_unlinkv(paths, count));
+	return tc_okay(vec_unlink(paths, count));
 }
 
 /**
@@ -115,7 +115,7 @@ static void tc_touchv(const char **paths, int count, int filesize)
 		tc_iov4creation(&iovs[i], paths[i], filesize, buf);
 	}
 
-	EXPECT_OK(tc_writev(iovs, count, false));
+	EXPECT_OK(vec_write(iovs, count, false));
 
 	if (buf) {
 		free(buf);
@@ -235,7 +235,7 @@ TYPED_TEST_P(TcTest, WritevCanCreateFiles)
 				getRandomBytes(4096));
 	}
 
-	EXPECT_OK(tc_writev(writev, count, false));
+	EXPECT_OK(vec_write(writev, count, false));
 
 	tc_iovec *readv = (tc_iovec *)malloc(sizeof(tc_iovec) * count);
 	for (int i = 0; i < count; ++i) {
@@ -243,7 +243,7 @@ TYPED_TEST_P(TcTest, WritevCanCreateFiles)
 			    (char *)malloc(4096));
 	}
 
-	EXPECT_OK(tc_readv(readv, count, false));
+	EXPECT_OK(vec_read(readv, count, false));
 
 	EXPECT_TRUE(compare_content(writev, readv, count));
 
@@ -269,24 +269,24 @@ TYPED_TEST_P(TcTest, TestFileDesc)
 
 	Removev(PATHS, 4);
 
-	files = tc_openv_simple(PATHS, N, O_RDWR | O_CREAT, 0);
+	files = vec_open_simple(PATHS, N, O_RDWR | O_CREAT, 0);
 	EXPECT_NOTNULL(files);
 
 	struct tc_iovec *writev = NULL;
 	writev = build_iovec(files, N, 0);
 	EXPECT_FALSE(writev == NULL);
 
-	EXPECT_OK(tc_writev(writev, N, false));
+	EXPECT_OK(vec_write(writev, N, false));
 
 	struct tc_iovec *readv = NULL;
 	readv = build_iovec(files, N, 0);
 	EXPECT_FALSE(readv == NULL);
 
-	EXPECT_OK(tc_readv(readv, N, false));
+	EXPECT_OK(vec_read(readv, N, false));
 
 	EXPECT_TRUE(compare_content(writev, readv, N));
 
-	tc_closev(files, N);
+	vec_close(files, N);
 	free_iovec(writev, N);
 	free_iovec(readv, N);
 }
@@ -447,12 +447,12 @@ TYPED_TEST_P(TcTest, AttrsTestPath)
 	}
 
 	attrs1 = set_tc_attrs(attrs1, count);
-	EXPECT_OK(tc_setattrsv(attrs1, count, false));
+	EXPECT_OK(vec_setattrs(attrs1, count, false));
 
 	for (i = 0; i < count; ++i) {
 		attrs2[i].masks = attrs1[i].masks;
 	}
-	EXPECT_OK(tc_getattrsv(attrs2, count, false));
+	EXPECT_OK(vec_getattrs(attrs2, count, false));
 
 	EXPECT_TRUE(compare_attrs(attrs1, attrs2, count));
 
@@ -481,12 +481,12 @@ TYPED_TEST_P(TcTest, TestHardLinks)
 	}
 
 	tc_touchv(files.data(), files.size(), false);
-	EXPECT_OK(tc_readv(olddata.data(), olddata.size(), false));
+	EXPECT_OK(vec_read(olddata.data(), olddata.size(), false));
 
-	EXPECT_OK(tc_hardlinkv(files.data(), links.data(), files.size(), false));
-	EXPECT_OK(tc_unlinkv(files.data(), files.size()));
+	EXPECT_OK(vec_hardlink(files.data(), links.data(), files.size(), false));
+	EXPECT_OK(vec_unlink(files.data(), files.size()));
 
-	EXPECT_OK(tc_readv(newdata.data(), newdata.size(), false));
+	EXPECT_OK(vec_read(newdata.data(), newdata.size(), false));
 	EXPECT_TRUE(compare_content(olddata.data(), newdata.data(), olddata.size()));
 
 	for (int i = 0; i < NFILES; ++i) {
@@ -520,12 +520,12 @@ TYPED_TEST_P(TcTest, AttrsTestSymlinks)
 	Removev(PATHS, count);
 	Removev(LPATHS, count);
 
-	EXPECT_OK(tc_symlinkv(PATHS, LPATHS, count, false));
+	EXPECT_OK(vec_symlink(PATHS, LPATHS, count, false));
 
 	for (i = 0; i < count; ++i) {
 		tc_iov4creation(&iov, PATHS[i], 100, getRandomBytes(100));
 		EXPECT_NOTNULL(iov.data);
-		EXPECT_OK(tc_writev(&iov, 1, false));
+		EXPECT_OK(vec_write(&iov, 1, false));
 
 		attrs1[i].file = tc_file_from_path(LPATHS[i]);
 		tc_attrs_set_mode(&attrs1[i], S_IRUSR);
@@ -533,19 +533,19 @@ TYPED_TEST_P(TcTest, AttrsTestSymlinks)
 		attrs2[i] = attrs1[i];
 	}
 
-	EXPECT_OK(tc_setattrsv(attrs1, count, false));
-	EXPECT_OK(tc_getattrsv(attrs2, count, false));
+	EXPECT_OK(vec_setattrs(attrs1, count, false));
+	EXPECT_OK(vec_getattrs(attrs2, count, false));
 	EXPECT_TRUE(compare_attrs(attrs1, attrs2, count));
 
 	tc_attrs_set_mode(&attrs1[0], S_IRUSR | S_IRGRP);
-	EXPECT_OK(tc_setattrsv(attrs1, count, false));
-	EXPECT_OK(tc_lgetattrsv(attrs2, count, false));
+	EXPECT_OK(vec_setattrs(attrs1, count, false));
+	EXPECT_OK(vec_lgetattrs(attrs2, count, false));
 
 	EXPECT_FALSE(S_IROTH & attrs1[0].mode);
 	EXPECT_TRUE(S_IROTH & attrs2[0].mode);
 	EXPECT_FALSE(compare_attrs(attrs1, attrs2, count));
 
-	EXPECT_OK(tc_getattrsv(attrs2, count, false));
+	EXPECT_OK(vec_getattrs(attrs2, count, false));
 	EXPECT_TRUE(compare_attrs(attrs1, attrs2, count));
 
 	free(attrs1);
@@ -571,7 +571,7 @@ TYPED_TEST_P(TcTest, AttrsTestFileDesc)
 	EXPECT_NOTNULL(attrs2);
 
 	Removev(PATHS, count);
-	tcfs = tc_openv_simple(PATHS, count, O_RDWR | O_CREAT, 0);
+	tcfs = vec_open_simple(PATHS, count, O_RDWR | O_CREAT, 0);
 	EXPECT_NOTNULL(tcfs);
 
 	for (int i = 0; i < count; ++i) {
@@ -579,16 +579,16 @@ TYPED_TEST_P(TcTest, AttrsTestFileDesc)
 	}
 
 	set_tc_attrs(attrs1, count);
-	EXPECT_OK(tc_setattrsv(attrs1, count, false));
+	EXPECT_OK(vec_setattrs(attrs1, count, false));
 
 	for (i = 0; i < count; ++i) {
 		attrs2[i].masks = attrs1[i].masks;
 	}
-	EXPECT_OK(tc_getattrsv(attrs2, count, false));
+	EXPECT_OK(vec_getattrs(attrs2, count, false));
 
 	EXPECT_TRUE(compare_attrs(attrs1, attrs2, count));
 
-	tc_closev(tcfs, count);
+	vec_close(tcfs, count);
 
 	free(attrs1);
 	free(attrs2);
@@ -612,7 +612,7 @@ TYPED_TEST_P(TcTest, SetAttrsOfManyFiles)
 	EXPECT_NOTNULL(attrs1);
 	EXPECT_NOTNULL(attrs2);
 
-	tc_file *tcfs = tc_openv_simple(PATHS, N, O_RDWR | O_CREAT, 0);
+	tc_file *tcfs = vec_open_simple(PATHS, N, O_RDWR | O_CREAT, 0);
 	EXPECT_NOTNULL(tcfs);
 
 	for (int i = 0; i < N; ++i) {
@@ -620,16 +620,16 @@ TYPED_TEST_P(TcTest, SetAttrsOfManyFiles)
 	}
 
 	set_tc_attrs(attrs1, N);
-	EXPECT_OK(tc_setattrsv(attrs1, N, false));
+	EXPECT_OK(vec_setattrs(attrs1, N, false));
 
 	for (int i = 0; i < N; ++i) {
 		attrs2[i].masks = attrs1[i].masks;
 	}
-	EXPECT_OK(tc_getattrsv(attrs2, N, false));
+	EXPECT_OK(vec_getattrs(attrs2, N, false));
 
 	EXPECT_TRUE(compare_attrs(attrs1, attrs2, N));
 
-	tc_closev(tcfs, N);
+	vec_close(tcfs, N);
 
 	for (int i = 0; i < N; ++i) {
 		free((void *)PATHS[i]);
@@ -670,7 +670,7 @@ TYPED_TEST_P(TcTest, ListDirContents)
 	read_attrs[2].file = tc_file_from_path("TcTest-ListDir/file3.txt");
 	read_attrs[0].masks = read_attrs[1].masks = read_attrs[2].masks =
 	    TC_ATTRS_MASK_ALL;
-	EXPECT_OK(tc_getattrsv(read_attrs, count, false));
+	EXPECT_OK(vec_getattrs(read_attrs, count, false));
 
 	EXPECT_TRUE(compare_attrs(contents, read_attrs, count));
 
@@ -755,7 +755,7 @@ TYPED_TEST_P(TcTest, RenameFile)
 		files[i].dst_file = tc_file_from_path(dest_path[i]);
 	}
 
-	EXPECT_OK(tc_renamev(files.data(), 4, false));
+	EXPECT_OK(vec_rename(files.data(), 4, false));
 
 	/* TODO use listdir to check src files no longer exist */
 }
@@ -772,7 +772,7 @@ TYPED_TEST_P(TcTest, RemoveFileTest)
 		files[i] = tc_file_from_path(path[i]);
 	}
 
-	EXPECT_OK(tc_removev(files.data(), 4, false));
+	EXPECT_OK(vec_remove(files.data(), 4, false));
 }
 
 TYPED_TEST_P(TcTest, MakeDirectories)
@@ -788,7 +788,7 @@ TYPED_TEST_P(TcTest, MakeDirectories)
 		tc_set_up_creation(&dirs[i], path[i], 0755);
 	}
 
-	EXPECT_OK(tc_mkdirv(dirs, 3, false));
+	EXPECT_OK(vec_mkdir(dirs, 3, false));
 }
 
 TYPED_TEST_P(TcTest, MakeManyDirsDontFitInOneCompound)
@@ -817,7 +817,7 @@ TYPED_TEST_P(TcTest, MakeManyDirsDontFitInOneCompound)
 		dirs.push_back(tca);
 	}
 
-	EXPECT_OK(tc_mkdirv(dirs.data(), dirs.size(), false));
+	EXPECT_OK(vec_mkdir(dirs.data(), dirs.size(), false));
 }
 
 /**
@@ -842,19 +842,19 @@ TYPED_TEST_P(TcTest, Append)
 
 	tc_iov4creation(&iov, PATH, N, data);
 
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 
 	for (i = 0; i < 2; ++i) {
 		iov.offset = TC_OFFSET_END;
 		iov.data = data + N * (i + 1);
 		iov.is_creation = false;
-		EXPECT_OK(tc_writev(&iov, 1, false));
+		EXPECT_OK(vec_write(&iov, 1, false));
 	}
 
 	iov.offset = 0;
 	iov.length = 3 * N;
 	iov.data = data_read;
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 	EXPECT_TRUE(iov.is_eof);
 	EXPECT_EQ(3 * N, iov.length);
 	EXPECT_EQ(0, memcmp(data, data_read, 3 * N));
@@ -877,7 +877,7 @@ TYPED_TEST_P(TcTest, SuccessiveReads)
 	data = (char *)getRandomBytes(5 * N);
 	tc_iov4creation(&iov, path, 5 * N, data);
 
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 
 	read = (char *)malloc(5 * N);
 	EXPECT_NOTNULL(read);
@@ -886,24 +886,24 @@ TYPED_TEST_P(TcTest, SuccessiveReads)
 	EXPECT_EQ(0, tc_fseek(tcf, 0, SEEK_CUR));
 	EXPECT_NOTNULL(tcf);
 	tc_iov2file(&iov, tcf, TC_OFFSET_CUR, N, read);
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 	EXPECT_EQ(N, tc_fseek(tcf, 0, SEEK_CUR));
 
 	iov.data = read + N;
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 	EXPECT_EQ(2 * N, tc_fseek(tcf, 0, SEEK_CUR));
 
 	EXPECT_EQ(3 * N, tc_fseek(tcf, N, SEEK_CUR));
 	iov.data = read + 3 * N;
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 
 	EXPECT_EQ(2 * N, tc_fseek(tcf, 2 * N, SEEK_SET));
 	iov.data = read + 2 * N;
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 
 	EXPECT_EQ(4 * N, tc_fseek(tcf, -N, SEEK_END));
 	iov.data = read + 4 * N;
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 	EXPECT_TRUE(iov.is_eof);
 
 	EXPECT_EQ(0, memcmp(data, read, 5 * N));
@@ -928,21 +928,21 @@ TYPED_TEST_P(TcTest, SuccessiveWrites)
 
 	struct tc_iovec iov;
 	tc_iov2file(&iov, tcf, TC_OFFSET_CUR, 4_KB, data);
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 	tc_iov2file(&iov, tcf, TC_OFFSET_CUR, 4_KB, data + 4_KB);
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 
 	char *readbuf = (char *)malloc(16_KB);
 	tc_iov2file(&iov, tcf2, 0, 8_KB, readbuf);
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 	EXPECT_EQ(iov.length, 8_KB);
 	EXPECT_EQ(0, memcmp(data, readbuf, 8_KB));
 
 	tc_iov2file(&iov, tcf, TC_OFFSET_CUR, 8_KB, data + 8_KB);
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 
 	tc_iov2file(&iov, tcf2, 0, 16_KB, readbuf);
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 	EXPECT_EQ(iov.length, 16_KB);
 	EXPECT_EQ(0, memcmp(data, readbuf, 16_KB));
 
@@ -961,13 +961,13 @@ TYPED_TEST_P(TcTest, SessionTimeout)
 
 	tc_iov4creation(&iov, path, size, data1);
 
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 
 	sleep(60);
 
 	tc_iov2path(&iov, path, 0, size, data1);
 
-	EXPECT_OK(tc_readv(&iov, 1, false));
+	EXPECT_OK(vec_read(&iov, 1, false));
 
 	free(data1);
 }
@@ -1035,16 +1035,16 @@ static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)
 		EXPECT_NOTNULL(read_iovs[i].data);
 	}
 
-	EXPECT_OK(tc_writev(iovs.data(), nfiles, false));
+	EXPECT_OK(vec_write(iovs.data(), nfiles, false));
 
 	// copy or move files
 	if (copy) {
-		EXPECT_OK(tc_copyv(pairs.data(), nfiles, false));
+		EXPECT_OK(vec_copy(pairs.data(), nfiles, false));
 	} else {
-		EXPECT_OK(tc_dupv(pairs.data(), nfiles, false));
+		EXPECT_OK(vec_dup(pairs.data(), nfiles, false));
 	}
 
-	EXPECT_OK(tc_readv(read_iovs.data(), nfiles, false));
+	EXPECT_OK(vec_read(read_iovs.data(), nfiles, false));
 
 	compare_content(iovs.data(), read_iovs.data(), nfiles);
 
@@ -1097,7 +1097,7 @@ TYPED_TEST_P(TcTest, CopyLargeDirectory)
 				getRandomBytes(FILE_LENGTH_BYTES));
 		EXPECT_NOTNULL(iov[i].data);
 	}
-	EXPECT_OK(tc_writev(iov, FILE_COUNT, false));
+	EXPECT_OK(vec_write(iov, FILE_COUNT, false));
 
 	masks.has_mode = true;
 
@@ -1135,7 +1135,7 @@ TYPED_TEST_P(TcTest, CopyLargeDirectory)
 	}
 
 
-	EXPECT_OK(tc_copyv(dir_copy_pairs, file_count, false));
+	EXPECT_OK(vec_copy(dir_copy_pairs, file_count, false));
 	for (i = 0; i < file_count; i++) {
 		free((char *) dir_copy_pairs[i].dst_path);
 	}
@@ -1186,18 +1186,18 @@ TYPED_TEST_P(TcTest, CopyFirstHalfAsSecondHalf)
 	// create source files
 	tc_iov4creation(&iov, pairs[0].src_path, N, getRandomBytes(N));
 	EXPECT_NOTNULL(iov.data);
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 
 	// remove dest files
 	Removev(&pairs[0].dst_path, 1);
 
 	// reverse a file using copy
-	EXPECT_OK(tc_copyv(pairs, 2, false));
+	EXPECT_OK(vec_copy(pairs, 2, false));
 
 	tc_iov2path(&read_iov, pairs[1].dst_path, 0, N, (char *)malloc(N));
 	EXPECT_NOTNULL(read_iov.data);
 
-	EXPECT_OK(tc_readv(&read_iov, 1, false));
+	EXPECT_OK(vec_read(&read_iov, 1, false));
 
 	EXPECT_EQ(0, memcmp(iov.data, read_iov.data + N / 2, N / 2));
 	EXPECT_EQ(0, memcmp(iov.data + N / 2, read_iov.data, N / 2));
@@ -1225,7 +1225,7 @@ TYPED_TEST_P(TcTest, CopyManyFilesDontFitInOneCompound)
 				    UINT64_MAX);
 	}
 
-	EXPECT_OK(tc_copyv(pairs, NFILES, false));
+	EXPECT_OK(vec_copy(pairs, NFILES, false));
 }
 
 TYPED_TEST_P(TcTest, ListAnEmptyDirectory)
@@ -1276,12 +1276,12 @@ TYPED_TEST_P(TcTest, ShuffledRdWr)
 			tc_iov2path(&iovs[n], PATH, offsets[n] * S, S,
 				    data1 + offsets[n] * S);
 		}
-		EXPECT_OK(tc_writev(iovs, N, false));
+		EXPECT_OK(vec_write(iovs, N, false));
 
 		for (int n = 0; n < N; ++n) {
 			iovs[n].data = data2 + offsets[n] * S;
 		}
-		EXPECT_OK(tc_readv(iovs, N, false));
+		EXPECT_OK(vec_read(iovs, N, false));
 		EXPECT_EQ(0, memcmp(data1, data2, N * S));
 
 		std::shuffle(offsets.begin(), offsets.end(), rng);
@@ -1306,14 +1306,14 @@ TYPED_TEST_P(TcTest, ParallelRdWrAFile)
 			tc_iov2path(&iovs[t], PATH, t * S, S, data1 + t * S);
 		}
 		DoParallel(T, [&iovs](int i) {
-			EXPECT_OK(tc_writev(&iovs[i], 1, false));
+			EXPECT_OK(vec_write(&iovs[i], 1, false));
 		});
 
 		for (int t = 0; t < T; ++t) {
 			iovs[t].data = data2 + t * S;
 		}
 		DoParallel(T, [&iovs](int i) {
-			EXPECT_OK(tc_readv(&iovs[i], 1, false));
+			EXPECT_OK(vec_read(&iovs[i], 1, false));
 		});
 		EXPECT_EQ(0, memcmp(data1, data2, T * S));
 	}
@@ -1328,7 +1328,7 @@ TYPED_TEST_P(TcTest, RdWrLargeThanRPCLimit)
 	char* data1 = getRandomBytes(2_MB);
 	tc_iov4creation(&iov, "TcTest-WriteLargeThanRPCLimit.dat", 2_MB, data1);
 
-	EXPECT_OK(tc_writev(&iov, 1, false));
+	EXPECT_OK(vec_write(&iov, 1, false));
 	EXPECT_EQ(2_MB, iov.length);
 
 	char* data2 = (char *)malloc(2_MB);
@@ -1336,7 +1336,7 @@ TYPED_TEST_P(TcTest, RdWrLargeThanRPCLimit)
 	iov.data = data2;
 	for (size_t s = 8_KB; s <= 2_MB; s += 8_KB) {
 		iov.length = s;
-		EXPECT_OK(tc_readv(&iov, 1, false));
+		EXPECT_OK(vec_read(&iov, 1, false));
 		EXPECT_EQ(iov.length == 2_MB, iov.is_eof);
 		EXPECT_EQ(s, iov.length);
 		EXPECT_EQ(0, memcmp(data1, data2, s));
@@ -1361,7 +1361,7 @@ TYPED_TEST_P(TcTest, CompressDeepPaths)
 	tc_ensure_dir("TcTest-CompressDeepPaths/a/b/c0", 0755, NULL);
 	tc_ensure_dir("TcTest-CompressDeepPaths/a/b/c1", 0755, NULL);
 
-	tc_unlinkv(PATHS, N);
+	vec_unlink(PATHS, N);
 	struct tc_iovec *iovs = (struct tc_iovec *)calloc(N, sizeof(*iovs));
 	for (int i = 0; i < N; ++i) {
 		if (i == 0 || strcmp(PATHS[i], PATHS[i-1])) {
@@ -1373,7 +1373,7 @@ TYPED_TEST_P(TcTest, CompressDeepPaths)
 		}
 	}
 
-	EXPECT_OK(tc_writev(iovs, N, false));
+	EXPECT_OK(vec_write(iovs, N, false));
 	for (int i = 0; i < N; ++i) {
 		EXPECT_STREQ(iovs[i].file.path, PATHS[i]);
 		delete[] iovs[i].data;
@@ -1384,7 +1384,7 @@ TYPED_TEST_P(TcTest, CompressDeepPaths)
 		attrs[i].file = iovs[i].file;
 		attrs[i].masks = TC_ATTRS_MASK_ALL;
 	}
-	EXPECT_OK(tc_getattrsv(attrs, N, false));
+	EXPECT_OK(vec_getattrs(attrs, N, false));
 
 	free(iovs);
 	delete[] attrs;
@@ -1408,7 +1408,7 @@ TYPED_TEST_P(TcTest, CompressPathForRemove)
 		files[i] = tc_file_from_path(p1);
 		files[i + FILES_PER_DIR] = tc_file_from_path(p2);
 	}
-	EXPECT_OK(tc_removev(files, FILES_PER_DIR * 2, false));
+	EXPECT_OK(vec_remove(files, FILES_PER_DIR * 2, false));
 }
 
 TYPED_TEST_P(TcTest, SymlinkBasics)
@@ -1439,9 +1439,9 @@ TYPED_TEST_P(TcTest, SymlinkBasics)
 		bufsizes[i] = PATH_MAX;
 	}
 
-	EXPECT_OK(tc_symlinkv(CONTENTS, LINKS, N, false));
+	EXPECT_OK(vec_symlink(CONTENTS, LINKS, N, false));
 
-	EXPECT_OK(tc_readlinkv(LINKS, bufs, bufsizes, N, false));
+	EXPECT_OK(vec_readlink(LINKS, bufs, bufsizes, N, false));
 
 	for (int i = 0; i < N; ++i) {
 		EXPECT_EQ(strlen(CONTENTS[i]), bufsizes[i]);
@@ -1469,8 +1469,8 @@ TYPED_TEST_P(TcTest, ManyLinksDontFitInOneCompound)
 		bufsizes[i] = PATH_MAX;
 	}
 	tc_touchv(targets, NLINKS, 1_KB);
-	EXPECT_OK(tc_symlinkv(targets, links, NLINKS, false));
-	EXPECT_OK(tc_readlinkv(links, bufs, bufsizes, NLINKS, false));
+	EXPECT_OK(vec_symlink(targets, links, NLINKS, false));
+	EXPECT_OK(vec_readlink(links, bufs, bufsizes, NLINKS, false));
 	for (int i = 0; i < NLINKS; ++i) {
 		EXPECT_STREQ(targets[i], bufs[i]);
 	}
@@ -1489,7 +1489,7 @@ TYPED_TEST_P(TcTest, WriteManyDontFitInOneCompound)
 		tc_ensure_parent_dir(p);
 		tc_iov4creation(&iovs[i], p, strlen(p), p);
 	}
-	EXPECT_OK(tc_writev(iovs, NFILES, false));
+	EXPECT_OK(vec_write(iovs, NFILES, false));
 }
 
 static bool listdir_test_cb(const struct tc_attrs *entry, const char *dir,
@@ -1520,14 +1520,14 @@ TYPED_TEST_P(TcTest, RequestDoesNotFitIntoOneCompound)
 		pairs[i].src_file = tc_file_from_path(paths[i]);
 		pairs[i].dst_file = tc_file_from_path(new_paths[i]);
 	}
-	tc_file *files = tc_openv(paths, NFILES, flags, NULL);
+	tc_file *files = vec_open(paths, NFILES, flags, NULL);
 	EXPECT_NOTNULL(files);
-	EXPECT_OK(tc_closev(files, NFILES));
-	EXPECT_OK(tc_getattrsv(attrs, NFILES, false));
+	EXPECT_OK(vec_close(files, NFILES));
+	EXPECT_OK(vec_getattrs(attrs, NFILES, false));
 
 	struct tc_attrs_masks listdir_mask = { .has_mode = true };
 	std::set<std::string> objs;
-	EXPECT_OK(tc_listdirv(&ROOTDIR, 1, listdir_mask, 0, true,
+	EXPECT_OK(vec_listdir(&ROOTDIR, 1, listdir_mask, 0, true,
 			      listdir_test_cb, &objs, false));
 	std::set<std::string> expected;
 	for (int i = 0; i < NFILES; ++i) {
@@ -1541,8 +1541,8 @@ TYPED_TEST_P(TcTest, RequestDoesNotFitIntoOneCompound)
 	expected.erase("DontFit");
 	EXPECT_THAT(objs, testing::ContainerEq(expected));
 
-	EXPECT_OK(tc_renamev(pairs, NFILES, false));
-	EXPECT_OK(tc_unlinkv(new_paths, NFILES));
+	EXPECT_OK(vec_rename(pairs, NFILES, false));
+	EXPECT_OK(vec_unlink(new_paths, NFILES));
 }
 
 static bool is_same_stat(const struct stat *st1, const struct stat *st2)

@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 		dirs[i].file.type = TC_FILE_CURRENT;
 	}
 
-	res = tc_mkdirv(dirs, N, false);
+	res = vec_mkdir(dirs, N, false);
 
 	/* Check results. */
 	if (tc_okay(res)) {

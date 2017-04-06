@@ -104,9 +104,9 @@ void Run(const char *dir)
 		tc_res tcres;
 
 		if (FLAGS_read) {
-			tcres = tc_readv(iovs.data(), iovs.size(), false);
+			tcres = vec_read(iovs.data(), iovs.size(), false);
 		} else {
-			tcres = tc_writev(iovs.data(), iovs.size(), false);
+			tcres = vec_write(iovs.data(), iovs.size(), false);
 		}
 
 		if (!tc_okay(tcres)) {

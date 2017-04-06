@@ -86,13 +86,13 @@ static void BM_CreateEmpty(benchmark::State &state)
 	while (state.KeepRunning()) {
 		// state.iterators()
 		state.PauseTiming();
-		tc_unlinkv(paths.data(), nfiles);
+		vec_unlink(paths.data(), nfiles);
 		state.ResumeTiming();
 
-		tc_file *files = tc_openv_simple(paths.data(), nfiles,
+		tc_file *files = vec_open_simple(paths.data(), nfiles,
 						 O_CREAT | O_WRONLY, 0);
 		assert(files);
-		tc_res tcres = tc_closev(files, nfiles);
+		tc_res tcres = vec_close(files, nfiles);
 		assert(tc_okay(tcres));
 	}
 
@@ -107,9 +107,9 @@ static void BM_OpenClose(benchmark::State &state)
 
 	while (state.KeepRunning()) {
 		tc_file *files =
-		    tc_openv_simple(paths.data(), nfiles, O_RDONLY, 0);
+		    vec_open_simple(paths.data(), nfiles, O_RDONLY, 0);
 		assert(files);
-		tc_res tcres = tc_closev(files, nfiles);
+		tc_res tcres = vec_close(files, nfiles);
 		assert(tc_okay(tcres));
 	}
 
@@ -121,11 +121,11 @@ static void ReadWrite(benchmark::State &state, int flags, bool read)
 {
 	size_t nfiles = state.range(0);
 	vector<const char *> paths = NewPaths("file-%d", nfiles);
-	auto iofunc = read ? tc_readv : tc_writev;
+	auto iofunc = read ? vec_read : vec_write;
 	size_t offset = (flags & O_APPEND) ? TC_OFFSET_END : 0;
 
 	tc_file *files =
-	    tc_openv_simple(paths.data(), nfiles, flags, 0644);
+	    vec_open_simple(paths.data(), nfiles, flags, 0644);
 	assert(files);
 	vector<tc_iovec> iovs = NewIovecs(files, nfiles, offset);
 
@@ -134,7 +134,7 @@ static void ReadWrite(benchmark::State &state, int flags, bool read)
 		assert(tc_okay(tcres));
 	}
 
-	tc_closev(files, nfiles);
+	vec_close(files, nfiles);
 	FreeIovecs(&iovs);
 	FreePaths(&paths);
 }
@@ -188,7 +188,7 @@ static void BM_Read4KOpenClose(benchmark::State &state)
 	vector<tc_iovec> iovs = NewIovecs(files.data(), nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_readv(iovs.data(), nfiles, false);
+		tc_res tcres = vec_read(iovs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -257,7 +257,7 @@ static void BM_Getattrs(benchmark::State &state)
 	vector<tc_attrs> attrs = NewTcAttrs(nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_getattrsv(attrs.data(), nfiles, false);
+		tc_res tcres = vec_getattrs(attrs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -272,7 +272,7 @@ static void BM_Setattr1(benchmark::State &state)
 	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_setattrsv(attrs.data(), nfiles, false);
+		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -287,7 +287,7 @@ static void BM_Setattr2(benchmark::State &state)
 	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_setattrsv(attrs.data(), nfiles, false);
+		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -302,7 +302,7 @@ static void BM_Setattr3(benchmark::State &state)
 	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_setattrsv(attrs.data(), nfiles, false);
+		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -317,7 +317,7 @@ static void BM_Setattr4(benchmark::State &state)
 	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_setattrsv(attrs.data(), nfiles, false);
+		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -329,12 +329,12 @@ static void CreateFiles(vector<const char *>& paths)
 {
 	const size_t nfiles = paths.size();
 	tc_file *files =
-	    tc_openv_simple(paths.data(), nfiles, O_WRONLY | O_CREAT, 0644);
+	    vec_open_simple(paths.data(), nfiles, O_WRONLY | O_CREAT, 0644);
 	assert(files);
 	vector<tc_iovec> iovs = NewIovecs(files, nfiles);
-	tc_res tcres = tc_writev(iovs.data(), nfiles, false);
+	tc_res tcres = vec_write(iovs.data(), nfiles, false);
 	assert(tc_okay(tcres));
-	tc_closev(files, nfiles);
+	vec_close(files, nfiles);
 	FreeIovecs(&iovs);
 }
 
@@ -368,7 +368,7 @@ static void BM_Copy(benchmark::State &state)
 	vector<tc_extent_pair> pairs = NewFilePairsToCopy(nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_dupv(pairs.data(), nfiles, false);
+		tc_res tcres = vec_dup(pairs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -382,7 +382,7 @@ static void BM_SSCopy(benchmark::State &state)
 	vector<tc_extent_pair> pairs = NewFilePairsToCopy(nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_copyv(pairs.data(), nfiles, false);
+		tc_res tcres = vec_copy(pairs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
 
@@ -404,7 +404,7 @@ static void BM_Mkdir(benchmark::State &state)
 		}
 		state.ResumeTiming();
 
-		tc_res tcres = tc_mkdirv(dirs.data(), ndirs, false);
+		tc_res tcres = vec_mkdir(dirs.data(), ndirs, false);
 		assert(tc_okay(tcres));
 
 	}
@@ -423,11 +423,11 @@ static void BM_Symlink(benchmark::State &state)
 	CreateFiles(files);
 	while (state.KeepRunning()) {
 		tc_res tcres =
-		    tc_symlinkv(files.data(), links.data(), nfiles, false);
+		    vec_symlink(files.data(), links.data(), nfiles, false);
 		assert(tc_okay(tcres));
 
 		state.PauseTiming();
-		tc_unlinkv(links.data(), nfiles);
+		vec_unlink(links.data(), nfiles);
 		state.ResumeTiming();
 	}
 
@@ -450,9 +450,9 @@ static void BM_Readlink(benchmark::State &state)
 
 	ResetTestDirectory("Bench-Readlink");
 	CreateFiles(files);
-	tc_symlinkv(files.data(), links.data(), nfiles, false);
+	vec_symlink(files.data(), links.data(), nfiles, false);
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_readlinkv(links.data(), bufs.data(),
+		tc_res tcres = vec_readlink(links.data(), bufs.data(),
 					    buf_sizes.data(), nfiles, false);
 		assert(tc_okay(tcres));
 	}
@@ -480,7 +480,7 @@ static void BM_Rename(benchmark::State &state)
 	ResetTestDirectory("Bench-Rename");
 	CreateFiles(srcs);
 	while (state.KeepRunning()) {
-		tc_res tcres = tc_renamev(pairs.data(), nfiles, false);
+		tc_res tcres = vec_rename(pairs.data(), nfiles, false);
 		assert(tc_okay(tcres));
 
 		// switch srcs and dsts
@@ -507,7 +507,7 @@ static void BM_Remove(benchmark::State &state)
 		CreateFiles(paths);
 		state.ResumeTiming();
 
-		tc_res tcres = tc_unlinkv(paths.data(), nfiles);
+		tc_res tcres = vec_unlink(paths.data(), nfiles);
 		assert(tc_okay(tcres));
 	}
 
@@ -535,7 +535,7 @@ static void CreateDirsWithContents(vector<const char *>& dirs)
 	for (size_t i = 0; i < dirs.size(); ++i) {
 		tc_set_up_creation(&attrs[i], dirs[i], 0755);
 	}
-	tc_res tcres = tc_mkdirv(attrs.data(), dirs.size(), false);
+	tc_res tcres = vec_mkdir(attrs.data(), dirs.size(), false);
 	assert(tc_okay(tcres));
 
 	for (size_t i = 0; i < dirs.size(); ++i) {
@@ -557,7 +557,7 @@ static void BM_Listdir(benchmark::State &state)
 
 	while (state.KeepRunning()) {
 		tc_res tcres =
-		    tc_listdirv(dirs.data(), nfiles, TC_ATTRS_MASK_ALL, 0,
+		    vec_listdir(dirs.data(), nfiles, TC_ATTRS_MASK_ALL, 0,
 				false, DummyListDirCb, NULL, false);
 		assert(tc_okay(tcres));
 	}

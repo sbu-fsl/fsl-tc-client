@@ -122,7 +122,7 @@ void tc_deinit(void *module)
 	}
 }
 
-tc_file *tc_openv(const char **paths, int count, int *flags, mode_t *modes)
+tc_file *vec_open(const char **paths, int count, int *flags, mode_t *modes)
 {
 	tc_file *tcfs;
 	TC_DECLARE_COUNTER(open);
@@ -138,7 +138,7 @@ tc_file *tc_openv(const char **paths, int count, int *flags, mode_t *modes)
 	return tcfs;
 }
 
-tc_file *tc_openv_simple(const char **paths, int count, int flags, mode_t mode)
+tc_file *vec_open_simple(const char **paths, int count, int flags, mode_t mode)
 {
 	tc_file *tcfs;
 	int i;
@@ -149,14 +149,14 @@ tc_file *tc_openv_simple(const char **paths, int count, int flags, mode_t mode)
 		flag_array[i] = flags;
 		mode_array[i] = mode;
 	}
-	tcfs = tc_openv(paths, count, flag_array, mode_array);
+	tcfs = vec_open(paths, count, flag_array, mode_array);
 
 	free(mode_array);
 	free(flag_array);
 	return tcfs;
 }
 
-tc_res tc_closev(tc_file *tcfs, int count)
+tc_res vec_close(tc_file *tcfs, int count)
 {
 	tc_res tcres;
 	TC_DECLARE_COUNTER(close);
@@ -190,15 +190,15 @@ off_t tc_fseek(tc_file *tcf, off_t offset, int whence)
 
 tc_file* tc_open_by_path(int dirfd, const char *pathname, int flags, mode_t mode)
 {
-	return tc_openv(&pathname, 1, &flags, &mode);
+	return vec_open(&pathname, 1, &flags, &mode);
 }
 
 int tc_close(tc_file *tcf)
 {
-	return tc_closev(tcf, 1).err_no;
+	return vec_close(tcf, 1).err_no;
 }
 
-tc_res tc_readv(struct tc_iovec *reads, int count, bool is_transaction)
+tc_res vec_read(struct tc_iovec *reads, int count, bool is_transaction)
 {
 	int i;
 	tc_res tcres;
@@ -225,7 +225,7 @@ tc_res tc_readv(struct tc_iovec *reads, int count, bool is_transaction)
 	return tcres;
 }
 
-tc_res tc_writev(struct tc_iovec *writes, int count, bool is_transaction)
+tc_res vec_write(struct tc_iovec *writes, int count, bool is_transaction)
 {
 	tc_res tcres;
 	TC_DECLARE_COUNTER(write);
@@ -281,7 +281,7 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 		return false;
 	}
 
-	*err = tc_lgetattrsv(attrs, attrs_count, false);
+	*err = vec_lgetattrs(attrs, attrs_count, false);
 	if (!tc_okay(*err)) {
 		err->index = attrs_original_indices[err->index];
 		return false;
@@ -312,8 +312,8 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 		goto exit;
 	}
 
-	*err = tc_readlinkv(paths, bufs, bufsizes, path_count, false);
-	//TODO: what if tc_readlinkv() returns symlinks (symlink to symlink)?
+	*err = vec_readlink(paths, bufs, bufsizes, path_count, false);
+	//TODO: what if vec_readlink() returns symlinks (symlink to symlink)?
 	if (!tc_okay(*err)) {
 		err->index =
 		    paths_original_indices[attrs_original_indices[err->index]];
@@ -354,7 +354,7 @@ void free_syminfo(struct syminfo *syminfo, int count) {
 	}
 }
 
-tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
+tc_res vec_getattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 {
 	tc_res res;
 	const char *paths[count];
@@ -384,7 +384,7 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 		}
 	}
 
-	res = tc_lgetattrsv(attrs, count, false);
+	res = vec_lgetattrs(attrs, count, false);
 
 	for (i = 0; i < count; i++) {
 		if (S_ISLNK(attrs[i].mode)) {
@@ -406,15 +406,15 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 		attrs[mode_original_indices[i]].masks = old_masks[i];
 	}
 
-	// if nothing was a symlink, then our prior call to tc_lgetattrsv()
+	// if nothing was a symlink, then our prior call to vec_lgetattrs()
 	// sufficed, so we're done
 	if (!tc_okay(res) || link_count == 0) {
 		goto exit;
 	}
 
 
-	res = tc_readlinkv(paths, bufs, bufsizes, link_count, false);
-	// TODO: what if tc_readlinkv() returns another symlink (symlink to
+	res = vec_readlink(paths, bufs, bufsizes, link_count, false);
+	// TODO: what if vec_readlink() returns another symlink (symlink to
 	// symlink)?
 
 	if (!tc_okay(res)) {
@@ -427,7 +427,7 @@ tc_res tc_getattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 		attrs[original_indices[i]].file = tc_file_from_path(bufs[i]);
 	}
 
-	res = tc_lgetattrsv(attrs, link_count, is_transaction);
+	res = vec_lgetattrs(attrs, link_count, is_transaction);
 
 	if (!tc_okay(res)) {
 		res.index = original_indices[res.index];
@@ -444,7 +444,7 @@ exit:
 	return res;
 }
 
-tc_res tc_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
+tc_res vec_lgetattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 {
 	tc_res tcres;
 	TC_DECLARE_COUNTER(lgetattrs);
@@ -472,7 +472,7 @@ static int tc_stat_impl(tc_file tcf, struct stat *buf, bool readlink)
 		.masks = TC_ATTRS_MASK_ALL,
 	};
 
-	tcres = tc_lgetattrsv(&tca, 1, false);
+	tcres = vec_lgetattrs(&tca, 1, false);
 	if (!tc_okay(tcres)) {
 		return tcres.err_no;
 	}
@@ -497,7 +497,7 @@ static int tc_stat_impl(tc_file tcf, struct stat *buf, bool readlink)
 		tc_path_joinall(link_target, PATH_MAX, path, "..", linkbuf);
 
 		tca.file.path = link_target;
-		tcres = tc_lgetattrsv(&tca, 1, false);
+		tcres = vec_lgetattrs(&tca, 1, false);
 		if (!tc_okay(tcres)) {
 			return tcres.err_no;
 		}
@@ -522,7 +522,7 @@ int tc_lstat(const char *path, struct stat *buf)
 	return tc_stat_impl(tc_file_from_path(path), buf, false);
 }
 
-tc_res tc_setattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
+tc_res vec_setattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 {
 	struct syminfo syminfo[count];
 	tc_res res;
@@ -543,7 +543,7 @@ tc_res tc_setattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	}
 
 	if (!had_link) {
-		return tc_lsetattrsv(attrs, count, is_transaction);
+		return vec_lsetattrs(attrs, count, is_transaction);
 	}
 
 	for (i = 0; i < count; i++) {
@@ -552,7 +552,7 @@ tc_res tc_setattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 		}
 	}
 
-	res = tc_lsetattrsv(attrs, count, is_transaction);
+	res = vec_lsetattrs(attrs, count, is_transaction);
 
 	for (i = 0; i < count; i++) {
 		if (syminfo[i].target_path)	{
@@ -565,7 +565,7 @@ tc_res tc_setattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	return res;
 }
 
-tc_res tc_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
+tc_res vec_lsetattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 {
 	tc_res tcres;
 	TC_DECLARE_COUNTER(lsetattrs);
@@ -627,7 +627,7 @@ tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
 		return tc_failure(0, ENOMEM);
 	}
 
-	tcres = tc_listdirv(&dir, 1, masks, max_count, recursive,
+	tcres = vec_listdir(&dir, 1, masks, max_count, recursive,
 			    fill_dir_entries, &atarray, false);
 	if (!tc_okay(tcres)) {
 		tc_free_attrs(atarray.attrs, atarray.size, true);
@@ -644,8 +644,8 @@ tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
 	return tcres;
 }
 
-tc_res tc_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
-		   int max_entries, bool recursive, tc_listdirv_cb cb,
+tc_res vec_listdir(const char **dirs, int count, struct tc_attrs_masks masks,
+		   int max_entries, bool recursive, vec_listdir_cb cb,
 		   void *cbarg, bool is_transaction)
 {
 	tc_res tcres;
@@ -666,7 +666,7 @@ tc_res tc_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 	return tcres;
 }
 
-tc_res tc_renamev(tc_file_pair *pairs, int count, bool is_transaction)
+tc_res vec_rename(tc_file_pair *pairs, int count, bool is_transaction)
 {
 	tc_res tcres;
 	TC_DECLARE_COUNTER(rename);
@@ -682,7 +682,7 @@ tc_res tc_renamev(tc_file_pair *pairs, int count, bool is_transaction)
 	return tcres;
 }
 
-tc_res tc_removev(tc_file *files, int count, bool is_transaction)
+tc_res vec_remove(tc_file *files, int count, bool is_transaction)
 {
 	tc_res tcres;
 	TC_DECLARE_COUNTER(remove);
@@ -701,10 +701,10 @@ tc_res tc_removev(tc_file *files, int count, bool is_transaction)
 int tc_unlink(const char *path)
 {
 	tc_file tcf = tc_file_from_path(path);
-	return tc_removev(&tcf, 1, false).err_no;
+	return vec_remove(&tcf, 1, false).err_no;
 }
 
-tc_res tc_unlinkv(const char **paths, int count)
+tc_res vec_unlink(const char **paths, int count)
 {
 	int i = 0, r = 0;
 	tc_file *files;
@@ -715,13 +715,13 @@ tc_res tc_unlinkv(const char **paths, int count)
 		files[i] = tc_file_from_path(paths[i]);
 	}
 
-	tcres = tc_removev(files, count, false);
+	tcres = vec_remove(files, count, false);
 
 	free(files);
 	return tcres;
 }
 
-tc_res tc_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction)
+tc_res vec_mkdir(struct tc_attrs *dirs, int count, bool is_transaction)
 {
 	int i;
 	tc_res tcres;
@@ -788,7 +788,7 @@ static tc_res nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
 		dirs[i].masks = dirs[0].masks;
 	}
 
-	tcres = tc_getattrsv(dirs, n, false);
+	tcres = vec_getattrs(dirs, n, false);
 	if (tc_okay(tcres) || tcres.err_no != ENOENT) {
 		goto exit;
 	}
@@ -813,7 +813,7 @@ static tc_res nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
 	if (absent == 0)
 		goto exit;
 
-	tcres = tc_mkdirv(dirs, absent, false);
+	tcres = vec_mkdir(dirs, absent, false);
 
 exit:
 	free(dirs);
@@ -850,7 +850,7 @@ exit:
 	return tcres;
 }
 
-tc_res tc_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction)
+tc_res vec_lcopy(struct tc_extent_pair *pairs, int count, bool is_transaction)
 {
 	tc_res tcres;
 	TC_DECLARE_COUNTER(lcopy);
@@ -909,15 +909,15 @@ tc_pair(struct tc_extent_pair *pairs, int count, bool is_transaction,
 	return res;
 }
 
-tc_res tc_copyv(struct tc_extent_pair *pairs, int count, bool is_transaction)
+tc_res vec_copy(struct tc_extent_pair *pairs, int count, bool is_transaction)
 {
-	return tc_pair(pairs, count, is_transaction, tc_lcopyv);
+	return tc_pair(pairs, count, is_transaction, vec_lcopy);
 }
 
 /**
  * FIXME: allow moving files larger than RAM.
  */
-tc_res tc_ldupv(struct tc_extent_pair *pairs, int count, bool is_transaction)
+tc_res vec_ldup(struct tc_extent_pair *pairs, int count, bool is_transaction)
 {
 	tc_res tcres;
 	struct tc_iovec *iovs;
@@ -935,10 +935,10 @@ tc_res tc_ldupv(struct tc_extent_pair *pairs, int count, bool is_transaction)
 		iovs[i].is_eof = false;
 	}
 
-	tcres = tc_readv(iovs, count, is_transaction);
+	tcres = vec_read(iovs, count, is_transaction);
 	if (!tc_okay(tcres)) {
 		fprintf(stderr,
-			"tc_ldupv failed when reading %s (%d-th file): %s",
+			"vec_ldup failed when reading %s (%d-th file): %s",
 			pairs[i].src_path, i, strerror(tcres.err_no));
 		goto exit;
 	}
@@ -949,10 +949,10 @@ tc_res tc_ldupv(struct tc_extent_pair *pairs, int count, bool is_transaction)
 		iovs[i].is_write_stable = true;
 		iovs[i].is_failure = false;
 	}
-	tcres = tc_writev(iovs, count, is_transaction);
+	tcres = vec_write(iovs, count, is_transaction);
 	if (!tc_okay(tcres)) {
 		fprintf(stderr,
-			"tc_ldupv failed when writing %s (%d-th file): %s",
+			"vec_ldup failed when writing %s (%d-th file): %s",
 			pairs[i].dst_path, i, strerror(tcres.err_no));
 		goto exit;
 	}
@@ -966,12 +966,12 @@ exit:
 	return tcres;
 }
 
-tc_res tc_dupv(struct tc_extent_pair *pairs, int count, bool is_transaction)
+tc_res vec_dup(struct tc_extent_pair *pairs, int count, bool is_transaction)
 {
-	return tc_pair(pairs, count, is_transaction, tc_ldupv);
+	return tc_pair(pairs, count, is_transaction, vec_ldup);
 }
 
-tc_res tc_hardlinkv(const char **oldpaths, const char **newpaths, int count,
+tc_res vec_hardlink(const char **oldpaths, const char **newpaths, int count,
 		    bool istxn)
 {
 	tc_res tcres = TC_OKAY;
@@ -988,7 +988,7 @@ tc_res tc_hardlinkv(const char **oldpaths, const char **newpaths, int count,
 	return tcres;
 }
 
-tc_res tc_symlinkv(const char **oldpaths, const char **newpaths, int count,
+tc_res vec_symlink(const char **oldpaths, const char **newpaths, int count,
 		   bool istxn)
 {
 	tc_res tcres = TC_OKAY;
@@ -1005,7 +1005,7 @@ tc_res tc_symlinkv(const char **oldpaths, const char **newpaths, int count,
 	return tcres;
 }
 
-tc_res tc_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
+tc_res vec_readlink(const char **paths, char **bufs, size_t *bufsizes,
 		    int count, bool istxn)
 {
 	tc_res tcres;

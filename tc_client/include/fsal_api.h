@@ -1310,20 +1310,20 @@ struct fsal_obj_ops {
 				 struct fsal_obj_handle **new_obj);
 
 /* Multiple open..read..close in a single compound */
-	tc_res (*tc_readv)(struct tc_iovec *iovs, int count);
+	tc_res (*vec_read)(struct tc_iovec *iovs, int count);
 
 /* Multiple open..write..close in a single compound */
-	tc_res (*tc_writev)(struct tc_iovec *iovs, int count);
+	tc_res (*vec_write)(struct tc_iovec *iovs, int count);
 
-	tc_res (*tc_openv)(struct tc_attrs *attrs, int count, int *flags,
+	tc_res (*vec_open)(struct tc_attrs *attrs, int count, int *flags,
 			   stateid4 *sids);
 
-	tc_res (*tc_closev)(const nfs_fh4 *fh4s, int count, stateid4 *sids,
+	tc_res (*vec_close)(const nfs_fh4 *fh4s, int count, stateid4 *sids,
 			    seqid4 *seqs);
 
-	tc_res (*tc_lgetattrsv)(struct tc_attrs *attrs, int count);
+	tc_res (*vec_lgetattrs)(struct tc_attrs *attrs, int count);
 
-	tc_res (*tc_lsetattrsv)(struct tc_attrs *attrs, int count);
+	tc_res (*vec_lsetattrs)(struct tc_attrs *attrs, int count);
 
 	fsal_status_t (*tc_destroysession)();
 /**
@@ -1333,25 +1333,25 @@ struct fsal_obj_ops {
  * will be set in "dirs".  Note that the caller is responsible for freeing the
  * file handles in the returned "dirs".
  */
-	tc_res (*tc_mkdirv)(struct tc_attrs *dirs, int count);
+	tc_res (*vec_mkdir)(struct tc_attrs *dirs, int count);
 
-	tc_res (*tc_listdirv)(const char **dirs, int count,
+	tc_res (*vec_listdir)(const char **dirs, int count,
 			      struct tc_attrs_masks masks, int max_entries,
-			      bool recursive, tc_listdirv_cb cb, void *cbarg);
+			      bool recursive, vec_listdir_cb cb, void *cbarg);
 
-	tc_res (*tc_renamev)(tc_file_pair *pairs, int count);
+	tc_res (*vec_rename)(tc_file_pair *pairs, int count);
 
-	tc_res (*tc_removev)(tc_file *files, int count);
+	tc_res (*vec_remove)(tc_file *files, int count);
 
-	tc_res (*tc_lcopyv)(struct tc_extent_pair *pairs, int count);
+	tc_res (*vec_lcopy)(struct tc_extent_pair *pairs, int count);
 
-	tc_res (*tc_hardlinkv)(const char **oldpaths, const char **newpaths,
+	tc_res (*vec_hardlink)(const char **oldpaths, const char **newpaths,
 			       int count);
 
-	tc_res (*tc_symlinkv)(const char **oldpaths, const char **newpaths,
+	tc_res (*vec_symlink)(const char **oldpaths, const char **newpaths,
 			      int count);
 
-	tc_res (*tc_readlinkv)(const char **paths, char **bufs,
+	tc_res (*vec_readlink)(const char **paths, char **bufs,
 			       size_t *bufsizes, int count);
 
 	fsal_status_t (*root_lookup)(struct fsal_obj_handle **handle);

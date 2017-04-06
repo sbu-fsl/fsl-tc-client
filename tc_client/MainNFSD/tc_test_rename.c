@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
 		file_iov[i].length = strlen(srcpaths[i]);
 		file_iov[i].data = (char *)srcpaths[i];
 	}
-	res = tc_writev(file_iov, N, false);
+	res = vec_write(file_iov, N, false);
 	if (!tc_okay(res)) {
 		fprintf(stderr, "Failed to create test files\n");
 		goto exit;
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 		pairs[i].dst_file = tc_file_from_path(dstpaths[i]);
 	}
 
-	res = tc_renamev(pairs, N, false);
+	res = vec_rename(pairs, N, false);
 	if (tc_okay(res)) {
 		fprintf(stderr, "Successfully renamed %d test files\n", N);
 	} else {

@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
 		memset(&dirs[i].masks, 0, sizeof(dirs[i].masks));
 	}
 
-	res = tc_getattrsv(dirs, N, false);
+	res = vec_getattrs(dirs, N, false);
 	if (tc_okay(res)) {
 		fprintf(stderr, "directory %s already exists\n", DIR_LEAF);
 		goto exit;
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 	}
 	assert(n == N - res.index);
 
-	res = tc_mkdirv(dirs, n, false);
+	res = vec_mkdir(dirs, n, false);
 
 	/* Check results. */
 	if (tc_okay(res)) {

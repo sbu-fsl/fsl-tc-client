@@ -370,7 +370,7 @@ int test()
 	res = test_readv(file_name, 3, NULL);
 
 	if(res)
-		LogDebug(COMPONENT_FSAL, "tc_readv() successful\n");
+		LogDebug(COMPONENT_FSAL, "vec_read() successful\n");
 
 
 	/*
@@ -379,7 +379,7 @@ int test()
         res = test_readv(file_name, 4, NULL);
 
 	if(res)
-                LogDebug(COMPONENT_FSAL, "tc_readv() successful\n");	
+                LogDebug(COMPONENT_FSAL, "vec_read() successful\n");	
 
 	
 	/*************************************************************
@@ -393,16 +393,16 @@ int test()
         res = test_writev(file_name, 3);
 
 	if(res)
-        	LogDebug(COMPONENT_FSAL, "tc_writev() successful\n");
+        	LogDebug(COMPONENT_FSAL, "vec_write() successful\n");
 
 	/*
-	 * tc_writev failed, File not found error
+	 * vec_write failed, File not found error
 	 */
 
         res = test_writev(file_name, 4);
 
 	if(res)
-                LogDebug(COMPONENT_FSAL, "tc_writev() successful\n");
+                LogDebug(COMPONENT_FSAL, "vec_write() successful\n");
 
 
 	/*************************************************************
@@ -423,7 +423,7 @@ int test()
         	res = test_setattrsv(attr_files, change_attr, 3);
 
 		if(res)
-        		LogDebug(COMPONENT_FSAL, "tc_setattrsv() successful\n");
+        		LogDebug(COMPONENT_FSAL, "vec_setattrs() successful\n");
 	}
 		
 
@@ -435,7 +435,7 @@ int test()
         res = test_setattrsv(attr_files, change_attr, 3);
 
 	if(res)
-        	LogDebug(COMPONENT_FSAL, "tc_setattrsv() successful\n");
+        	LogDebug(COMPONENT_FSAL, "vec_setattrs() successful\n");
 
 
 	clear_tc_attrsv(change_attr);
