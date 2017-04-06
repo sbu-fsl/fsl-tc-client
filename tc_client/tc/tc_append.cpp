@@ -70,19 +70,19 @@ void Run(const char *dir)
 	void *tcdata;
 	if (FLAGS_tc) {
 		char buf[PATH_MAX];
-		tcdata = tc_init(get_tc_config_file(buf, PATH_MAX),
+		tcdata = vinit(get_tc_config_file(buf, PATH_MAX),
 				 "/tmp/tc-append-tc.log", 77);
 		fprintf(stderr, "Using config file at %s\n", buf);
 	} else {
-		tcdata = tc_init(NULL, "/tmp/tc-append-posix.log", 0);
+		tcdata = vinit(NULL, "/tmp/tc-append-posix.log", 0);
 	}
 
 	const size_t iosize = ConvertSize(FLAGS_size.c_str());
 
-	vector<tc_iovec> iovs(FLAGS_nfiles);
+	vector<viovec> iovs(FLAGS_nfiles);
 	for (size_t i = 0; i < iovs.size(); ++i) {
-		tc_iovec &iov = iovs[i];
-		iov.file = tc_file_from_path(GetFilePath(dir, i));
+		viovec &iov = iovs[i];
+		iov.file = vfile_from_path(GetFilePath(dir, i));
 		iov.offset = TC_OFFSET_END;
 		iov.length = iosize;
 		iov.data = (char *)malloc(iosize);
@@ -90,8 +90,8 @@ void Run(const char *dir)
 		iov.is_eof = false;
 	}
 
-	tc_res tcres = vec_write(iovs.data(), iovs.size(), false);
-	if (!tc_okay(tcres)) {
+	vres tcres = vec_write(iovs.data(), iovs.size(), false);
+	if (!vokay(tcres)) {
 		error(1, tcres.err_no, "failed to append %s",
 		      iovs[tcres.index].file.path);
 	}
@@ -101,7 +101,7 @@ void Run(const char *dir)
 		free(iovs[i].data);
 	}
 
-	tc_deinit(tcdata);
+	vdeinit(tcdata);
 }
 
 int main(int argc, char *argv[])

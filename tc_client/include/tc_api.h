@@ -46,18 +46,18 @@ extern "C" {
  * This returns fsal_module pointer to tc_client module
  * If tc_client module does not exist, it will return NULL
  *
- * Caller of this function should call tc_deinit() after use
+ * Caller of this function should call vdeinit() after use
  */
-void *tc_init(const char *config_path, const char *log_path,
+void *vinit(const char *config_path, const char *log_path,
 	      uint16_t export_id);
 
 /*
  * Free the reference to module and op_ctx
- * Should be called if tc_init() was called previously
+ * Should be called if vinit() was called previously
  *
  * This will always succeed
  */
-void tc_deinit(void *module);
+void vdeinit(void *module);
 
 enum TC_FILETYPE {
 	TC_FILE_NULL = 0,
@@ -78,7 +78,7 @@ enum TC_FILETYPE {
 /**
  * "type" is one of the six file types; "fd" and "path_or_handle" depend on
  * the file type:
- *	0. A "type" value of TC_FILE_NULL means the tc_file is invalid or emtpy.
+ *	0. A "type" value of TC_FILE_NULL means the vfile is invalid or emtpy.
  *
  *	1. When "type" is TC_FILE_DESCRIPTOR, "fd" identifies the file we are
  *	operating on.
@@ -101,7 +101,7 @@ enum TC_FILETYPE {
  *
  * See http://man7.org/linux/man-pages/man2/open_by_handle_at.2.html
  */
-typedef struct _tc_file
+typedef struct _vfile
 {
 	int type;
 
@@ -113,10 +113,10 @@ typedef struct _tc_file
 		const char *path;
 		const struct file_handle *handle;
 	}; /* path_or_handle */
-} tc_file;
+} vfile;
 
-static inline tc_file tc_file_from_path(const char *pathname) {
-	tc_file tf;
+static inline vfile vfile_from_path(const char *pathname) {
+	vfile tf;
 
 	assert(pathname);
 	tf.type = TC_FILE_PATH;
@@ -126,8 +126,8 @@ static inline tc_file tc_file_from_path(const char *pathname) {
 	return tf;
 }
 
-static inline tc_file tc_file_from_fd(int fd) {
-	tc_file tf;
+static inline vfile vfile_from_fd(int fd) {
+	vfile tf;
 
 	tf.type = TC_FILE_DESCRIPTOR;
 	tf.fd = fd;
@@ -136,9 +136,9 @@ static inline tc_file tc_file_from_fd(int fd) {
 	return tf;
 }
 
-static inline tc_file tc_file_current(void)
+static inline vfile vfile_current(void)
 {
-	tc_file tf;
+	vfile tf;
 
 	tf.type = TC_FILE_CURRENT;
 	tf.fd = -1;     /* poison */
@@ -150,11 +150,11 @@ static inline tc_file tc_file_current(void)
 /**
  * Create a TC file relative to current FH.
  */
-static inline tc_file tc_file_from_cfh(const char *relpath) {
-	tc_file tf;
+static inline vfile vfile_from_cfh(const char *relpath) {
+	vfile tf;
 
 	if (relpath && relpath[0] == '/') {
-		return tc_file_from_path(relpath);
+		return vfile_from_path(relpath);
 	}
 
 	tf.type = TC_FILE_CURRENT;
@@ -165,43 +165,43 @@ static inline tc_file tc_file_from_cfh(const char *relpath) {
 }
 
 /**
- * Open a tc_file using path.  Similar to "openat(2)".
+ * Open a vfile using path.  Similar to "openat(2)".
  *
- * NOTE: It is not necessary that a tc_file have to be open before reading
+ * NOTE: It is not necessary that a vfile have to be open before reading
  * from/writing to it.  We recommend using vec_read() and vec_write() to
  * implicitly open a file when necessary.
  */
-tc_file* tc_open_by_path(int dirfd, const char *pathname, int flags,
+vfile* sca_open_by_path(int dirfd, const char *pathname, int flags,
 			mode_t mode);
 
-static inline tc_file* tc_open(const char *pathname, int flags, mode_t mode)
+static inline vfile* sca_open(const char *pathname, int flags, mode_t mode)
 {
-	return tc_open_by_path(AT_FDCWD, pathname, flags, mode);
+	return sca_open_by_path(AT_FDCWD, pathname, flags, mode);
 }
 
 /**
- * Open a tc_file using file handle.  Similar to "open_by_handle_at(2)".
+ * Open a vfile using file handle.  Similar to "open_by_handle_at(2)".
  */
-tc_file tc_open_by_handle(int mount_fd, struct file_handle *fh, int flags);
+vfile sca_open_by_handle(int mount_fd, struct file_handle *fh, int flags);
 
 /**
- * Close a tc_file if necessary.
+ * Close a vfile if necessary.
  */
-int tc_close(tc_file *tcf);
+int sca_close(vfile *tcf);
 
 /**
  * Change current work directory to "path".
  *
  * Return 0 on success and a negative error number in case of failure.
  */
-int tc_chdir(const char *path);
+int sca_chdir(const char *path);
 
 /**
  * Returns current working directory.
  *
  * The caller owns the returned buffer and is responsible for freeing it.
  */
-char *tc_getcwd(void);
+char *sca_getcwd(void);
 
 /**
  * A special offset that is the same as the file size.
@@ -218,9 +218,9 @@ char *tc_getcwd(void);
  * The fields have different meaning depending the operation is read or write.
  * Most often, clients allocate an array of this struct.
  */
-struct tc_iovec
+struct viovec
 {
-	tc_file file;
+	vfile file;
 	size_t offset; /* IN: read/write offset */
 
 	/**
@@ -245,10 +245,10 @@ struct tc_iovec
 	unsigned int is_write_stable : 1;   /* IN/OUT: stable write? */
 };
 
-struct tc_iov_array
+struct viov_array
 {
 	int size;
-	struct tc_iovec *iovs;
+	struct viovec *iovs;
 };
 
 #define TC_IOV_ARRAY_INITIALIZER(iov, s)                                       \
@@ -256,14 +256,14 @@ struct tc_iov_array
 		.size = (s), .iovs = (iov),                                    \
 	}
 
-static inline struct tc_iov_array tc_iovs2array(struct tc_iovec *iovs, int s)
+static inline struct viov_array viovs2array(struct viovec *iovs, int s)
 {
-	struct tc_iov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, s);
+	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, s);
 	return iova;
 }
 
-static inline struct tc_iovec *tc_iov2file(struct tc_iovec *iov,
-					   const tc_file *tcf,
+static inline struct viovec *viov2file(struct viovec *iov,
+					   const vfile *tcf,
 					   size_t off,
 					   size_t len,
 					   char *buf)
@@ -276,18 +276,18 @@ static inline struct tc_iovec *tc_iov2file(struct tc_iovec *iov,
 	return iov;
 }
 
-static inline struct tc_iovec *tc_iov2current(struct tc_iovec *iov, size_t off,
+static inline struct viovec *viov2current(struct viovec *iov, size_t off,
 					      size_t len, char *buf)
 {
-	tc_file tcf = tc_file_current();
-	return tc_iov2file(iov, &tcf, off, len, buf);
+	vfile tcf = vfile_current();
+	return viov2file(iov, &tcf, off, len, buf);
 }
 
-static inline struct tc_iovec *tc_iov2path(struct tc_iovec *iov,
+static inline struct viovec *viov2path(struct viovec *iov,
 					   const char *path, size_t off,
 					   size_t len, char *buf)
 {
-	iov->file = tc_file_from_path(path);
+	iov->file = vfile_from_path(path);
 	iov->offset = off;
 	iov->length = len;
 	iov->data = buf;
@@ -295,10 +295,10 @@ static inline struct tc_iovec *tc_iov2path(struct tc_iovec *iov,
 	return iov;
 }
 
-static inline struct tc_iovec *tc_iov2fd(struct tc_iovec *iov, int fd,
+static inline struct viovec *viov2fd(struct viovec *iov, int fd,
 					 size_t off, size_t len, char *buf)
 {
-	iov->file = tc_file_from_fd(fd);
+	iov->file = vfile_from_fd(fd);
 	iov->offset = off;
 	iov->length = len;
 	iov->data = buf;
@@ -306,10 +306,10 @@ static inline struct tc_iovec *tc_iov2fd(struct tc_iovec *iov, int fd,
 	return iov;
 }
 
-static inline struct tc_iovec *
-tc_iov4creation(struct tc_iovec *iov, const char *path, size_t len, char *buf)
+static inline struct viovec *
+viov4creation(struct viovec *iov, const char *path, size_t len, char *buf)
 {
-	iov->file = tc_file_from_path(path);
+	iov->file = vfile_from_path(path);
 	iov->offset = 0;
 	iov->length = len;
 	iov->data = buf;
@@ -323,69 +323,69 @@ tc_iov4creation(struct tc_iovec *iov, const char *path, size_t len, char *buf)
  * When transaction is not enabled, compound processing stops upon the first
  * failure.
  */
-typedef struct _tc_res
+typedef struct _vres
 {
 	int index;  /* index of the first failed operation */
 	int err_no; /* error number of the failed operation */
-} tc_res;
+} vres;
 
-#define tc_okay(tcres) ((tcres).err_no == 0)
+#define vokay(tcres) ((tcres).err_no == 0)
 
-static inline tc_res tc_failure(int i, int err) {
-	tc_res res;
+static inline vres vfailure(int i, int err) {
+	vres res;
 	res.index = i;
 	res.err_no = err;
 	return res;
 }
 
-tc_file *vec_open(const char **paths, int count, int *flags, mode_t *modes);
+vfile *vec_open(const char **paths, int count, int *flags, mode_t *modes);
 
-tc_file *vec_open_simple(const char **paths, int count, int flags, mode_t mode);
+vfile *vec_open_simple(const char **paths, int count, int flags, mode_t mode);
 
-tc_res vec_close(tc_file *files, int count);
+vres vec_close(vfile *files, int count);
 
 /**
  * Reposition read/write file offset.
  * REQUIRE: tcf->type == TC_FILE_DESCRIPTOR
  */
-off_t tc_fseek(tc_file *tcf, off_t offset, int whence);
+off_t sca_fseek(vfile *tcf, off_t offset, int whence);
 
 /**
  * Read from one or more files.
  *
- * @reads: the tc_iovec array of read operations.  "path" of the first array
+ * @reads: the viovec array of read operations.  "path" of the first array
  * element must not be NULL; a NULL "path" of any other array element means
  * using the same "path" of the preceding array element.
  * @count: the count of reads in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res vec_read(struct tc_iovec *reads, int count, bool is_transaction);
+vres vec_read(struct viovec *reads, int count, bool is_transaction);
 
-static inline bool tx_readv(struct tc_iovec *reads, int count)
+static inline bool tx_vec_read(struct viovec *reads, int count)
 {
-	return tc_okay(vec_read(reads, count, true));
+	return vokay(vec_read(reads, count, true));
 }
 
 /**
  * Write to one or more files.
  *
- * @writes: the tc_iovec array of write operations.  "path" of the first array
+ * @writes: the viovec array of write operations.  "path" of the first array
  * element must not be NULL; a NULL "path" of any other array element means
  * using the same "path"
  * @count: the count of writes in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res vec_write(struct tc_iovec *writes, int count, bool is_transaction);
+vres vec_write(struct viovec *writes, int count, bool is_transaction);
 
-static inline bool tx_writev(struct tc_iovec *writes, int count)
+static inline bool tx_vec_write(struct viovec *writes, int count)
 {
-	return tc_okay(vec_write(writes, count, true));
+	return vokay(vec_write(writes, count, true));
 }
 
 /**
  * The bitmap indicating the presence of file attributes.
  */
-struct tc_attrs_masks
+struct vattrs_masks
 {
 	unsigned int has_mode : 1;  /* protection flags */
 	unsigned int has_size : 1;  /* file size, in bytes */
@@ -404,10 +404,10 @@ struct tc_attrs_masks
 /**
  * File attributes.  See stat(2).
  */
-struct tc_attrs
+struct vattrs
 {
-	tc_file file;
-	struct tc_attrs_masks masks;
+	vfile file;
+	struct vattrs_masks masks;
 	mode_t mode;   /* protection */
 	size_t size;   /* file size, in bytes */
 	nlink_t nlink; /* number of hard links */
@@ -421,74 +421,74 @@ struct tc_attrs
 	struct timespec ctime;
 };
 
-static inline void tc_attrs_set_mode(struct tc_attrs *attrs, mode_t mode)
+static inline void vattrs_set_mode(struct vattrs *attrs, mode_t mode)
 {
 	attrs->mode = mode;
 	attrs->masks.has_mode = true;
 }
 
-static inline void tc_attrs_set_size(struct tc_attrs *attrs, size_t size)
+static inline void vattrs_set_size(struct vattrs *attrs, size_t size)
 {
 	attrs->size = size;
 	attrs->masks.has_size = true;
 }
 
-static inline void tc_attrs_set_fileid(struct tc_attrs *attrs, uint64_t fileid)
+static inline void vattrs_set_fileid(struct vattrs *attrs, uint64_t fileid)
 {
 	attrs->fileid = fileid;
 	attrs->masks.has_fileid = true;
 }
 
-static inline void tc_attrs_set_uid(struct tc_attrs *attrs, size_t uid)
+static inline void vattrs_set_uid(struct vattrs *attrs, size_t uid)
 {
 	attrs->uid = uid;
 	attrs->masks.has_uid = true;
 }
 
-static inline void tc_attrs_set_gid(struct tc_attrs *attrs, size_t gid)
+static inline void vattrs_set_gid(struct vattrs *attrs, size_t gid)
 {
 	attrs->gid = gid;
 	attrs->masks.has_gid = true;
 }
 
-static inline void tc_attrs_set_nlink(struct tc_attrs *attrs, size_t nlink)
+static inline void vattrs_set_nlink(struct vattrs *attrs, size_t nlink)
 {
 	attrs->nlink = nlink;
 	attrs->masks.has_nlink = true;
 }
 
-static inline void tc_attrs_set_atime(struct tc_attrs *attrs,
+static inline void vattrs_set_atime(struct vattrs *attrs,
 				      struct timespec atime)
 {
 	attrs->atime = atime;
 	attrs->masks.has_atime = true;
 }
 
-static inline void tc_attrs_set_mtime(struct tc_attrs *attrs,
+static inline void vattrs_set_mtime(struct vattrs *attrs,
 				      struct timespec mtime)
 {
 	attrs->mtime = mtime;
 	attrs->masks.has_mtime = true;
 }
 
-static inline void tc_attrs_set_ctime(struct tc_attrs *attrs,
+static inline void vattrs_set_ctime(struct vattrs *attrs,
 				      struct timespec ctime)
 {
 	attrs->ctime = ctime;
 	attrs->masks.has_ctime = true;
 }
 
-static inline void tc_attrs_set_rdev(struct tc_attrs *attrs, dev_t rdev)
+static inline void vattrs_set_rdev(struct vattrs *attrs, dev_t rdev)
 {
 	attrs->rdev = rdev;
 	attrs->masks.has_rdev = true;
 }
 
-static inline void tc_set_up_creation(struct tc_attrs *newobj, const char *name,
+static inline void vset_up_creation(struct vattrs *newobj, const char *name,
 				      mode_t mode)
 {
-	newobj->file = tc_file_from_path(name);
-	memset(&newobj->masks, 0, sizeof(struct tc_attrs_masks));
+	newobj->file = vfile_from_path(name);
+	memset(&newobj->masks, 0, sizeof(struct vattrs_masks));
 	newobj->masks.has_mode = true;
 	newobj->mode = mode;
 	newobj->masks.has_uid = true;
@@ -497,7 +497,7 @@ static inline void tc_set_up_creation(struct tc_attrs *newobj, const char *name,
 	newobj->gid = getegid();
 }
 
-static inline void tc_stat2attrs(const struct stat *st, struct tc_attrs *attrs)
+static inline void vstat2attrs(const struct stat *st, struct vattrs *attrs)
 {
 	if (attrs->masks.has_mode)
 		attrs->mode = st->st_mode;
@@ -529,7 +529,7 @@ static inline void tc_stat2attrs(const struct stat *st, struct tc_attrs *attrs)
 	}
 }
 
-static inline void tc_attrs2stat(const struct tc_attrs *attrs, struct stat *st)
+static inline void vattrs2stat(const struct vattrs *attrs, struct stat *st)
 {
 	if (attrs->masks.has_mode)
 		st->st_mode = attrs->mode;
@@ -555,8 +555,8 @@ static inline void tc_attrs2stat(const struct tc_attrs *attrs, struct stat *st)
 		st->st_ctime = attrs->ctime.tv_sec;
 }
 
-extern const struct tc_attrs_masks TC_ATTRS_MASK_ALL;
-extern const struct tc_attrs_masks TC_ATTRS_MASK_NONE;
+extern const struct vattrs_masks TC_ATTRS_MASK_ALL;
+extern const struct vattrs_masks TC_ATTRS_MASK_NONE;
 
 #define TC_MASK_INIT_ALL                                                       \
 	{                                                                      \
@@ -578,51 +578,51 @@ extern const struct tc_attrs_masks TC_ATTRS_MASK_NONE;
  * Get attributes of file objects.
  *
  * @attrs: array of attributes to get
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res vec_getattrs(struct tc_attrs *attrs, int count, bool is_transaction);
-tc_res vec_lgetattrs(struct tc_attrs *attrs, int count, bool is_transaction);
+vres vec_getattrs(struct vattrs *attrs, int count, bool is_transaction);
+vres vec_lgetattrs(struct vattrs *attrs, int count, bool is_transaction);
 
-static inline bool tx_getattrsv(struct tc_attrs *attrs, int count)
+static inline bool tx_vec_getattrs(struct vattrs *attrs, int count)
 {
-	return tc_okay(vec_getattrs(attrs, count, true));
+	return vokay(vec_getattrs(attrs, count, true));
 }
 
-static inline bool tx_lgetattrsv(struct tc_attrs *attrs, int count)
+static inline bool tx_vec_lgetattrs(struct vattrs *attrs, int count)
 {
-	return tc_okay(vec_lgetattrs(attrs, count, true));
+	return vokay(vec_lgetattrs(attrs, count, true));
 }
 
-int tc_stat(const char *path, struct stat *buf);
-int tc_lstat(const char *path, struct stat *buf);
-int tc_fstat(tc_file *tcf, struct stat *buf);
+int sca_stat(const char *path, struct stat *buf);
+int sca_lstat(const char *path, struct stat *buf);
+int sca_fstat(vfile *tcf, struct stat *buf);
 
-static inline bool tc_exists(const char *path)
+static inline bool sca_exists(const char *path)
 {
 	struct stat buf;
-	return tc_lstat(path, &buf) == 0;
+	return sca_lstat(path, &buf) == 0;
 }
 
 /**
  * Set attributes of file objects.
  *
  * @attrs: array of attributes to set
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res vec_setattrs(struct tc_attrs *attrs, int count, bool is_transaction);
+vres vec_setattrs(struct vattrs *attrs, int count, bool is_transaction);
 
-static inline bool tx_setattrsv(struct tc_attrs *attrs, int count)
+static inline bool tx_vec_setattrs(struct vattrs *attrs, int count)
 {
-	return tc_okay(vec_setattrs(attrs, count, true));
+	return vokay(vec_setattrs(attrs, count, true));
 }
 
-tc_res vec_lsetattrs(struct tc_attrs *attrs, int count, bool is_transaction);
+vres vec_lsetattrs(struct vattrs *attrs, int count, bool is_transaction);
 
-static inline bool tx_lsetattrsv(struct tc_attrs *attrs, int count)
+static inline bool tx_vec_lsetattrs(struct vattrs *attrs, int count)
 {
-	return tc_okay(vec_lsetattrs(attrs, count, true));
+	return vokay(vec_lsetattrs(attrs, count, true));
 }
 
 /**
@@ -634,10 +634,10 @@ static inline bool tx_lsetattrsv(struct tc_attrs *attrs, int count)
  * @contents [OUT]: the pointer to the array of files/directories in the
  * directory.  The array and the paths in the array will be allocated
  * internally by this function; the caller is responsible for releasing the
- * memory, probably by using tc_free_attrs().
+ * memory, probably by using vfree_attrs().
  */
-tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
-		  bool recursive, struct tc_attrs **contents, int *count);
+vres sca_listdir(const char *dir, struct vattrs_masks masks, int max_count,
+		  bool recursive, struct vattrs **contents, int *count);
 
 /**
  * Callback of vec_listdir().
@@ -649,7 +649,7 @@ tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
  *
  * Return whether vec_listdir() should continue the processing or stop.
  */
-typedef bool (*vec_listdir_cb)(const struct tc_attrs *entry, const char *dir,
+typedef bool (*vec_listdir_cb)(const struct vattrs *entry, const char *dir,
 			       void *cbarg);
 /**
  * List the content of the specified directories.
@@ -662,18 +662,18 @@ typedef bool (*vec_listdir_cb)(const struct tc_attrs *entry, const char *dir,
  * @cb [IN}: the callback function to be applied to each listed entry
  * @cbarg [IN/OUT]: private arguments for the callback
  */
-tc_res vec_listdir(const char **dirs, int count, struct tc_attrs_masks masks,
+vres vec_listdir(const char **dirs, int count, struct vattrs_masks masks,
 		   int max_entries, bool recursive, vec_listdir_cb cb,
 		   void *cbarg, bool is_transaction);
 
 /**
- * Free an array of "tc_attrs".
+ * Free an array of "vattrs".
  *
  * @attrs [IN]: the array to be freed
  * @count [IN]: the length of the array
- * @free_path [IN]: whether to free the paths in "tc_attrs" as well.
+ * @free_path [IN]: whether to free the paths in "vattrs" as well.
  */
-static inline void tc_free_attrs(struct tc_attrs *attrs, int count,
+static inline void vfree_attrs(struct vattrs *attrs, int count,
 				 bool free_path)
 {
 	int i;
@@ -688,35 +688,35 @@ static inline void tc_free_attrs(struct tc_attrs *attrs, int count,
 	free(attrs);
 }
 
-typedef struct tc_file_pair
+typedef struct vfile_pair
 {
-	tc_file src_file;
-	tc_file dst_file;
-} tc_file_pair;
+	vfile src_file;
+	vfile dst_file;
+} vfile_pair;
 
 /**
  * Rename the file from "src_path" to "dst_path" for each of "pairs".
  *
  * @pairs: the array of file pairs to be renamed
- * @count: the count of the preceding "tc_file_pair" array
+ * @count: the count of the preceding "vfile_pair" array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res vec_rename(struct tc_file_pair *pairs, int count, bool is_transaction);
+vres vec_rename(struct vfile_pair *pairs, int count, bool is_transaction);
 
-static inline bool tx_renamev(tc_file_pair *pairs, int count)
+static inline bool tx_vec_rename(vfile_pair *pairs, int count)
 {
-	return tc_okay(vec_rename(pairs, count, true));
+	return vokay(vec_rename(pairs, count, true));
 }
 
-tc_res vec_remove(tc_file *files, int count, bool is_transaction);
+vres vec_remove(vfile *files, int count, bool is_transaction);
 
-static inline bool tx_removev(tc_file *files, int count)
+static inline bool tx_vec_remove(vfile *files, int count)
 {
-	return tc_okay(vec_remove(files, count, true));
+	return vokay(vec_remove(files, count, true));
 }
 
-int tc_unlink(const char *pathname);
-tc_res vec_unlink(const char **pathnames, int count);
+int sca_unlink(const char *pathname);
+vres vec_unlink(const char **pathnames, int count);
 
 /**
  * Create one or more directories.
@@ -727,15 +727,15 @@ tc_res vec_unlink(const char **pathnames, int count);
  * @count [IN]: the count of the preceding "dirs" array
  * @is_transaction [IN]: whether to execute the compound as a transaction
  */
-tc_res vec_mkdir(struct tc_attrs *dirs, int count, bool is_transaction);
+vres vec_mkdir(struct vattrs *dirs, int count, bool is_transaction);
 
-static inline bool tx_mkdirv(struct tc_attrs *dirs, int count,
+static inline bool tx_vec_mkdir(struct vattrs *dirs, int count,
 			     bool is_transaction)
 {
-	return tc_okay(vec_mkdir(dirs, count, is_transaction));
+	return vokay(vec_mkdir(dirs, count, is_transaction));
 }
 
-struct tc_extent_pair
+struct vextent_pair
 {
 	const char *src_path;
 	const char *dst_path;
@@ -748,7 +748,7 @@ struct tc_extent_pair
 	size_t length;
 };
 
-static inline void tc_fill_extent_pair(struct tc_extent_pair *tcep,
+static inline void vfill_extent_pair(struct vextent_pair *tcep,
 				       const char *spath, size_t soff,
 				       const char *dpath, size_t doff,
 				       size_t len)
@@ -764,31 +764,31 @@ static inline void tc_fill_extent_pair(struct tc_extent_pair *tcep,
  * Copy the file from "src_path" to "dst_path" for each of "pairs".
  *
  * @pairs: the array of file extent pairs to copy
- * @count: the count of the preceding "tc_extent_pair" array
+ * @count: the count of the preceding "vextent_pair" array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res vec_copy(struct tc_extent_pair *pairs, int count, bool is_transaction);
-tc_res vec_lcopy(struct tc_extent_pair *pairs, int count, bool is_transaction);
+vres vec_copy(struct vextent_pair *pairs, int count, bool is_transaction);
+vres vec_lcopy(struct vextent_pair *pairs, int count, bool is_transaction);
 
-static inline bool tx_copyv(struct tc_extent_pair *pairs, int count)
+static inline bool tx_copyv(struct vextent_pair *pairs, int count)
 {
-	return tc_okay(vec_copy(pairs, count, true));
+	return vokay(vec_copy(pairs, count, true));
 }
 
 /**
  * Copy the data from "src_path" to "dst_path" by reading from "src_path" and
  * then writing to "dst_path".
  */
-tc_res vec_dup(struct tc_extent_pair *pairs, int count, bool is_transaction);
-tc_res vec_ldup(struct tc_extent_pair *pairs, int count, bool is_transaction);
+vres vec_dup(struct vextent_pair *pairs, int count, bool is_transaction);
+vres vec_ldup(struct vextent_pair *pairs, int count, bool is_transaction);
 
-tc_res vec_hardlink(const char **oldpaths, const char **newpaths, int count,
+vres vec_hardlink(const char **oldpaths, const char **newpaths, int count,
 		    bool istxn);
 
-static inline bool tx_hardlinkv(const char **oldpaths, const char **newpaths,
+static inline bool tx_vec_hardlink(const char **oldpaths, const char **newpaths,
 				int count, bool istxn)
 {
-	return tc_okay(vec_hardlink(oldpaths, newpaths, count, true));
+	return vokay(vec_hardlink(oldpaths, newpaths, count, true));
 }
 
 /**
@@ -797,30 +797,30 @@ static inline bool tx_hardlinkv(const char **oldpaths, const char **newpaths,
  * @oldpaths: an array of source paths
  * @newpaths: an array of dest paths
  */
-tc_res vec_symlink(const char **oldpaths, const char **newpaths, int count,
+vres vec_symlink(const char **oldpaths, const char **newpaths, int count,
 		   bool istxn);
 
-static inline bool tx_symlinkv(const char **oldpaths, const char **newpaths,
+static inline bool tx_vec_symlink(const char **oldpaths, const char **newpaths,
 			       int count)
 {
-	return tc_okay(vec_symlink(oldpaths, newpaths, count, true));
+	return vokay(vec_symlink(oldpaths, newpaths, count, true));
 }
 
-tc_res vec_readlink(const char **paths, char **bufs, size_t *bufsizes,
+vres vec_readlink(const char **paths, char **bufs, size_t *bufsizes,
 		    int count, bool istxn);
 
-static inline bool tx_readlinkv(const char **paths, char **bufs,
+static inline bool tx_vec_readlink(const char **paths, char **bufs,
 				size_t *bufsizes, int count)
 {
-	return tc_okay(vec_readlink(paths, bufs, bufsizes, count, true));
+	return vokay(vec_readlink(paths, bufs, bufsizes, count, true));
 }
 
-static inline int tc_symlink(const char *oldpath, const char *newpath)
+static inline int sca_symlink(const char *oldpath, const char *newpath)
 {
 	return vec_symlink(&oldpath, &newpath, 1, false).err_no;
 }
 
-static inline int tc_readlink(const char *path, char *buf, size_t bufsize)
+static inline int sca_readlink(const char *path, char *buf, size_t bufsize)
 {
 	return vec_readlink(&path, &buf, &bufsize, 1, false).err_no;
 }
@@ -884,11 +884,11 @@ struct tc_adb
  * @count: the count of the preceding pattern array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res tc_write_adb(struct tc_adb *patterns, int count, bool is_transaction);
+vres tc_write_adb(struct tc_adb *patterns, int count, bool is_transaction);
 
 static inline bool tx_write_adb(struct tc_adb *patterns, int count)
 {
-	return tc_okay(tc_write_adb(patterns, count, true));
+	return vokay(tc_write_adb(patterns, count, true));
 }
 
 /**
@@ -897,22 +897,22 @@ static inline bool tx_write_adb(struct tc_adb *patterns, int count)
  * directory; when "leaf" is not NULL, the parent of "dir" is the target
  * directory, and leaf will be set to the name of the leaf node.
  */
-tc_res tc_ensure_dir(const char *dir, mode_t mode, slice_t *leaf);
+vres sca_ensure_dir(const char *dir, mode_t mode, slice_t *leaf);
 
 /**
  * Copy a directory to a new destination
  */
-tc_res tc_cp_recursive(const char *src_dir, const char *dst, bool symlink,
+vres sca_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 		       bool use_server_side_copy);
 
 /**
  * Remove a list of file-system objects (files or directories).
  */
-tc_res tc_rm(const char **objs, int count, bool recursive);
+vres tc_rm(const char **objs, int count, bool recursive);
 
 static inline bool tc_rm_recursive(const char *dir)
 {
-	return tc_okay(tc_rm(&dir, 1, true));
+	return vokay(tc_rm(&dir, 1, true));
 }
 
 #ifdef __cplusplus

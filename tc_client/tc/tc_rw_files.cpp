@@ -69,7 +69,7 @@ void Run(const char *dir)
 	size_t bytes = 0;
 
 	while (files_finished < FLAGS_nfiles) {
-		vector<tc_iovec> iovs;
+		vector<viovec> iovs;
 
 		for (size_t i = files_finished; i < FLAGS_nfiles; ) {
 			if (bytes >= kSizeLimit) {
@@ -79,13 +79,13 @@ void Run(const char *dir)
 				++i;
 				continue;
 			}
-			struct tc_iovec iov;
+			struct viovec iov;
 			size_t iosize = std::min<size_t>(
 			    kIoSizeThreshold,
 			    file_size - (bytes_finished[i] + bytes_reading[i]));
 			iosize = std::min(iosize, kSizeLimit - bytes);
 
-			iov.file = tc_file_from_path(GetFilePath(dir, i));
+			iov.file = vfile_from_path(GetFilePath(dir, i));
 			iov.offset = bytes_finished[i] + bytes_reading[i];
 			iov.length = iosize;
 			iov.data = data + bytes;
@@ -101,7 +101,7 @@ void Run(const char *dir)
 			}
 		}
 
-		tc_res tcres;
+		vres tcres;
 
 		if (FLAGS_read) {
 			tcres = vec_read(iovs.data(), iovs.size(), false);
@@ -109,7 +109,7 @@ void Run(const char *dir)
 			tcres = vec_write(iovs.data(), iovs.size(), false);
 		}
 
-		if (!tc_okay(tcres)) {
+		if (!vokay(tcres)) {
 			error(1, tcres.err_no, "failed to read %s",
 			      iovs[tcres.index].file.path);
 		}

@@ -32,7 +32,7 @@
 #include "sys/stat.h"
 #include "tc_helper.h"
 
-static tc_res TC_OKAY = { .index = -1, .err_no = 0, };
+static vres TC_OKAY = { .index = -1, .err_no = 0, };
 
 static bool TC_IMPL_IS_NFS4 = false;
 
@@ -40,8 +40,8 @@ static pthread_t tc_counter_thread;
 static const char *tc_counter_path = "/tmp/tc-counters.txt";
 static int tc_counter_running = 1;
 
-const struct tc_attrs_masks TC_ATTRS_MASK_ALL = TC_MASK_INIT_ALL;
-const struct tc_attrs_masks TC_ATTRS_MASK_NONE = TC_MASK_INIT_NONE;
+const struct vattrs_masks TC_ATTRS_MASK_ALL = TC_MASK_INIT_ALL;
+const struct vattrs_masks TC_ATTRS_MASK_NONE = TC_MASK_INIT_NONE;
 
 bool tc_counter_printer(struct tc_func_counter *tfc, void *arg)
 {
@@ -74,7 +74,7 @@ static void *output_tc_counters(void *arg)
 }
 
 /* Not thread-safe */
-void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
+void *vinit(const char *config_path, const char *log_path, uint16_t export_id)
 {
 	void *context;
 	int retval;
@@ -96,14 +96,14 @@ void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 	if (retval != 0) {
 		fprintf(stderr, "failed to create tc_counter thread: %s\n",
 			strerror(retval));
-		tc_deinit(context);
+		vdeinit(context);
 		return NULL;
 	}
 
 	return context;
 }
 
-void tc_deinit(void *module)
+void vdeinit(void *module)
 {
 	buf_t *pbuf = new_auto_buf(4096);
 	FILE *pfile;
@@ -122,9 +122,9 @@ void tc_deinit(void *module)
 	}
 }
 
-tc_file *vec_open(const char **paths, int count, int *flags, mode_t *modes)
+vfile *vec_open(const char **paths, int count, int *flags, mode_t *modes)
 {
-	tc_file *tcfs;
+	vfile *tcfs;
 	TC_DECLARE_COUNTER(open);
 
 	TC_START_COUNTER(open);
@@ -138,9 +138,9 @@ tc_file *vec_open(const char **paths, int count, int *flags, mode_t *modes)
 	return tcfs;
 }
 
-tc_file *vec_open_simple(const char **paths, int count, int flags, mode_t mode)
+vfile *vec_open_simple(const char **paths, int count, int flags, mode_t mode)
 {
-	tc_file *tcfs;
+	vfile *tcfs;
 	int i;
 	int *flag_array = calloc(count, sizeof(int));
 	mode_t *mode_array = calloc(count, sizeof(mode_t));
@@ -156,9 +156,9 @@ tc_file *vec_open_simple(const char **paths, int count, int flags, mode_t mode)
 	return tcfs;
 }
 
-tc_res vec_close(tc_file *tcfs, int count)
+vres vec_close(vfile *tcfs, int count)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(close);
 
 	TC_START_COUNTER(close);
@@ -167,12 +167,12 @@ tc_res vec_close(tc_file *tcfs, int count)
 	} else {
 		tcres = posix_closev(tcfs, count);
 	}
-	TC_STOP_COUNTER(close, count, tc_okay(tcres));
+	TC_STOP_COUNTER(close, count, vokay(tcres));
 
 	return tcres;
 }
 
-off_t tc_fseek(tc_file *tcf, off_t offset, int whence)
+off_t sca_fseek(vfile *tcf, off_t offset, int whence)
 {
 	off_t res;
 	TC_DECLARE_COUNTER(seek);
@@ -188,27 +188,27 @@ off_t tc_fseek(tc_file *tcf, off_t offset, int whence)
 	return res;
 }
 
-tc_file* tc_open_by_path(int dirfd, const char *pathname, int flags, mode_t mode)
+vfile* sca_open_by_path(int dirfd, const char *pathname, int flags, mode_t mode)
 {
 	return vec_open(&pathname, 1, &flags, &mode);
 }
 
-int tc_close(tc_file *tcf)
+int sca_close(vfile *tcf)
 {
 	return vec_close(tcf, 1).err_no;
 }
 
-tc_res vec_read(struct tc_iovec *reads, int count, bool is_transaction)
+vres vec_read(struct viovec *reads, int count, bool is_transaction)
 {
 	int i;
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(read);
 
 	TC_START_COUNTER(read);
 	for (i = 0; i < count; ++i) {
 		if (reads[i].is_creation) {
 			TC_STOP_COUNTER(read, count, false);
-			return tc_failure(i, EINVAL);
+			return vfailure(i, EINVAL);
 		}
 	}
 	/**
@@ -220,14 +220,14 @@ tc_res vec_read(struct tc_iovec *reads, int count, bool is_transaction)
 	} else {
 		tcres = posix_readv(reads, count, is_transaction);
 	}
-	TC_STOP_COUNTER(read, count, tc_okay(tcres));
+	TC_STOP_COUNTER(read, count, vokay(tcres));
 
 	return tcres;
 }
 
-tc_res vec_write(struct tc_iovec *writes, int count, bool is_transaction)
+vres vec_write(struct viovec *writes, int count, bool is_transaction)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(write);
 
 	TC_START_COUNTER(write);
@@ -236,7 +236,7 @@ tc_res vec_write(struct tc_iovec *writes, int count, bool is_transaction)
 	} else {
 		tcres = posix_writev(writes, count, is_transaction);
 	}
-	TC_STOP_COUNTER(write, count, tc_okay(tcres));
+	TC_STOP_COUNTER(write, count, vokay(tcres));
 
 	return tcres;
 }
@@ -249,9 +249,9 @@ struct syminfo {
 			   // to not be a symlink
 };
 
-bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
+bool resolve_symlinks(struct syminfo *syms, int count, vres *err) {
 	int i;
-	struct tc_attrs attrs[count];
+	struct vattrs attrs[count];
 	int attrs_original_indices[count];
 	int attrs_count = 0;
 	const char **paths;
@@ -267,7 +267,7 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 		struct syminfo sym = syms[i];
 		if (sym.src_path) {
 			attrs[attrs_count].file =
-			    tc_file_from_path(sym.src_path);
+			    vfile_from_path(sym.src_path);
 			attrs[attrs_count].masks = TC_ATTRS_MASK_NONE;
 			attrs[attrs_count].masks.has_mode = true;
 			attrs_original_indices[attrs_count] = i;
@@ -282,7 +282,7 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 	}
 
 	*err = vec_lgetattrs(attrs, attrs_count, false);
-	if (!tc_okay(*err)) {
+	if (!vokay(*err)) {
 		err->index = attrs_original_indices[err->index];
 		return false;
 	}
@@ -314,7 +314,7 @@ bool resolve_symlinks(struct syminfo *syms, int count, tc_res *err) {
 
 	*err = vec_readlink(paths, bufs, bufsizes, path_count, false);
 	//TODO: what if vec_readlink() returns symlinks (symlink to symlink)?
-	if (!tc_okay(*err)) {
+	if (!vokay(*err)) {
 		err->index =
 		    paths_original_indices[attrs_original_indices[err->index]];
 		res = false;
@@ -354,12 +354,12 @@ void free_syminfo(struct syminfo *syminfo, int count) {
 	}
 }
 
-tc_res vec_getattrs(struct tc_attrs *attrs, int count, bool is_transaction)
+vres vec_getattrs(struct vattrs *attrs, int count, bool is_transaction)
 {
-	tc_res res;
+	vres res;
 	const char *paths[count];
-	tc_file original_files[count];
-	struct tc_attrs_masks old_masks[count];
+	vfile original_files[count];
+	struct vattrs_masks old_masks[count];
 	mode_t old_modes[count];
 	int mode_original_indices[count];
 	int original_indices[count];
@@ -388,7 +388,7 @@ tc_res vec_getattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 
 	for (i = 0; i < count; i++) {
 		if (S_ISLNK(attrs[i].mode)) {
-			tc_file file = attrs[i].file;
+			vfile file = attrs[i].file;
 			assert(file.type == TC_FILE_PATH);
 
 			paths[link_count] = file.path;
@@ -408,7 +408,7 @@ tc_res vec_getattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 
 	// if nothing was a symlink, then our prior call to vec_lgetattrs()
 	// sufficed, so we're done
-	if (!tc_okay(res) || link_count == 0) {
+	if (!vokay(res) || link_count == 0) {
 		goto exit;
 	}
 
@@ -417,19 +417,19 @@ tc_res vec_getattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 	// TODO: what if vec_readlink() returns another symlink (symlink to
 	// symlink)?
 
-	if (!tc_okay(res)) {
+	if (!vokay(res)) {
 		res.index = original_indices[res.index];
 		goto exit;
 	}
 
 	for (i = 0; i < link_count; i++) {
 		original_files[i] = attrs[original_indices[i]].file;
-		attrs[original_indices[i]].file = tc_file_from_path(bufs[i]);
+		attrs[original_indices[i]].file = vfile_from_path(bufs[i]);
 	}
 
 	res = vec_lgetattrs(attrs, link_count, is_transaction);
 
-	if (!tc_okay(res)) {
+	if (!vokay(res)) {
 		res.index = original_indices[res.index];
 	}
 
@@ -444,9 +444,9 @@ exit:
 	return res;
 }
 
-tc_res vec_lgetattrs(struct tc_attrs *attrs, int count, bool is_transaction)
+vres vec_lgetattrs(struct vattrs *attrs, int count, bool is_transaction)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(lgetattrs);
 
 	TC_START_COUNTER(lgetattrs);
@@ -455,30 +455,30 @@ tc_res vec_lgetattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 	} else {
 		tcres = posix_lgetattrsv(attrs, count, is_transaction);
 	}
-	TC_STOP_COUNTER(lgetattrs, count, tc_okay(tcres));
+	TC_STOP_COUNTER(lgetattrs, count, vokay(tcres));
 
 	return tcres;
 }
 
-static int tc_stat_impl(tc_file tcf, struct stat *buf, bool readlink)
+static int sca_stat_impl(vfile tcf, struct stat *buf, bool readlink)
 {
 	const char *path;
 	char *linkbuf;
 	char *link_target;
 	int ret;
-	tc_res tcres;
-	struct tc_attrs tca = {
+	vres tcres;
+	struct vattrs tca = {
 		.file = tcf,
 		.masks = TC_ATTRS_MASK_ALL,
 	};
 
 	tcres = vec_lgetattrs(&tca, 1, false);
-	if (!tc_okay(tcres)) {
+	if (!vokay(tcres)) {
 		return tcres.err_no;
 	}
 
 	if (!readlink || !S_ISLNK(tca.mode)) {
-		tc_attrs2stat(&tca, buf);
+		vattrs2stat(&tca, buf);
 		return 0;
 	}
 
@@ -489,7 +489,7 @@ static int tc_stat_impl(tc_file tcf, struct stat *buf, bool readlink)
 
 	while (S_ISLNK(tca.mode)) {
 		path = tca.file.path;
-		ret = tc_readlink(path, linkbuf, PATH_MAX);
+		ret = sca_readlink(path, linkbuf, PATH_MAX);
 		if (ret != 0) {
 			return ret;
 		}
@@ -498,34 +498,34 @@ static int tc_stat_impl(tc_file tcf, struct stat *buf, bool readlink)
 
 		tca.file.path = link_target;
 		tcres = vec_lgetattrs(&tca, 1, false);
-		if (!tc_okay(tcres)) {
+		if (!vokay(tcres)) {
 			return tcres.err_no;
 		}
 	}
 
-	tc_attrs2stat(&tca, buf);
+	vattrs2stat(&tca, buf);
 	return 0;
 }
 
-int tc_stat(const char *path, struct stat *buf)
+int sca_stat(const char *path, struct stat *buf)
 {
-	return tc_stat_impl(tc_file_from_path(path), buf, true);
+	return sca_stat_impl(vfile_from_path(path), buf, true);
 }
 
-int tc_fstat(tc_file *tcf, struct stat *buf)
+int sca_fstat(vfile *tcf, struct stat *buf)
 {
-	return tc_stat_impl(*tcf, buf, false);
+	return sca_stat_impl(*tcf, buf, false);
 }
 
-int tc_lstat(const char *path, struct stat *buf)
+int sca_lstat(const char *path, struct stat *buf)
 {
-	return tc_stat_impl(tc_file_from_path(path), buf, false);
+	return sca_stat_impl(vfile_from_path(path), buf, false);
 }
 
-tc_res vec_setattrs(struct tc_attrs *attrs, int count, bool is_transaction)
+vres vec_setattrs(struct vattrs *attrs, int count, bool is_transaction)
 {
 	struct syminfo syminfo[count];
-	tc_res res;
+	vres res;
 	int i;
 	bool had_link;
 
@@ -538,7 +538,7 @@ tc_res vec_setattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 	}
 
 	had_link = resolve_symlinks(syminfo, count, &res);
-	if (!tc_okay(res)) {
+	if (!vokay(res)) {
 		return res;
 	}
 
@@ -565,9 +565,9 @@ tc_res vec_setattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 	return res;
 }
 
-tc_res vec_lsetattrs(struct tc_attrs *attrs, int count, bool is_transaction)
+vres vec_lsetattrs(struct vattrs *attrs, int count, bool is_transaction)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(lsetattrs);
 
 	TC_START_COUNTER(lsetattrs);
@@ -576,30 +576,30 @@ tc_res vec_lsetattrs(struct tc_attrs *attrs, int count, bool is_transaction)
 	} else {
 		tcres = posix_lsetattrsv(attrs, count, is_transaction);
 	}
-	TC_STOP_COUNTER(lsetattrs, count, tc_okay(tcres));
+	TC_STOP_COUNTER(lsetattrs, count, vokay(tcres));
 
 	return tcres;
 }
 
-struct _tc_attrs_array {
-	struct tc_attrs *attrs;
+struct _vattrs_array {
+	struct vattrs *attrs;
 	size_t size;
 	size_t capacity;
 };
 
-static bool fill_dir_entries(const struct tc_attrs *entry, const char *dir,
+static bool fill_dir_entries(const struct vattrs *entry, const char *dir,
 			     void *cbarg)
 {
 	void *buf;
-	struct _tc_attrs_array *parray = (struct _tc_attrs_array *)cbarg;
+	struct _vattrs_array *parray = (struct _vattrs_array *)cbarg;
 
 	if (parray->size >= parray->capacity) {
 		buf = realloc(parray->attrs,
-			      sizeof(struct tc_attrs) * parray->capacity * 2);
+			      sizeof(struct vattrs) * parray->capacity * 2);
 		if (!buf) {
 			return false;
 		}
-		parray->attrs = (struct tc_attrs *)buf;
+		parray->attrs = (struct vattrs *)buf;
 		parray->capacity *= 2;
 	}
 	parray->attrs[parray->size] = *entry;
@@ -609,11 +609,11 @@ static bool fill_dir_entries(const struct tc_attrs *entry, const char *dir,
 	return true;
 }
 
-tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
-		  bool recursive, struct tc_attrs **contents, int *count)
+vres sca_listdir(const char *dir, struct vattrs_masks masks, int max_count,
+		  bool recursive, struct vattrs **contents, int *count)
 {
-	tc_res tcres;
-	struct _tc_attrs_array atarray;
+	vres tcres;
+	struct _vattrs_array atarray;
 
 	atarray.size = 0;
 	if (max_count == 0) {
@@ -622,15 +622,15 @@ tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
 		assert(max_count > 0);
 		atarray.capacity = max_count;
 	}
-	atarray.attrs = calloc(atarray.capacity, sizeof(struct tc_attrs));
+	atarray.attrs = calloc(atarray.capacity, sizeof(struct vattrs));
 	if (!atarray.attrs) {
-		return tc_failure(0, ENOMEM);
+		return vfailure(0, ENOMEM);
 	}
 
 	tcres = vec_listdir(&dir, 1, masks, max_count, recursive,
 			    fill_dir_entries, &atarray, false);
-	if (!tc_okay(tcres)) {
-		tc_free_attrs(atarray.attrs, atarray.size, true);
+	if (!vokay(tcres)) {
+		vfree_attrs(atarray.attrs, atarray.size, true);
 	}
 
 	*count = atarray.size;
@@ -644,11 +644,11 @@ tc_res tc_listdir(const char *dir, struct tc_attrs_masks masks, int max_count,
 	return tcres;
 }
 
-tc_res vec_listdir(const char **dirs, int count, struct tc_attrs_masks masks,
+vres vec_listdir(const char **dirs, int count, struct vattrs_masks masks,
 		   int max_entries, bool recursive, vec_listdir_cb cb,
 		   void *cbarg, bool is_transaction)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(listdir);
 
 	if (count == 0) return TC_OKAY;
@@ -661,14 +661,14 @@ tc_res vec_listdir(const char **dirs, int count, struct tc_attrs_masks masks,
 		tcres = posix_listdirv(dirs, count, masks, max_entries,
 				      recursive, cb, cbarg, is_transaction);
 	}
-	TC_STOP_COUNTER(listdir, count, tc_okay(tcres));
+	TC_STOP_COUNTER(listdir, count, vokay(tcres));
 
 	return tcres;
 }
 
-tc_res vec_rename(tc_file_pair *pairs, int count, bool is_transaction)
+vres vec_rename(vfile_pair *pairs, int count, bool is_transaction)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(rename);
 
 	TC_START_COUNTER(rename);
@@ -677,14 +677,14 @@ tc_res vec_rename(tc_file_pair *pairs, int count, bool is_transaction)
 	} else {
 		tcres = posix_renamev(pairs, count, is_transaction);
 	}
-	TC_STOP_COUNTER(rename, count, tc_okay(tcres));
+	TC_STOP_COUNTER(rename, count, vokay(tcres));
 
 	return tcres;
 }
 
-tc_res vec_remove(tc_file *files, int count, bool is_transaction)
+vres vec_remove(vfile *files, int count, bool is_transaction)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(remove);
 
 	TC_START_COUNTER(remove);
@@ -693,26 +693,26 @@ tc_res vec_remove(tc_file *files, int count, bool is_transaction)
 	} else {
 		tcres = posix_removev(files, count, is_transaction);
 	}
-	TC_STOP_COUNTER(remove, count, tc_okay(tcres));
+	TC_STOP_COUNTER(remove, count, vokay(tcres));
 
 	return tcres;
 }
 
-int tc_unlink(const char *path)
+int sca_unlink(const char *path)
 {
-	tc_file tcf = tc_file_from_path(path);
+	vfile tcf = vfile_from_path(path);
 	return vec_remove(&tcf, 1, false).err_no;
 }
 
-tc_res vec_unlink(const char **paths, int count)
+vres vec_unlink(const char **paths, int count)
 {
 	int i = 0, r = 0;
-	tc_file *files;
-	tc_res tcres;
+	vfile *files;
+	vres tcres;
 
-	files = (tc_file *)calloc(count, sizeof(tc_file));
+	files = (vfile *)calloc(count, sizeof(vfile));
 	for (i = 0; i < count; ++i) {
-		files[i] = tc_file_from_path(paths[i]);
+		files[i] = vfile_from_path(paths[i]);
 	}
 
 	tcres = vec_remove(files, count, false);
@@ -721,10 +721,10 @@ tc_res vec_unlink(const char **paths, int count)
 	return tcres;
 }
 
-tc_res vec_mkdir(struct tc_attrs *dirs, int count, bool is_transaction)
+vres vec_mkdir(struct vattrs *dirs, int count, bool is_transaction)
 {
 	int i;
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(mkdir);
 
 	TC_START_COUNTER(mkdir);
@@ -736,33 +736,33 @@ tc_res vec_mkdir(struct tc_attrs *dirs, int count, bool is_transaction)
 	} else {
 		tcres = posix_mkdirv(dirs, count, is_transaction);
 	}
-	TC_STOP_COUNTER(mkdir, count, tc_okay(tcres));
+	TC_STOP_COUNTER(mkdir, count, vokay(tcres));
 
 	return tcres;
 }
 
-static tc_res posix_ensure_dir(slice_t *comps, int n, mode_t mode)
+static vres posix_ensure_dir(slice_t *comps, int n, mode_t mode)
 {
-	tc_res tcres = TC_OKAY;
-	struct tc_attrs attrs;
+	vres tcres = TC_OKAY;
+	struct vattrs attrs;
 	buf_t *path;
 	int i;
 
 	path = new_auto_buf(PATH_MAX + 1);
 	for (i = 0; i < n; ++i) {
 		tc_path_append(path, comps[i]);
-		attrs.file = tc_file_from_path(asstr(path));
+		attrs.file = vfile_from_path(asstr(path));
 		tcres = posix_lgetattrsv(&attrs, 1, false);
-		if (tc_okay(tcres)) {
+		if (vokay(tcres)) {
 			continue;
 		}
 		if (tcres.err_no != ENOENT) {
 			/*POSIX_ERR("failed to stat %s", path->data);*/
 			return tcres;
 		}
-		tc_set_up_creation(&attrs, path->data, mode);
+		vset_up_creation(&attrs, path->data, mode);
 		tcres = posix_mkdirv(&attrs, 1, false);
-		if (!tc_okay(tcres)) {
+		if (!vokay(tcres)) {
 			/*POSIX_ERR("failed to create %s", path->data);*/
 			return tcres;
 		}
@@ -771,25 +771,25 @@ static tc_res posix_ensure_dir(slice_t *comps, int n, mode_t mode)
 	return tcres;
 }
 
-static tc_res nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
+static vres nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
 {
-	tc_res tcres = TC_OKAY;
-	struct tc_attrs *dirs;
+	vres tcres = TC_OKAY;
+	struct vattrs *dirs;
 	buf_t *path;
 	int absent;
 	int i;
 
 	dirs = calloc(n, sizeof(*dirs));
-	dirs[0].file = tc_file_from_path(new_auto_str(comps[0]));
+	dirs[0].file = vfile_from_path(new_auto_str(comps[0]));
 	dirs[0].masks = TC_ATTRS_MASK_NONE;
 	dirs[0].masks.has_mode = true;
 	for (i = 1; i < n; ++i) {
-		dirs[i].file = tc_file_from_cfh(new_auto_str(comps[i]));
+		dirs[i].file = vfile_from_cfh(new_auto_str(comps[i]));
 		dirs[i].masks = dirs[0].masks;
 	}
 
 	tcres = vec_getattrs(dirs, n, false);
-	if (tc_okay(tcres) || tcres.err_no != ENOENT) {
+	if (vokay(tcres) || tcres.err_no != ENOENT) {
 		goto exit;
 	}
 
@@ -801,9 +801,9 @@ static tc_res nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
 			continue;
 		} else if (i == tcres.index) {
 			tc_path_append(path, comps[i]);
-			tc_set_up_creation(&dirs[absent], asstr(path), mode);
+			vset_up_creation(&dirs[absent], asstr(path), mode);
 		} else {
-			tc_set_up_creation(&dirs[absent],
+			vset_up_creation(&dirs[absent],
 					   new_auto_str(comps[i]), mode);
 			dirs[absent].file.type = TC_FILE_CURRENT;
 		}
@@ -820,15 +820,15 @@ exit:
 	return tcres;
 }
 
-tc_res tc_ensure_dir(const char *dir, mode_t mode, slice_t *leaf)
+vres sca_ensure_dir(const char *dir, mode_t mode, slice_t *leaf)
 {
-	tc_res tcres = TC_OKAY;
+	vres tcres = TC_OKAY;
 	slice_t *comps;
 	int n;
 
 	n = tc_path_tokenize(dir, &comps);
 	if (n < 0) {
-		return tc_failure(0, -n);
+		return vfailure(0, -n);
 	}
 
 	if (leaf && n > 0) {
@@ -850,9 +850,9 @@ exit:
 	return tcres;
 }
 
-tc_res vec_lcopy(struct tc_extent_pair *pairs, int count, bool is_transaction)
+vres vec_lcopy(struct vextent_pair *pairs, int count, bool is_transaction)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(lcopy);
 
 	TC_START_COUNTER(lcopy);
@@ -862,17 +862,17 @@ tc_res vec_lcopy(struct tc_extent_pair *pairs, int count, bool is_transaction)
 	} else {
 		tcres = posix_lcopyv(pairs, count, is_transaction);
 	}
-	TC_STOP_COUNTER(lcopy, count, tc_okay(tcres));
+	TC_STOP_COUNTER(lcopy, count, vokay(tcres));
 
 	return tcres;
 }
 
-static tc_res
-tc_pair(struct tc_extent_pair *pairs, int count, bool is_transaction,
-	tc_res (*fn)(struct tc_extent_pair *pairs, int count, bool txn))
+static vres
+tc_pair(struct vextent_pair *pairs, int count, bool is_transaction,
+	vres (*fn)(struct vextent_pair *pairs, int count, bool txn))
 {
 	struct syminfo syminfo[count];
-	tc_res res;
+	vres res;
 	int i;
 	bool had_link;
 
@@ -881,7 +881,7 @@ tc_pair(struct tc_extent_pair *pairs, int count, bool is_transaction,
 	}
 
 	had_link = resolve_symlinks(syminfo, count, &res);
-	if (!tc_okay(res)) {
+	if (!vokay(res)) {
 		return res;
 	}
 
@@ -909,7 +909,7 @@ tc_pair(struct tc_extent_pair *pairs, int count, bool is_transaction,
 	return res;
 }
 
-tc_res vec_copy(struct tc_extent_pair *pairs, int count, bool is_transaction)
+vres vec_copy(struct vextent_pair *pairs, int count, bool is_transaction)
 {
 	return tc_pair(pairs, count, is_transaction, vec_lcopy);
 }
@@ -917,16 +917,16 @@ tc_res vec_copy(struct tc_extent_pair *pairs, int count, bool is_transaction)
 /**
  * FIXME: allow moving files larger than RAM.
  */
-tc_res vec_ldup(struct tc_extent_pair *pairs, int count, bool is_transaction)
+vres vec_ldup(struct vextent_pair *pairs, int count, bool is_transaction)
 {
-	tc_res tcres;
-	struct tc_iovec *iovs;
+	vres tcres;
+	struct viovec *iovs;
 	int i;
 
 	iovs = malloc(count * sizeof(*iovs));
 	assert(iovs);
 	for (i = 0; i < count; ++i) {
-		iovs[i].file = tc_file_from_path(pairs[i].src_path);
+		iovs[i].file = vfile_from_path(pairs[i].src_path);
 		iovs[i].offset = pairs[i].src_offset;
 		iovs[i].length = pairs[i].length;
 		iovs[i].data = malloc(pairs[i].length);
@@ -936,7 +936,7 @@ tc_res vec_ldup(struct tc_extent_pair *pairs, int count, bool is_transaction)
 	}
 
 	tcres = vec_read(iovs, count, is_transaction);
-	if (!tc_okay(tcres)) {
+	if (!vokay(tcres)) {
 		fprintf(stderr,
 			"vec_ldup failed when reading %s (%d-th file): %s",
 			pairs[i].src_path, i, strerror(tcres.err_no));
@@ -944,13 +944,13 @@ tc_res vec_ldup(struct tc_extent_pair *pairs, int count, bool is_transaction)
 	}
 
 	for (i = 0; i < count; ++i) {
-		iovs[i].file = tc_file_from_path(pairs[i].dst_path);
+		iovs[i].file = vfile_from_path(pairs[i].dst_path);
 		iovs[i].is_creation = true;
 		iovs[i].is_write_stable = true;
 		iovs[i].is_failure = false;
 	}
 	tcres = vec_write(iovs, count, is_transaction);
-	if (!tc_okay(tcres)) {
+	if (!vokay(tcres)) {
 		fprintf(stderr,
 			"vec_ldup failed when writing %s (%d-th file): %s",
 			pairs[i].dst_path, i, strerror(tcres.err_no));
@@ -966,15 +966,15 @@ exit:
 	return tcres;
 }
 
-tc_res vec_dup(struct tc_extent_pair *pairs, int count, bool is_transaction)
+vres vec_dup(struct vextent_pair *pairs, int count, bool is_transaction)
 {
 	return tc_pair(pairs, count, is_transaction, vec_ldup);
 }
 
-tc_res vec_hardlink(const char **oldpaths, const char **newpaths, int count,
+vres vec_hardlink(const char **oldpaths, const char **newpaths, int count,
 		    bool istxn)
 {
-	tc_res tcres = TC_OKAY;
+	vres tcres = TC_OKAY;
 	TC_DECLARE_COUNTER(hardlink);
 
 	TC_START_COUNTER(hardlink);
@@ -983,15 +983,15 @@ tc_res vec_hardlink(const char **oldpaths, const char **newpaths, int count,
 	} else {
 		tcres = posix_hardlinkv(oldpaths, newpaths, count, istxn);
 	}
-	TC_STOP_COUNTER(hardlink, count, tc_okay(tcres));
+	TC_STOP_COUNTER(hardlink, count, vokay(tcres));
 
 	return tcres;
 }
 
-tc_res vec_symlink(const char **oldpaths, const char **newpaths, int count,
+vres vec_symlink(const char **oldpaths, const char **newpaths, int count,
 		   bool istxn)
 {
-	tc_res tcres = TC_OKAY;
+	vres tcres = TC_OKAY;
 	TC_DECLARE_COUNTER(symlink);
 
 	TC_START_COUNTER(symlink);
@@ -1000,15 +1000,15 @@ tc_res vec_symlink(const char **oldpaths, const char **newpaths, int count,
 	} else {
 		tcres = posix_symlinkv(oldpaths, newpaths, count, istxn);
 	}
-	TC_STOP_COUNTER(symlink, count, tc_okay(tcres));
+	TC_STOP_COUNTER(symlink, count, vokay(tcres));
 
 	return tcres;
 }
 
-tc_res vec_readlink(const char **paths, char **bufs, size_t *bufsizes,
+vres vec_readlink(const char **paths, char **bufs, size_t *bufsizes,
 		    int count, bool istxn)
 {
-	tc_res tcres;
+	vres tcres;
 	TC_DECLARE_COUNTER(readlink);
 
 	TC_START_COUNTER(readlink);
@@ -1017,18 +1017,18 @@ tc_res vec_readlink(const char **paths, char **bufs, size_t *bufsizes,
 	} else {
 		tcres = posix_readlinkv(paths, bufs, bufsizes, count, istxn);
 	}
-	TC_STOP_COUNTER(readlink, count, tc_okay(tcres));
+	TC_STOP_COUNTER(readlink, count, vokay(tcres));
 
 	return tcres;
 }
 
-tc_res tc_write_adb(struct tc_adb *patterns, int count, bool is_transaction)
+vres tc_write_adb(struct tc_adb *patterns, int count, bool is_transaction)
 {
 	return TC_OKAY;
 }
 
 
-int tc_chdir(const char *path)
+int sca_chdir(const char *path)
 {
 	if (TC_IMPL_IS_NFS4) {
 		return nfs4_chdir(path);
@@ -1037,7 +1037,7 @@ int tc_chdir(const char *path)
 	}
 }
 
-char *tc_getcwd()
+char *sca_getcwd()
 {
 	if (TC_IMPL_IS_NFS4) {
 		return nfs4_getcwd();

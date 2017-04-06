@@ -49,8 +49,8 @@ static char tc_config_path[PATH_MAX];
 int main(int argc, char *argv[])
 {
 	void *context = NULL;
-	struct tc_iovec read_iovec[4];
-	tc_res res;
+	struct viovec read_iovec[4];
+	vres res;
 
 	/* Locate and use the default config file in the repo.  Before running
 	 * this example, please update the config file to a correct NFS server.
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -70,23 +70,23 @@ int main(int argc, char *argv[])
 	}
 
 	/* Setup I/O request */
-	read_iovec[0].file = tc_file_from_path(TC_TEST_NFS_FILE0);
+	read_iovec[0].file = vfile_from_path(TC_TEST_NFS_FILE0);
 	read_iovec[0].offset = 0;
 	read_iovec[0].length = 16384;
 	read_iovec[0].data = malloc(16384);
 	assert(read_iovec[0].data);
-	read_iovec[1].file = tc_file_current();
+	read_iovec[1].file = vfile_current();
 	read_iovec[1].offset = 16384;
 	read_iovec[1].length = 16384;
 	read_iovec[1].data = malloc(16384);
 	assert(read_iovec[1].data);
 
-	read_iovec[2].file = tc_file_from_path(TC_TEST_NFS_FILE1);
+	read_iovec[2].file = vfile_from_path(TC_TEST_NFS_FILE1);
 	read_iovec[2].offset = 0;
 	read_iovec[2].length = 16384;
 	read_iovec[2].data = malloc(16384);
 	assert(read_iovec[2].data);
-	read_iovec[3].file = tc_file_current();
+	read_iovec[3].file = vfile_current();
 	read_iovec[3].offset = 16384;
 	read_iovec[3].length = 16384;
 	read_iovec[3].data = malloc(16384);
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 	res = vec_read(read_iovec, 4, false);
 
 	/* Check results. */
-	if (tc_okay(res)) {
+	if (vokay(res)) {
 		fprintf(stderr,
 			"Successfully read the first %d bytes of file \"%s\" "
 			"via NFS.\n",
@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 			DEFAULT_LOG_FILE);
 	}
 
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

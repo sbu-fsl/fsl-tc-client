@@ -37,7 +37,7 @@ static struct tc_kfd fd_list[MAX_FD];
 static int free_fds[MAX_FD];
 static int free_fds_top;
 
-int tc_init_fds()
+int vinit_fds()
 {
         int r = 0;
 	int i = 0;

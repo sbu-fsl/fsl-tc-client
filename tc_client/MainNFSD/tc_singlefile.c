@@ -66,8 +66,8 @@ int tc_singlefile(char *input_path, unsigned int block_size,
 		  unsigned int num_files, unsigned int file_size,
 		  int ops_per_comp, double dist, int rw)
 {
-	struct tc_iovec *user_arg = NULL;
-	struct tc_iovec *cur_arg = NULL;
+	struct viovec *user_arg = NULL;
+	struct viovec *cur_arg = NULL;
 	char *temp_path[MAX_READ_COUNT];
 	int input_len = 0;
 	int i = 0;
@@ -79,7 +79,7 @@ int tc_singlefile(char *input_path, unsigned int block_size,
 
 	srand(time(NULL));
 
-	LogDebug(COMPONENT_FSAL, "tc_init() success");
+	LogDebug(COMPONENT_FSAL, "vinit() success");
 	input_len = strlen(input_path);
 	k = 0;
 	while (k < MAX_READ_COUNT) {
@@ -87,7 +87,7 @@ int tc_singlefile(char *input_path, unsigned int block_size,
 		k++;
 	}
 
-	user_arg = malloc(ops_per_comp * (sizeof(struct tc_iovec)));
+	user_arg = malloc(ops_per_comp * (sizeof(struct viovec)));
 	k = 0;
 	while (k < ops_per_comp) {
 		cur_arg = user_arg + k;
@@ -105,14 +105,14 @@ int tc_singlefile(char *input_path, unsigned int block_size,
 		k = 0;
 		while (k < ops_per_comp) {
 			cur_arg = user_arg + k;
-			cur_arg->file = tc_file_from_cfh(".");
+			cur_arg->file = vfile_from_cfh(".");
 			cur_arg->offset = j*block_size + k*block_size;
 			cur_arg->length = block_size;
 			k++;
 		}
 
 		snprintf(temp_path[0], input_len + 8, "%s%d", input_path, 0);
-		user_arg->file = tc_file_from_path(temp_path[0]);
+		user_arg->file = vfile_from_path(temp_path[0]);
 
 		if (rw == 0) {
 			nfs4_readv(user_arg, ops_per_comp, FALSE);

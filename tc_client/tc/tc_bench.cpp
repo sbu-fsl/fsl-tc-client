@@ -38,7 +38,7 @@ const size_t BUFSIZE = 4096;
 static void ResetTestDirectory(const char *dir)
 {
 	tc_rm_recursive(dir);
-	tc_ensure_dir(dir, 0755, NULL);
+	sca_ensure_dir(dir, 0755, NULL);
 }
 
 static vector<const char *> NewPaths(const char *format, int n)
@@ -59,9 +59,9 @@ static void FreePaths(vector<const char *> *paths)
 		free((char *)p);
 }
 
-static vector<tc_iovec> NewIovecs(tc_file *files, int n, size_t offset = 0)
+static vector<viovec> NewIovecs(vfile *files, int n, size_t offset = 0)
 {
-	vector<tc_iovec> iovs(n);
+	vector<viovec> iovs(n);
 	for (int i = 0; i < n; ++i) {
 		iovs[i].file = files[i];
 		iovs[i].offset = offset;
@@ -72,7 +72,7 @@ static vector<tc_iovec> NewIovecs(tc_file *files, int n, size_t offset = 0)
 	return iovs;
 }
 
-static void FreeIovecs(vector<tc_iovec> *iovs)
+static void FreeIovecs(vector<viovec> *iovs)
 {
 	for (auto iov : *iovs)
 		free((char *)iov.data);
@@ -89,11 +89,11 @@ static void BM_CreateEmpty(benchmark::State &state)
 		vec_unlink(paths.data(), nfiles);
 		state.ResumeTiming();
 
-		tc_file *files = vec_open_simple(paths.data(), nfiles,
+		vfile *files = vec_open_simple(paths.data(), nfiles,
 						 O_CREAT | O_WRONLY, 0);
 		assert(files);
-		tc_res tcres = vec_close(files, nfiles);
-		assert(tc_okay(tcres));
+		vres tcres = vec_close(files, nfiles);
+		assert(vokay(tcres));
 	}
 
 	FreePaths(&paths);
@@ -106,11 +106,11 @@ static void BM_OpenClose(benchmark::State &state)
 	vector<const char *> paths = NewPaths("file-%d", nfiles);
 
 	while (state.KeepRunning()) {
-		tc_file *files =
+		vfile *files =
 		    vec_open_simple(paths.data(), nfiles, O_RDONLY, 0);
 		assert(files);
-		tc_res tcres = vec_close(files, nfiles);
-		assert(tc_okay(tcres));
+		vres tcres = vec_close(files, nfiles);
+		assert(vokay(tcres));
 	}
 
 	FreePaths(&paths);
@@ -124,14 +124,14 @@ static void ReadWrite(benchmark::State &state, int flags, bool read)
 	auto iofunc = read ? vec_read : vec_write;
 	size_t offset = (flags & O_APPEND) ? TC_OFFSET_END : 0;
 
-	tc_file *files =
+	vfile *files =
 	    vec_open_simple(paths.data(), nfiles, flags, 0644);
 	assert(files);
-	vector<tc_iovec> iovs = NewIovecs(files, nfiles, offset);
+	vector<viovec> iovs = NewIovecs(files, nfiles, offset);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = iofunc(iovs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = iofunc(iovs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	vec_close(files, nfiles);
@@ -179,17 +179,17 @@ static void BM_Read4KOpenClose(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
 	vector<const char *> paths = NewPaths("file-%d", nfiles);
-	vector<tc_file> files(nfiles);
+	vector<vfile> files(nfiles);
 
 	for (size_t i = 0; i < nfiles; ++i) {
-		files[i] = tc_file_from_path(paths[i]);
+		files[i] = vfile_from_path(paths[i]);
 	}
 
-	vector<tc_iovec> iovs = NewIovecs(files.data(), nfiles);
+	vector<viovec> iovs = NewIovecs(files.data(), nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_read(iovs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_read(iovs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeIovecs(&iovs);
@@ -197,10 +197,10 @@ static void BM_Read4KOpenClose(benchmark::State &state)
 }
 BENCHMARK(BM_Read4KOpenClose)->RangeMultiplier(2)->Range(1, 256);
 
-static vector<tc_attrs> NewTcAttrs(size_t nfiles, tc_attrs *values = nullptr)
+static vector<vattrs> NewTcAttrs(size_t nfiles, vattrs *values = nullptr)
 {
 	vector<const char *> paths = NewPaths("file-%d", nfiles);
-	vector<tc_attrs> attrs(nfiles);
+	vector<vattrs> attrs(nfiles);
 
 	for (size_t i = 0; i < nfiles; ++i) {
 		if (values) {
@@ -208,13 +208,13 @@ static vector<tc_attrs> NewTcAttrs(size_t nfiles, tc_attrs *values = nullptr)
 		} else {
 			attrs[i].masks = TC_ATTRS_MASK_ALL;
 		}
-		attrs[i].file = tc_file_from_path(paths[i]);
+		attrs[i].file = vfile_from_path(paths[i]);
 	}
 
 	return attrs;
 }
 
-static void FreeTcAttrs(vector<tc_attrs> *attrs)
+static void FreeTcAttrs(vector<vattrs> *attrs)
 {
 	for (const auto& at : *attrs) {
 		free((char *)at.file.path);
@@ -230,23 +230,23 @@ static inline struct timespec totimespec(long sec, long nsec)
 	return tm;
 }
 
-static tc_attrs GetAttrValuesToSet(int nattrs)
+static vattrs GetAttrValuesToSet(int nattrs)
 {
-	tc_attrs attrs;
+	vattrs attrs;
 
 	attrs.masks = TC_ATTRS_MASK_NONE;
 	if (nattrs >= 1) {
-		tc_attrs_set_mode(&attrs, S_IRUSR | S_IRGRP | S_IROTH);
+		vattrs_set_mode(&attrs, S_IRUSR | S_IRGRP | S_IROTH);
 	}
 	if (nattrs >= 2) {
-		tc_attrs_set_uid(&attrs, 0);
-		tc_attrs_set_gid(&attrs, 0);
+		vattrs_set_uid(&attrs, 0);
+		vattrs_set_gid(&attrs, 0);
 	}
 	if (nattrs >= 3) {
-		tc_attrs_set_atime(&attrs, totimespec(time(NULL), 0));
+		vattrs_set_atime(&attrs, totimespec(time(NULL), 0));
 	}
 	if (nattrs >= 4) {
-		tc_attrs_set_size(&attrs, 8192);
+		vattrs_set_size(&attrs, 8192);
 	}
 	return attrs;
 }
@@ -254,11 +254,11 @@ static tc_attrs GetAttrValuesToSet(int nattrs)
 static void BM_Getattrs(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	vector<tc_attrs> attrs = NewTcAttrs(nfiles);
+	vector<vattrs> attrs = NewTcAttrs(nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_getattrs(attrs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_getattrs(attrs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeTcAttrs(&attrs);
@@ -268,12 +268,12 @@ BENCHMARK(BM_Getattrs)->RangeMultiplier(2)->Range(1, 256);
 static void BM_Setattr1(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	tc_attrs values = GetAttrValuesToSet(1);
-	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
+	vattrs values = GetAttrValuesToSet(1);
+	vector<vattrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_setattrs(attrs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeTcAttrs(&attrs);
@@ -283,12 +283,12 @@ BENCHMARK(BM_Setattr1)->RangeMultiplier(2)->Range(1, 256);
 static void BM_Setattr2(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	tc_attrs values = GetAttrValuesToSet(2);
-	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
+	vattrs values = GetAttrValuesToSet(2);
+	vector<vattrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_setattrs(attrs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeTcAttrs(&attrs);
@@ -298,12 +298,12 @@ BENCHMARK(BM_Setattr2)->RangeMultiplier(2)->Range(1, 256);
 static void BM_Setattr3(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	tc_attrs values = GetAttrValuesToSet(3);
-	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
+	vattrs values = GetAttrValuesToSet(3);
+	vector<vattrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_setattrs(attrs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeTcAttrs(&attrs);
@@ -313,12 +313,12 @@ BENCHMARK(BM_Setattr3)->RangeMultiplier(2)->Range(1, 256);
 static void BM_Setattr4(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	tc_attrs values = GetAttrValuesToSet(4);
-	vector<tc_attrs> attrs = NewTcAttrs(nfiles, &values);
+	vattrs values = GetAttrValuesToSet(4);
+	vector<vattrs> attrs = NewTcAttrs(nfiles, &values);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_setattrs(attrs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_setattrs(attrs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeTcAttrs(&attrs);
@@ -328,22 +328,22 @@ BENCHMARK(BM_Setattr4)->RangeMultiplier(2)->Range(1, 256);
 static void CreateFiles(vector<const char *>& paths)
 {
 	const size_t nfiles = paths.size();
-	tc_file *files =
+	vfile *files =
 	    vec_open_simple(paths.data(), nfiles, O_WRONLY | O_CREAT, 0644);
 	assert(files);
-	vector<tc_iovec> iovs = NewIovecs(files, nfiles);
-	tc_res tcres = vec_write(iovs.data(), nfiles, false);
-	assert(tc_okay(tcres));
+	vector<viovec> iovs = NewIovecs(files, nfiles);
+	vres tcres = vec_write(iovs.data(), nfiles, false);
+	assert(vokay(tcres));
 	vec_close(files, nfiles);
 	FreeIovecs(&iovs);
 }
 
-static vector<tc_extent_pair> NewFilePairsToCopy(size_t nfiles)
+static vector<vextent_pair> NewFilePairsToCopy(size_t nfiles)
 {
 	vector<const char *> srcs = NewPaths("file-%d", nfiles);
 	CreateFiles(srcs);
 	vector<const char *> dsts = NewPaths("dst-%d", nfiles);
-	vector<tc_extent_pair> pairs(nfiles);
+	vector<vextent_pair> pairs(nfiles);
 	for (size_t i = 0; i < nfiles; ++i) {
 		pairs[i].src_path = srcs[i];
 		pairs[i].dst_path = dsts[i];
@@ -354,7 +354,7 @@ static vector<tc_extent_pair> NewFilePairsToCopy(size_t nfiles)
 	return pairs;
 }
 
-static void FreeFilePairsToCopy(vector<tc_extent_pair> *pairs)
+static void FreeFilePairsToCopy(vector<vextent_pair> *pairs)
 {
 	for (auto& p : *pairs) {
 		free((char *)p.src_path);
@@ -365,11 +365,11 @@ static void FreeFilePairsToCopy(vector<tc_extent_pair> *pairs)
 static void BM_Copy(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	vector<tc_extent_pair> pairs = NewFilePairsToCopy(nfiles);
+	vector<vextent_pair> pairs = NewFilePairsToCopy(nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_dup(pairs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_dup(pairs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeFilePairsToCopy(&pairs);
@@ -379,11 +379,11 @@ BENCHMARK(BM_Copy)->RangeMultiplier(2)->Range(1, 256);
 static void BM_SSCopy(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	vector<tc_extent_pair> pairs = NewFilePairsToCopy(nfiles);
+	vector<vextent_pair> pairs = NewFilePairsToCopy(nfiles);
 
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_copy(pairs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_copy(pairs.data(), nfiles, false);
+		assert(vokay(tcres));
 	}
 
 	FreeFilePairsToCopy(&pairs);
@@ -394,18 +394,18 @@ static void BM_Mkdir(benchmark::State &state)
 {
 	size_t ndirs = state.range(0);
 	vector<const char *> paths = NewPaths("Bench-Mkdir/dir-%d", ndirs);
-	vector<tc_attrs> dirs(ndirs);
+	vector<vattrs> dirs(ndirs);
 
 	while (state.KeepRunning()) {
 		state.PauseTiming();
 		ResetTestDirectory("Bench-Mkdir");
 		for (size_t i = 0; i < ndirs; ++i) {
-			tc_set_up_creation(&dirs[i], paths[i], 0755);
+			vset_up_creation(&dirs[i], paths[i], 0755);
 		}
 		state.ResumeTiming();
 
-		tc_res tcres = vec_mkdir(dirs.data(), ndirs, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_mkdir(dirs.data(), ndirs, false);
+		assert(vokay(tcres));
 
 	}
 
@@ -422,9 +422,9 @@ static void BM_Symlink(benchmark::State &state)
 	ResetTestDirectory("Bench-Symlink");
 	CreateFiles(files);
 	while (state.KeepRunning()) {
-		tc_res tcres =
+		vres tcres =
 		    vec_symlink(files.data(), links.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		assert(vokay(tcres));
 
 		state.PauseTiming();
 		vec_unlink(links.data(), nfiles);
@@ -452,9 +452,9 @@ static void BM_Readlink(benchmark::State &state)
 	CreateFiles(files);
 	vec_symlink(files.data(), links.data(), nfiles, false);
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_readlink(links.data(), bufs.data(),
+		vres tcres = vec_readlink(links.data(), bufs.data(),
 					    buf_sizes.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		assert(vokay(tcres));
 	}
 
 	for (size_t i = 0; i < nfiles; ++i) {
@@ -470,18 +470,18 @@ static void BM_Rename(benchmark::State &state)
 	size_t nfiles = state.range(0);
 	vector<const char *> srcs = NewPaths("Bench-Rename/src-%d", nfiles);
 	vector<const char *> dsts = NewPaths("Bench-Rename/dst-%d", nfiles);
-	vector<tc_file_pair> pairs(nfiles);
+	vector<vfile_pair> pairs(nfiles);
 
 	for (size_t i = 0; i < nfiles; ++i) {
-		pairs[i].src_file = tc_file_from_path(srcs[i]);
-		pairs[i].dst_file = tc_file_from_path(dsts[i]);
+		pairs[i].src_file = vfile_from_path(srcs[i]);
+		pairs[i].dst_file = vfile_from_path(dsts[i]);
 	}
 
 	ResetTestDirectory("Bench-Rename");
 	CreateFiles(srcs);
 	while (state.KeepRunning()) {
-		tc_res tcres = vec_rename(pairs.data(), nfiles, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_rename(pairs.data(), nfiles, false);
+		assert(vokay(tcres));
 
 		// switch srcs and dsts
 		state.PauseTiming();
@@ -507,8 +507,8 @@ static void BM_Remove(benchmark::State &state)
 		CreateFiles(paths);
 		state.ResumeTiming();
 
-		tc_res tcres = vec_unlink(paths.data(), nfiles);
-		assert(tc_okay(tcres));
+		vres tcres = vec_unlink(paths.data(), nfiles);
+		assert(vokay(tcres));
 	}
 
 	FreePaths(&paths);
@@ -516,7 +516,7 @@ static void BM_Remove(benchmark::State &state)
 BENCHMARK(BM_Remove)->RangeMultiplier(2)->Range(1, 256);
 
 // dummy callback
-static bool DummyListDirCb(const struct tc_attrs *entry, const char *dir,
+static bool DummyListDirCb(const struct vattrs *entry, const char *dir,
 			   void *cbarg)
 {
 	return true;
@@ -531,12 +531,12 @@ static bool DummyListDirCb(const struct tc_attrs *entry, const char *dir,
 static void CreateDirsWithContents(vector<const char *>& dirs)
 {
 	const int kFilesPerDir = 17;
-	vector<tc_attrs> attrs(dirs.size());
+	vector<vattrs> attrs(dirs.size());
 	for (size_t i = 0; i < dirs.size(); ++i) {
-		tc_set_up_creation(&attrs[i], dirs[i], 0755);
+		vset_up_creation(&attrs[i], dirs[i], 0755);
 	}
-	tc_res tcres = vec_mkdir(attrs.data(), dirs.size(), false);
-	assert(tc_okay(tcres));
+	vres tcres = vec_mkdir(attrs.data(), dirs.size(), false);
+	assert(vokay(tcres));
 
 	for (size_t i = 0; i < dirs.size(); ++i) {
 		char p[PATH_MAX];
@@ -556,10 +556,10 @@ static void BM_Listdir(benchmark::State &state)
 	CreateDirsWithContents(dirs);
 
 	while (state.KeepRunning()) {
-		tc_res tcres =
+		vres tcres =
 		    vec_listdir(dirs.data(), nfiles, TC_ATTRS_MASK_ALL, 0,
 				false, DummyListDirCb, NULL, false);
-		assert(tc_okay(tcres));
+		assert(vokay(tcres));
 	}
 
 	FreePaths(&dirs);
@@ -572,18 +572,18 @@ static void* SetUp(bool istc)
 	void *context;
 	if (istc) {
 		char buf[PATH_MAX];
-		context = tc_init(get_tc_config_file(buf, PATH_MAX),
+		context = vinit(get_tc_config_file(buf, PATH_MAX),
 				  "/tmp/tc-bench-tc.log", 77);
 		fprintf(stderr, "Using config file at %s\n", buf);
 	} else {
-		context = tc_init(NULL, "/tmp/tc-bench-posix.log", 0);
+		context = vinit(NULL, "/tmp/tc-bench-posix.log", 0);
 	}
 	return context;
 }
 
 static void TearDown(void *context)
 {
-	tc_deinit(context);
+	vdeinit(context);
 }
 
 int main(int argc, char **argv)

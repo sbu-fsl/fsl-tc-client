@@ -45,7 +45,7 @@ void nfs4_deinit(void *arg);
  * @read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res nfs4_readv(struct tc_iovec *reads, int read_count, bool is_transaction);
+vres nfs4_readv(struct viovec *reads, int read_count, bool is_transaction);
 
 /**
  * @writes - Array of writes for one or more files
@@ -53,27 +53,27 @@ tc_res nfs4_readv(struct tc_iovec *reads, int read_count, bool is_transaction);
  * @read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res nfs4_writev(struct tc_iovec *writes, int write_count,
+vres nfs4_writev(struct viovec *writes, int write_count,
 		   bool is_transaction);
 
 /**
  * Open a list of files specified by paths
  *
- * Returns a list of tc_file that the caller is responsible for freeing.
+ * Returns a list of vfile that the caller is responsible for freeing.
  */
-tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes);
+vfile *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes);
 
 /**
  *
  * On success, "tcfs" will be freed.
  */
-tc_res nfs4_closev(tc_file *tcfs, int count);
+vres nfs4_closev(vfile *tcfs, int count);
 
-off_t nfs4_fseek(tc_file *tcf, off_t offset, int whence);
+off_t nfs4_fseek(vfile *tcf, off_t offset, int whence);
 
 /*
  * Close all open files which user might have forgot to close
- * To be called during tc_deinit()
+ * To be called during vdeinit()
  */
 void nfs4_close_all();
 
@@ -81,19 +81,19 @@ void nfs4_close_all();
  * Get attributes of files
  *
  * @attrs: array of attributes to get
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res nfs4_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+vres nfs4_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction);
 
 /**
  * Set attributes of files.
  *
  * @attrs: array of attributes to set
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res nfs4_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+vres nfs4_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction);
 
 /**
  * Rename specfied files.
@@ -102,7 +102,7 @@ tc_res nfs4_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
  * @count: the count of tc_pairs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res nfs4_renamev(tc_file_pair *pairs, int count, bool is_transaction);
+vres nfs4_renamev(vfile_pair *pairs, int count, bool is_transaction);
 
 /**
  * Remove specfied files.
@@ -111,23 +111,23 @@ tc_res nfs4_renamev(tc_file_pair *pairs, int count, bool is_transaction);
  * @count: the count of tc_ in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res nfs4_removev(tc_file *tc_files, int count, bool is_transaction);
+vres nfs4_removev(vfile *tc_files, int count, bool is_transaction);
 
-tc_res nfs4_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction);
+vres nfs4_mkdirv(struct vattrs *dirs, int count, bool is_transaction);
 
-tc_res nfs4_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
+vres nfs4_listdirv(const char **dirs, int count, struct vattrs_masks masks,
 		     int max_entries, bool recursive, vec_listdir_cb cb,
 		     void *cbarg, bool is_transaction);
 
-tc_res nfs4_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction);
+vres nfs4_lcopyv(struct vextent_pair *pairs, int count, bool is_transaction);
 
-tc_res nfs4_hardlinkv(const char **oldpaths, const char **newpaths, int count,
+vres nfs4_hardlinkv(const char **oldpaths, const char **newpaths, int count,
 		      bool istxn);
 
-tc_res nfs4_symlinkv(const char **oldpaths, const char **newpaths, int count,
+vres nfs4_symlinkv(const char **oldpaths, const char **newpaths, int count,
 		     bool istxn);
 
-tc_res nfs4_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
+vres nfs4_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
 		      int count, bool istxn);
 
 int nfs4_chdir(const char *path);

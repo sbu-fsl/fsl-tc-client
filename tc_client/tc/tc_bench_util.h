@@ -34,16 +34,16 @@ std::vector<const char *> NewPaths(const char *format, int n, int start = 0);
 
 void FreePaths(std::vector<const char *> *paths);
 
-std::vector<tc_iovec> NewIovecs(tc_file *files, int n, size_t offset = 0);
+std::vector<viovec> NewIovecs(vfile *files, int n, size_t offset = 0);
 
-std::vector<tc_file> Paths2Files(const std::vector<const char *>& paths);
+std::vector<vfile> Paths2Files(const std::vector<const char *>& paths);
 
-void FreeIovecs(std::vector<tc_iovec> *iovs);
+void FreeIovecs(std::vector<viovec> *iovs);
 
-std::vector<tc_attrs> NewTcAttrs(size_t nfiles, tc_attrs *values = nullptr,
+std::vector<vattrs> NewTcAttrs(size_t nfiles, vattrs *values = nullptr,
 			    int start = 0);
 
-void FreeTcAttrs(std::vector<tc_attrs> *attrs);
+void FreeTcAttrs(std::vector<vattrs> *attrs);
 
 static inline struct timespec totimespec(long sec, long nsec)
 {
@@ -54,18 +54,18 @@ static inline struct timespec totimespec(long sec, long nsec)
 	return tm;
 }
 
-tc_attrs GetAttrValuesToSet(int nattrs);
+vattrs GetAttrValuesToSet(int nattrs);
 
 void CreateFiles(std::vector<const char *>& paths);
 
-std::vector<tc_extent_pair> NewFilePairsToCopy(const char *src_format,
+std::vector<vextent_pair> NewFilePairsToCopy(const char *src_format,
 					       const char *dst_format,
 					       size_t nfiles, size_t start = 0);
 
-void FreeFilePairsToCopy(std::vector<tc_extent_pair> *pairs);
+void FreeFilePairsToCopy(std::vector<vextent_pair> *pairs);
 
 // dummy callback
-bool DummyListDirCb(const struct tc_attrs *entry, const char *dir, void *cbarg);
+bool DummyListDirCb(const struct vattrs *entry, const char *dir, void *cbarg);
 
 // There average directory width is 17:
 //

@@ -53,9 +53,9 @@ int main(int argc, char *argv[])
 	void *context = NULL;
 	const int N = 5;
 	int i;
-	tc_file files[N];
-	struct tc_iovec file_iov[N];
-	tc_res res;
+	vfile files[N];
+	struct viovec file_iov[N];
+	vres res;
 	const char *data = "hello world";
 	const char *file_paths[] = { "/vfs0/rmdir/a", "/vfs0/rmdir/b",
 				     "/vfs0/rmdir/c", "/vfs0/rmdir/d",
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -78,8 +78,8 @@ int main(int argc, char *argv[])
 		return EIO;
 	}
 
-	res = tc_ensure_dir(TC_TEST_NFS_DIR, 0755, NULL);
-	if (!tc_okay(res)) {
+	res = sca_ensure_dir(TC_TEST_NFS_DIR, 0755, NULL);
+	if (!vokay(res)) {
 		NFS4_ERR("failed to create parent directory %s",
 			 TC_TEST_NFS_DIR);
 		goto exit;
@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 
 	/* Setup I/O request */
 	for (i = 0; i < N; ++i) {
-		files[i] = tc_file_from_path(file_paths[i]);
+		files[i] = vfile_from_path(file_paths[i]);
 		file_iov[i].file = files[i];
 		file_iov[i].is_creation = true;
 		file_iov[i].offset = 0;
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 	/* Write the file using NFS compounds; nfs4_writev() will open the file
 	 * with CREATION flag, write to it, and then close it. */
 	res = vec_write(file_iov, N, false);
-	if (tc_okay(res)) {
+	if (vokay(res)) {
 		fprintf(stderr, "Successfully created %d test files\n", N);
 	} else {
 		fprintf(stderr, "Failed to create test files\n");
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 	}
 
 	res = vec_remove(files, N, false);
-	if (tc_okay(res)) {
+	if (vokay(res)) {
 		fprintf(stderr, "Successfully removed %d test files\n", N);
 	} else {
 		fprintf(stderr,
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 	}
 
 exit:
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

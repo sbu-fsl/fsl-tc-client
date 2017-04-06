@@ -57,7 +57,7 @@ void tc_iterate_counters(bool (*tfc_reader)(struct tc_func_counter *tfc,
 	pthread_mutex_unlock(&tc_counter_lock);
 }
 
-void free_iovec(struct tc_iovec *iovec, int count)
+void free_iovec(struct viovec *iovec, int count)
 {
 	int i = 0;
 
@@ -78,7 +78,7 @@ char *get_tc_config_file(char *buf, int buf_size)
 	return buf;
 }
 
-bool compare_content(struct tc_iovec *iovec1, struct tc_iovec *iovec2,
+bool compare_content(struct viovec *iovec1, struct viovec *iovec2,
 		     int count)
 {
 	int i = 0;
@@ -110,31 +110,31 @@ void del_file_handle(struct file_handle *fh)
 	free(fh);
 }
 
-void tc_copy_attrs(const struct tc_attrs *src, struct tc_attrs *dst)
+void tc_copy_attrs(const struct vattrs *src, struct vattrs *dst)
 {
 	if (src->masks.has_mode)
-		tc_attrs_set_mode(dst, src->mode);
+		vattrs_set_mode(dst, src->mode);
 	if (src->masks.has_size)
-		tc_attrs_set_size(dst, src->size);
+		vattrs_set_size(dst, src->size);
 	if (src->masks.has_nlink)
-		tc_attrs_set_nlink(dst, src->nlink);
+		vattrs_set_nlink(dst, src->nlink);
 	if (src->masks.has_fileid)
-		tc_attrs_set_fileid(dst, src->fileid);
+		vattrs_set_fileid(dst, src->fileid);
 	if (src->masks.has_uid)
-		tc_attrs_set_uid(dst, src->uid);
+		vattrs_set_uid(dst, src->uid);
 	if (src->masks.has_gid)
-		tc_attrs_set_gid(dst, src->gid);
+		vattrs_set_gid(dst, src->gid);
 	if (src->masks.has_rdev)
-		tc_attrs_set_rdev(dst, src->rdev);
+		vattrs_set_rdev(dst, src->rdev);
 	if (src->masks.has_atime)
-		tc_attrs_set_atime(dst, src->atime);
+		vattrs_set_atime(dst, src->atime);
 	if (src->masks.has_mtime)
-		tc_attrs_set_mtime(dst, src->mtime);
+		vattrs_set_mtime(dst, src->mtime);
 	if (src->masks.has_ctime)
-		tc_attrs_set_ctime(dst, src->ctime);
+		vattrs_set_ctime(dst, src->ctime);
 }
 
-bool tc_cmp_file(const tc_file *tcf1, const tc_file *tcf2)
+bool tc_cmp_file(const vfile *tcf1, const vfile *tcf2)
 {
 	if (tcf1->type != tcf2->type)
 		return false;

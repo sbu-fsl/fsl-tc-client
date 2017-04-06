@@ -92,8 +92,8 @@ int tc_seq(char *input_path, int block_size, int num_files, int num_ops,
 	struct fsal_obj_handle *vfs0_handle = NULL;
 	fsal_status_t fsal_status = { 0, 0 };
 	struct req_op_context req_ctx;
-	struct tc_iovec *user_arg = NULL;
-	struct tc_iovec *cur_arg = NULL;
+	struct viovec *user_arg = NULL;
+	struct viovec *cur_arg = NULL;
 	char *temp_path = NULL;
 	char *data_buf = NULL;
 	int  input_len = 0;
@@ -134,7 +134,7 @@ int tc_seq(char *input_path, int block_size, int num_files, int num_ops,
 	input_len = strlen(input_path);
 	temp_path = malloc(input_len + 4);
 
-	user_arg = malloc(ops_per_comp * (sizeof(struct tc_iovec)));
+	user_arg = malloc(ops_per_comp * (sizeof(struct viovec)));
 	k = 0;
 	while (k < ops_per_comp) {
 		cur_arg = user_arg + k;
@@ -163,7 +163,7 @@ int tc_seq(char *input_path, int block_size, int num_files, int num_ops,
 
 			snprintf(temp_path, input_len + 4, "%s%d", input_path,
 				 j);
-			user_arg->file = tc_file_from_path(temp_path);
+			user_arg->file = vfile_from_path(temp_path);
 
 			if (rw == 0) {
 				nfs4_readv(user_arg, ops_per_comp, FALSE);

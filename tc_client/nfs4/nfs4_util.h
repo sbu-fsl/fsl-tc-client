@@ -39,7 +39,7 @@ extern "C" {
  */
 struct tcwrite_kargs
 {
-	struct tc_iovec *user_arg;
+	struct viovec *user_arg;
 	char *path;
 	stateid4 *sid;
 	nfs_fh4 *fh;
@@ -84,7 +84,7 @@ struct tc_kfd
 	size_t filesize;
 };
 
-int tc_init_fds();
+int vinit_fds();
 
 /* Helper function to get free count, to be called before sending open to server
  */

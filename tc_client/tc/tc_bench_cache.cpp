@@ -41,16 +41,16 @@ static void ReadWriteSingle(benchmark::State &state, bool is_read)
 {
 	off_t filesize = GetFileSize(filepath);
 	auto fn = is_read ? vec_read : vec_write;
-	struct tc_iovec iov;
-	iov.file = tc_file_from_path(filepath);
+	struct viovec iov;
+	iov.file = vfile_from_path(filepath);
 	iov.data = (char *)malloc(filesize);
 	assert(iov.data);
 	iov.offset = 0;
 	iov.length = filesize;
 
 	while (state.KeepRunning()) {
-		tc_res tcres = fn(&iov, 1, false);
-		assert(tc_okay(tcres));
+		vres tcres = fn(&iov, 1, false);
+		assert(vokay(tcres));
 	}
 
 	free(iov.data);

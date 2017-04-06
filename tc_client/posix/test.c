@@ -12,10 +12,10 @@
 #include "tc_api.h"
 
 /*
- * Free the tc_iovec
+ * Free the viovec
  */
 
-void clear_iovec(tc_iovec *user_arg, int count)
+void clear_iovec(viovec *user_arg, int count)
 {
 	int i=0;
 
@@ -28,15 +28,15 @@ void clear_iovec(tc_iovec *user_arg, int count)
 }
 
 /*
- * Helper function to populate tc_iovec for read/write
+ * Helper function to populate viovec for read/write
  */
 
-tc_iovec* set_iovec(char **path, int count, int is_write)
+viovec* set_iovec(char **path, int count, int is_write)
 {
 	int i = 0;
-	struct tc_iovec *user_arg = NULL;
+	struct viovec *user_arg = NULL;
 
-	user_arg = calloc(count, sizeof(struct tc_iovec));
+	user_arg = calloc(count, sizeof(struct viovec));
 
 	while(i<count) {
 		if(path[i] == NULL) {
@@ -70,10 +70,10 @@ tc_iovec* set_iovec(char **path, int count, int is_write)
 /*
  * Test reads
  * @IN(path): array of files to be read
- * @IN(count): count of entries in the tc_iovec
+ * @IN(count): count of entries in the viovec
  */
 
-bool test_readv(char **path, int count, tc_iovec *check_arg)
+bool test_readv(char **path, int count, viovec *check_arg)
 {
 	bool res = false;
 	int i = 0;
@@ -81,11 +81,11 @@ bool test_readv(char **path, int count, tc_iovec *check_arg)
          * posix_readv read the specified files
          */
 
-	struct tc_iovec *user_arg = set_iovec(path, count, 0);
+	struct viovec *user_arg = set_iovec(path, count, 0);
 	if(user_arg == NULL)
 		return res;
 	
-	res = tx_readv(user_arg, count);
+	res = tx_vec_read(user_arg, count);
 
 	if(res && check_arg) {
 		while(i <  count) {
@@ -113,7 +113,7 @@ bool test_readv(char **path, int count, tc_iovec *check_arg)
 /*
  * Test Writes
  * @IN(path): array of file to be written
- * @IN(count): count of entries in the tc_iovec
+ * @IN(count): count of entries in the viovec
  */
 
 bool test_writev(char **path, int count)
@@ -121,14 +121,14 @@ bool test_writev(char **path, int count)
 	bool res = false;
 
         /*
-         * tx_writev write to the specified files
+         * tx_vec_write write to the specified files
          */
        
-	struct tc_iovec *user_arg = set_iovec(path, count, 1);
+	struct viovec *user_arg = set_iovec(path, count, 1);
 	if(user_arg == NULL)
 		return res;
 	
-        res = tx_writev(user_arg, count);
+        res = tx_vec_write(user_arg, count);
 
 	test_readv(path, count, user_arg); 
 
@@ -141,7 +141,7 @@ bool test_writev(char **path, int count)
  * Compare the attributes once set, to check if set properly
  */
 
-int compare(tc_attrs *usr, tc_attrs *check, int count)
+int compare(vattrs *usr, vattrs *check, int count)
 {
 	int i=0;
 	while(i <  count) {
@@ -210,10 +210,10 @@ int compare(tc_attrs *usr, tc_attrs *check, int count)
 }
 
 /*
- * Free the memory allocated to tc_attrs
+ * Free the memory allocated to vattrs
  */
 
-void clear_tc_attrsv(tc_attrs *attrs)
+void clear_vattrsv(vattrs *attrs)
 {
 	free(attrs);
 }
@@ -222,10 +222,10 @@ void clear_tc_attrsv(tc_attrs *attrs)
  * Test the get attributes functionality
  */
 
-bool test_getattrsv(char **path, int count, tc_attrs *check_attrs)
+bool test_getattrsv(char **path, int count, vattrs *check_attrs)
 {
-	tc_attrs *user_attr = calloc(count, sizeof(tc_attrs));
-	tc_attrs_masks masks[3] = {0};	
+	vattrs *user_attr = calloc(count, sizeof(vattrs));
+	vattrs_masks masks[3] = {0};	
         bool res = false;
 	int err = 0, i = 0;
 
@@ -255,7 +255,7 @@ bool test_getattrsv(char **path, int count, tc_attrs *check_attrs)
 		i++;
 	}
 
-        res = tx_getattrsv(user_attr, count);
+        res = tx_vec_getattrs(user_attr, count);
 
 	if(check_attrs  && res) {
 		err = compare(user_attr, check_attrs, count);
@@ -266,7 +266,7 @@ bool test_getattrsv(char **path, int count, tc_attrs *check_attrs)
 		}
 	}
 			
-        clear_tc_attrsv(user_attr);
+        clear_vattrsv(user_attr);
 
 	return res;
 }
@@ -274,16 +274,16 @@ bool test_getattrsv(char **path, int count, tc_attrs *check_attrs)
 /*
  * Test set attribute functionality
  * @IN(path): array of files whose attributes are to be set
- * @IN(count): count of entries in the tc_attrs
+ * @IN(count): count of entries in the vattrs
  * @IN(masks): bit fields indicating which field needs modification
  */
 
-bool test_setattrsv(char **path, tc_attrs *change_attr, int count)
+bool test_setattrsv(char **path, vattrs *change_attr, int count)
 {
-	tc_attrs *user_attr = change_attr;
+	vattrs *user_attr = change_attr;
 	bool res = false;
 
-	res = tx_setattrsv(user_attr, count);
+	res = tx_vec_setattrs(user_attr, count);
 	
 	if(res) {
 		res = test_getattrsv(path, count, user_attr);
@@ -296,14 +296,14 @@ bool test_setattrsv(char **path, tc_attrs *change_attr, int count)
 }
 
 /*
- * helper function to populate tc_attrs struct
+ * helper function to populate vattrs struct
  * @IN(path): array of files whose attributes are to be set
- * @IN(count): count of entries in the tc_attrs
+ * @IN(count): count of entries in the vattrs
  */
-tc_attrs* set_tc_attrs(char **path, int count)
+vattrs* set_vattrs(char **path, int count)
 {
-	tc_attrs *change_attr = calloc(count, sizeof(tc_attrs));
-	tc_attrs_masks masks[3] = {0};
+	vattrs *change_attr = calloc(count, sizeof(vattrs));
+	vattrs_masks masks[3] = {0};
 	int i = 0;
 
 	uid_t uid[] = {2711, 456, 789};
@@ -317,7 +317,7 @@ tc_attrs* set_tc_attrs(char **path, int count)
 
 		if(path[i] == NULL) {
 
-                        LogDebug(COMPONENT_FSAL, "set_tc_attrs() failed for file : %s\n", path[i]);
+                        LogDebug(COMPONENT_FSAL, "set_vattrs() failed for file : %s\n", path[i]);
 
                         free(change_attr);
                         return NULL;
@@ -358,7 +358,7 @@ int test()
 {
 	
 	bool res = true;
-	tc_attrs *change_attr = NULL;
+	vattrs *change_attr = NULL;
 
 	char *file_name[] = {"/home/garima/test/abcd", "/home/garima/test/abcd", "/home/garima/test/abcd1", NULL};
 
@@ -412,7 +412,7 @@ int test()
 
 	/* Set the masks which will be needed for multiple test cases */
 	char *attr_files[] = {"/home/garima/test/abcd2", "/home/garima/test/abcd1", "/home/garima/test/abcd"};
-	change_attr = set_tc_attrs(attr_files, 3);
+	change_attr = set_vattrs(attr_files, 3);
 
 
 	/*
@@ -438,7 +438,7 @@ int test()
         	LogDebug(COMPONENT_FSAL, "vec_setattrs() successful\n");
 
 
-	clear_tc_attrsv(change_attr);
+	clear_vattrsv(change_attr);
 
         return 0;
 }

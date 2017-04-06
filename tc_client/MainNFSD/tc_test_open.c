@@ -29,8 +29,8 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	int rc = -1;
-	tc_res res;
-	tc_file *tcf;
+	vres res;
+	vfile *tcf;
 
 	/* Locate and use the default config file.  Please update the config
 	 * file to the correct NFS server. */
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -49,27 +49,27 @@ int main(int argc, char *argv[])
 	}
 
 	/* Read the file; nfs4_readv() will open it first if needed. */
-	tcf = tc_open(TC_TEST_NFS_FILE0, O_RDWR, 0);
+	tcf = sca_open(TC_TEST_NFS_FILE0, O_RDWR, 0);
 	if (tcf->fd < 0) {
 		NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE0);
 	}
 
-	rc = tc_close(tcf);
+	rc = sca_close(tcf);
 	if (rc < 0) {
 		NFS4_DEBUG("Cannot close %d", tcf->fd);
 	}
 
-	tcf = tc_open(TC_TEST_NFS_FILE1, O_WRONLY | O_CREAT, 0);
+	tcf = sca_open(TC_TEST_NFS_FILE1, O_WRONLY | O_CREAT, 0);
 	if (tcf->fd < 0) {
 		NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE1);
 	}
 
-	rc = tc_close(tcf);
+	rc = sca_close(tcf);
 	if (rc < 0) {
 		NFS4_DEBUG("Cannot close %d", tcf->fd);
 	}
 
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

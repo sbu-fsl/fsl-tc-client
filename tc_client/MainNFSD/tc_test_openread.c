@@ -45,9 +45,9 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	int rc = -1;
-	struct tc_iovec read_iovec[4];
-	tc_res res;
-	tc_file *file1;
+	struct viovec read_iovec[4];
+	vres res;
+	vfile *file1;
 
 	/* Locate and use the default config file.  Please update the config
 	 * file to the correct NFS server. */
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 		return EIO;
 	}
 
-	file1 = tc_open(TC_TEST_NFS_FILE1, O_RDWR, 0);
+	file1 = sca_open(TC_TEST_NFS_FILE1, O_RDWR, 0);
 	if (file1->fd < 0) {
 		NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE1);
 	}
@@ -73,14 +73,14 @@ int main(int argc, char *argv[])
 	NFS4_DEBUG("Opened %s, %d\n", TC_TEST_NFS_FILE1, file1->fd);
 
 	/* Setup I/O request */
-	tc_iov2file(&read_iovec[0], file1, 0, 16384, malloc(16384));
+	viov2file(&read_iovec[0], file1, 0, 16384, malloc(16384));
         assert(read_iovec[0].data);
-	tc_iov2current(&read_iovec[1], 16384, 16384, malloc(16384));
+	viov2current(&read_iovec[1], 16384, 16384, malloc(16384));
 	assert(read_iovec[1].data);
 
-	tc_iov2path(&read_iovec[2], TC_TEST_NFS_FILE0, 0, 16384, malloc(16384));
+	viov2path(&read_iovec[2], TC_TEST_NFS_FILE0, 0, 16384, malloc(16384));
 	assert(read_iovec[2].data);
-	tc_iov2current(&read_iovec[3], 16384, 16384, malloc(16384));
+	viov2current(&read_iovec[3], 16384, 16384, malloc(16384));
 	assert(read_iovec[3].data);
 
         res = vec_write(read_iovec, 4, false);
@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 
 
         /* Check results. */
-	if (tc_okay(res)) {
+	if (vokay(res)) {
 		fprintf(stderr,
 			"Successfully read the first %d bytes of file \"%s\" "
 			"via NFS.\n",
@@ -104,11 +104,11 @@ int main(int argc, char *argv[])
 			strerror(res.err_no), DEFAULT_LOG_FILE);
 	}
 
-	rc = tc_close(file1);
+	rc = sca_close(file1);
 	if (rc < 0) {
 		NFS4_DEBUG("Cannot close %d", file1->fd);
 	}
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

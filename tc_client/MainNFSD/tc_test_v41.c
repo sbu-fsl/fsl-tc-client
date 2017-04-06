@@ -29,8 +29,8 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	int rc = -1;
-	tc_res res;
-	tc_file file1;
+	vres res;
+	vfile file1;
 
 	/* Locate and use the default config file.  Please update the config
 	 * file to the correct NFS server. */
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 		return EIO;
 	}
 
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

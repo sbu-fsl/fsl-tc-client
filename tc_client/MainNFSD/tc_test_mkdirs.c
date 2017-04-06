@@ -52,9 +52,9 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	const int N = 5;
-	struct tc_attrs dirs[N];
+	struct vattrs dirs[N];
 	char *path;
-	tc_res res;
+	vres res;
 	int i;
 	int rc;
 	slice_t leaf;
@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -80,32 +80,32 @@ int main(int argc, char *argv[])
 	}
 
 	/* create common parent directory */
-	res = tc_ensure_dir(DIR_PATHS[0], 0755, &leaf);
-	if (!tc_okay(res)) {
+	res = sca_ensure_dir(DIR_PATHS[0], 0755, &leaf);
+	if (!vokay(res)) {
 		NFS4_ERR("failed to create parent directory of %s",
 			 DIR_PATHS[0]);
 		goto exit;
 	}
 
 	/* set up sub-directories to create*/
-	tc_set_up_creation(&dirs[0], DIR_PATHS[0], 0755);
+	vset_up_creation(&dirs[0], DIR_PATHS[0], 0755);
 	for (i = 1; i < N; ++i) {
 		path = alloca(PATH_MAX);
 		rc = tc_path_rebase(DIR_PATHS[0], DIR_PATHS[i], path, PATH_MAX);
 		if (rc < 0) {
 			fprintf(stderr, "failed to rebase %s to %s\n",
 				DIR_PATHS[i], DIR_PATHS[0]);
-			res = tc_failure(0, EINVAL);
+			res = vfailure(0, EINVAL);
 			goto exit;
 		}
-		tc_set_up_creation(&dirs[i], path, 0755);
+		vset_up_creation(&dirs[i], path, 0755);
 		dirs[i].file.type = TC_FILE_CURRENT;
 	}
 
 	res = vec_mkdir(dirs, N, false);
 
 	/* Check results. */
-	if (tc_okay(res)) {
+	if (vokay(res)) {
 		fprintf(stderr,
 			"All directories successfully created via NFS.\n");
 	} else {
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 	}
 
 exit:
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

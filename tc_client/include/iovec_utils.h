@@ -31,18 +31,18 @@ extern "C" {
 const size_t TC_SPLIT_THRESHOLD = 4096;
 
 /**
- * Split an array of tc_iovec specified by "iova" to multiple arrays of
- * tc_iovec so that the total size of tc_iovecs in each array is no larger than
- * size_limit.  The caller own the returned array of tc_iov_array, and is
- * responsible for freeing them by calling tc_restore_iov_array().
+ * Split an array of viovec specified by "iova" to multiple arrays of
+ * viovec so that the total size of viovecs in each array is no larger than
+ * size_limit.  The caller own the returned array of viov_array, and is
+ * responsible for freeing them by calling vrestore_iov_array().
  *
- * @iova: the input tc_iov_array to be split
- * @size_limit: size limit of each resultant tc_iov_array
- * @nparts: the number of tc_iov_arrays "iova" is split into
- * Returns an array of tc_iov_array.
+ * @iova: the input viov_array to be split
+ * @size_limit: size limit of each resultant viov_array
+ * @nparts: the number of viov_arrays "iova" is split into
+ * Returns an array of viov_array.
  *
  */
-struct tc_iov_array *tc_split_iov_array(const struct tc_iov_array *iova,
+struct viov_array *tc_split_iov_array(const struct viov_array *iova,
 					int size_limit, int *nparts);
 
 /**
@@ -52,10 +52,10 @@ struct tc_iov_array *tc_split_iov_array(const struct tc_iov_array *iova,
  *
  * Return success or failure.
  */
-bool tc_restore_iov_array(struct tc_iov_array *iova,
-			  struct tc_iov_array **parts, int nparts);
+bool vrestore_iov_array(struct viov_array *iova,
+			  struct viov_array **parts, int nparts);
 
-bool tc_merge_iov_array(struct tc_iov_array *iova);
+bool tc_merge_iov_array(struct viov_array *iova);
 
 #ifdef __cplusplus
 }

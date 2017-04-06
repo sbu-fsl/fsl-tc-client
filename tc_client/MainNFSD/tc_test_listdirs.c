@@ -46,7 +46,7 @@ static char tc_config_path[PATH_MAX];
 
 #define DEFAULT_LOG_FILE "/tmp/tc_test_listdirs.log"
 
-static bool process_direntry(const struct tc_attrs *dentry, const char *dir,
+static bool process_direntry(const struct vattrs *dentry, const char *dir,
 			     void *cbarg)
 {
 	fprintf(stderr, "listed '%s' from directory '%s'\n", dentry->file.path,
@@ -59,13 +59,13 @@ int main(int argc, char *argv[])
 	void *context = NULL;
 	const int NDIRS = 3;
 	const int NFILES = 5;
-	struct tc_attrs dirs[NDIRS];
+	struct vattrs dirs[NDIRS];
 	char *path;
-	tc_res tcres;
+	vres tcres;
 	int i, j;
 	int rc;
 	const char *DIR_PATHS[] = { "/vfs0/dir1", "/vfs0/dir2", "/vfs0/dir3" };
-	struct tc_attrs_masks masks = {0};
+	struct vattrs_masks masks = {0};
 
 	/* Locate and use the default config file in the repo.  Before running
 	 * this example, please update the config file to a correct NFS server.
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -85,18 +85,18 @@ int main(int argc, char *argv[])
 	}
 
 	/* create common parent directory */
-	tcres = tc_ensure_dir("/vfs0", 0755, NULL);
-	if (!tc_okay(tcres)) {
+	tcres = sca_ensure_dir("/vfs0", 0755, NULL);
+	if (!vokay(tcres)) {
 		NFS4_ERR("failed to create parent directory /vfs0");
 		goto exit;
 	}
 
 	/* create directories */
 	for (i = 0; i < NDIRS; ++i) {
-		tc_set_up_creation(&dirs[i], DIR_PATHS[i], 0755);
+		vset_up_creation(&dirs[i], DIR_PATHS[i], 0755);
 	}
 	tcres = vec_mkdir(dirs, NDIRS, false);
-	if (tc_okay(tcres)) {
+	if (vokay(tcres)) {
 		fprintf(stderr, "successfully created %d directories\n", NDIRS);
 	} else {
 		fprintf(stderr, "failed to create directories\n");
@@ -104,20 +104,20 @@ int main(int argc, char *argv[])
 	}
 
 	/* create 5 files in each directories */
-	struct tc_attrs *files = alloca(NDIRS * NFILES * sizeof(*files));
+	struct vattrs *files = alloca(NDIRS * NFILES * sizeof(*files));
 	memset(files, 0, NDIRS * NFILES * sizeof(*files));
 	for (i = 0; i < NDIRS; ++i) {
 		for (j = 0; j < NFILES; ++j) {
 			path = alloca(PATH_MAX);
 			snprintf(path, PATH_MAX, "%s/file%d", DIR_PATHS[i], j);
-			tc_set_up_creation(&files[i * NFILES + j], path, 0755);
+			vset_up_creation(&files[i * NFILES + j], path, 0755);
 			fprintf(stderr, "set up %d-th file %s under %s\n",
 				i * NFILES + j, path, DIR_PATHS[i]);
 		}
 	}
 	/* FIXME: use vec_write() to create files instead of directories */
 	tcres = vec_mkdir(files, NDIRS * NFILES, false);
-	if (tc_okay(tcres)) {
+	if (vokay(tcres)) {
 		fprintf(stderr, "successfully created %d files\n",
 			NDIRS * NFILES);
 	} else {
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
 
 	tcres = vec_listdir(DIR_PATHS, NDIRS, masks, 0, false, process_direntry,
 			    NULL, false);
-	if (tc_okay(tcres)) {
+	if (vokay(tcres)) {
 		fprintf(stderr, "successfully listed %d files\n",
 			NDIRS * NFILES);
 	} else {
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 	}
 
 exit:
-	tc_deinit(context);
+	vdeinit(context);
 
 	return tcres.err_no;
 }
