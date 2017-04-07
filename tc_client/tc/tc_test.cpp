@@ -462,7 +462,8 @@ TYPED_TEST_P(TcTest, AttrsTestPath)
 
 TYPED_TEST_P(TcTest, TestHardLinks)
 {
-	EXPECT_TRUE(tc_rm_recursive("HardLinks"));
+	const char *dirname = "HardLinks";
+	EXPECT_OK(vec_unlink_recursive(&dirname, 1));
 	sca_ensure_dir("HardLinks", 0755, NULL);
 	const int NFILES = 8;
 	std::vector<const char *> files(NFILES);
@@ -659,7 +660,7 @@ TYPED_TEST_P(TcTest, ListDirContents)
 	tc_touch("TcTest-ListDir/file2.txt", 2);
 	tc_touch("TcTest-ListDir/file3.txt", 3);
 
-	EXPECT_OK(sca_listdir(DIR_PATH, TC_ATTRS_MASK_ALL, 3, false, &contents,
+	EXPECT_OK(sca_listdir(DIR_PATH, VATTRS_MASK_ALL, 3, false, &contents,
 			     &count));
 	EXPECT_EQ(3, count);
 	qsort(contents, count, sizeof(*contents), tc_cmp_attrs_by_name);
@@ -669,7 +670,7 @@ TYPED_TEST_P(TcTest, ListDirContents)
 	read_attrs[1].file = vfile_from_path("TcTest-ListDir/file2.txt");
 	read_attrs[2].file = vfile_from_path("TcTest-ListDir/file3.txt");
 	read_attrs[0].masks = read_attrs[1].masks = read_attrs[2].masks =
-	    TC_ATTRS_MASK_ALL;
+	    VATTRS_MASK_ALL;
 	EXPECT_OK(vec_getattrs(read_attrs, count, false));
 
 	EXPECT_TRUE(compare_attrs(contents, read_attrs, count));
@@ -690,7 +691,7 @@ TYPED_TEST_P(TcTest, ListLargeDir)
 
 	vattrs *contents;
 	int count = 0;
-	EXPECT_OK(sca_listdir("TcTest-ListLargeDir", TC_ATTRS_MASK_ALL, 0,
+	EXPECT_OK(sca_listdir("TcTest-ListLargeDir", VATTRS_MASK_ALL, 0,
 			     false, &contents, &count));
 	EXPECT_EQ(N, count);
 	qsort(contents, count, sizeof(*contents), tc_cmp_attrs_by_name);
@@ -715,7 +716,7 @@ TYPED_TEST_P(TcTest, ListDirRecursively)
 
 	vattrs *contents;
 	int count = 0;
-	EXPECT_OK(sca_listdir("TcTest-ListDirRecursively", TC_ATTRS_MASK_ALL, 0,
+	EXPECT_OK(sca_listdir("TcTest-ListDirRecursively", VATTRS_MASK_ALL, 0,
 			     true, &contents, &count));
 	qsort(contents, count, sizeof(*contents), tc_cmp_attrs_by_name);
 	const char *expected[] = {
@@ -795,7 +796,9 @@ TYPED_TEST_P(TcTest, MakeManyDirsDontFitInOneCompound)
 {
 	const int NDIRS = 64;
 	std::vector<vattrs> dirs;
-	EXPECT_TRUE(tc_rm_recursive("ManyDirs"));
+	const char *dirname = "ManyDirs";
+
+	EXPECT_OK(vec_unlink_recursive(&dirname, 1));
 	char buf[PATH_MAX];
 	std::vector<std::string> paths;
 
@@ -1015,7 +1018,7 @@ static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)
 	std::vector<std::string> dst_paths(nfiles);
 	char buf[PATH_MAX];
 
-	EXPECT_TRUE(tc_rm_recursive(dir));
+	EXPECT_OK(vec_unlink_recursive(&dir, 1));
 	EXPECT_OK(sca_ensure_dir(dir, 0755, NULL));
 
 	for (int i = 0; i < nfiles; ++i) {
@@ -1073,7 +1076,7 @@ TYPED_TEST_P(TcTest, CopyLargeDirectory)
 	int i;
 	int count;
 	struct vattrs *contents;
-	struct vattrs_masks masks = TC_ATTRS_MASK_NONE;
+	struct vattrs_masks masks = VATTRS_MASK_NONE;
 	struct vextent_pair *dir_copy_pairs = NULL;
 	const char **oldpaths = NULL;
 	const char **newpaths = NULL;
@@ -1144,8 +1147,11 @@ TYPED_TEST_P(TcTest, CopyLargeDirectory)
 TYPED_TEST_P(TcTest, RecursiveCopyDirWithSymlinks)
 {
 #define TCT_RCD_DIR "RecursiveCopyDirWithSymlinks"
-	tc_rm_recursive(TCT_RCD_DIR);
-	tc_rm_recursive("RCDest");
+	const char *dirname1 = TCT_RCD_DIR;
+	const char *dirname2 = "RCDest";
+
+	vec_unlink_recursive(&dirname1, 1);
+	vec_unlink_recursive(&dirname2, 1);
 	EXPECT_OK(sca_ensure_dir(TCT_RCD_DIR, 0755, NULL));
 	const int NFILES = 8;
 	const char * files[NFILES];
@@ -1236,7 +1242,7 @@ TYPED_TEST_P(TcTest, ListAnEmptyDirectory)
 
 	sca_ensure_dir(PATH, 0755, NULL);
 	EXPECT_OK(
-	    sca_listdir(PATH, TC_ATTRS_MASK_ALL, 1, false, &contents, &count));
+	    sca_listdir(PATH, VATTRS_MASK_ALL, 1, false, &contents, &count));
 	EXPECT_EQ(0, count);
 	EXPECT_EQ(NULL, contents);
 }
@@ -1252,7 +1258,7 @@ TYPED_TEST_P(TcTest, List2ndLevelDir)
 	sca_ensure_dir(DIR_PATH, 0755, NULL);
 	tc_touch(FILE_PATH, 0);
 	EXPECT_OK(
-	    sca_listdir(DIR_PATH, TC_ATTRS_MASK_ALL, 1, false, &attrs, &count));
+	    sca_listdir(DIR_PATH, VATTRS_MASK_ALL, 1, false, &attrs, &count));
 	EXPECT_EQ(1, count);
 	EXPECT_EQ(0, attrs->size);
 	vfree_attrs(attrs, count, true);
@@ -1382,7 +1388,7 @@ TYPED_TEST_P(TcTest, CompressDeepPaths)
 	vattrs *attrs = new vattrs[N];
 	for (int i = 0; i < N; ++i) {
 		attrs[i].file = iovs[i].file;
-		attrs[i].masks = TC_ATTRS_MASK_ALL;
+		attrs[i].masks = VATTRS_MASK_ALL;
 	}
 	EXPECT_OK(vec_getattrs(attrs, N, false));
 
@@ -1459,8 +1465,9 @@ TYPED_TEST_P(TcTest, ManyLinksDontFitInOneCompound)
 	const char *links[NLINKS];
 	char *bufs[NLINKS];
 	size_t bufsizes[NLINKS];
+	const char *dirname = "ManyLinks";
 
-	EXPECT_TRUE(tc_rm_recursive("ManyLinks"));
+	EXPECT_OK(vec_unlink_recursive(&dirname, 1));
 	for (int i = 0; i < NLINKS; ++i) {
 		targets[i] = new_auto_path("ManyLinks/file%d", i);
 		links[i] = new_auto_path("ManyLinks/a%d/b/c/d/e/f/h/link", i);
@@ -1482,7 +1489,7 @@ TYPED_TEST_P(TcTest, WriteManyDontFitInOneCompound)
 	struct viovec iovs[NFILES];
 	const char *ROOTDIR = "WriteMany";
 
-	EXPECT_TRUE(tc_rm_recursive(ROOTDIR));
+	EXPECT_OK(vec_unlink_recursive(&ROOTDIR, 1));
 	for (int i = 0; i < NFILES; ++i) {
 		char *p =
 		    new_auto_path("WriteMany/a%03d/b/c/d/e/f/g/h/file", i);
@@ -1510,7 +1517,7 @@ TYPED_TEST_P(TcTest, RequestDoesNotFitIntoOneCompound)
 	struct vfile_pair pairs[NFILES];
 	const char *ROOTDIR = "DontFit";
 
-	EXPECT_TRUE(tc_rm_recursive(ROOTDIR));
+	EXPECT_OK(vec_unlink_recursive(&ROOTDIR, 1));
 	for (int i = 0; i < NFILES; ++i) {
 		paths[i] = new_auto_path("DontFit/a%03d/b/c/d/e/f/g/h/file", i);
 		tc_ensure_parent_dir(paths[i]);
@@ -1611,7 +1618,7 @@ TYPED_TEST_P(TcTest, TcRmBasic)
 		TCRM_PREFIX "/file2",
 	};
 
-	EXPECT_OK(tc_rm(objs, 4, true));
+	EXPECT_OK(vec_unlink_recursive(objs, 4));
 #undef TCRM_PREFIX
 }
 
@@ -1624,6 +1631,8 @@ TYPED_TEST_P(TcTest, TcRmBasic)
  */
 TYPED_TEST_P(TcTest, TcRmManyFiles)
 {
+	const char *dirname = "RmMany";
+
 	EXPECT_OK(sca_ensure_dir("RmMany", 0755, NULL));
 	EXPECT_OK(sca_ensure_dir("RmMany/aa", 0755, NULL));
 	EXPECT_OK(sca_ensure_dir("RmMany/bb", 0755, NULL));
@@ -1642,13 +1651,14 @@ TYPED_TEST_P(TcTest, TcRmManyFiles)
 	free(scratch);
 	EXPECT_OK(sca_ensure_dir("RmMany/cc", 0755, NULL));
 	tc_touch("RmMany/cc/bar", 1_KB);
-	EXPECT_TRUE(tc_rm_recursive("RmMany"));
+	EXPECT_OK(vec_unlink_recursive(&dirname, 1));
 }
 
 TYPED_TEST_P(TcTest, TcRmRecursive)
 {
+	const char *dirname = "NonExistDir";
 	EXPECT_FALSE(sca_exists("NonExistDir"));
-	EXPECT_TRUE(tc_rm_recursive("NonExistDir"));
+	EXPECT_OK(vec_unlink_recursive(&dirname, 1));
 }
 
 REGISTER_TYPED_TEST_CASE_P(TcTest,

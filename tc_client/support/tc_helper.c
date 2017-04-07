@@ -139,14 +139,14 @@ bool tc_cmp_file(const vfile *tcf1, const vfile *tcf2)
 	if (tcf1->type != tcf2->type)
 		return false;
 	switch (tcf1->type) {
-	case TC_FILE_DESCRIPTOR:
+	case VFILE_DESCRIPTOR:
 		return tcf1->fd == tcf2->fd;
-	case TC_FILE_PATH:
-	case TC_FILE_CURRENT:
+	case VFILE_PATH:
+	case VFILE_CURRENT:
 		return tcf1->type == tcf2->type &&
 		       ((tcf1->path == NULL && tcf2->path == NULL) ||
 			(strcmp(tcf1->path, tcf2->path) == 0));
-	case TC_FILE_HANDLE:
+	case VFILE_HANDLE:
 		if (tcf1->handle->handle_bytes != tcf2->handle->handle_bytes)
 			return false;
 		if (tcf1->handle->handle_type != tcf2->handle->handle_type)

@@ -78,10 +78,10 @@ static inline size_t tc_get_iov_overhead(const struct viovec *iov)
 	size_t rdwr_bytes = OPSIZE + RDWRSIZE;
 
 	switch (iov->file.type) {
-	case TC_FILE_DESCRIPTOR:
+	case VFILE_DESCRIPTOR:
 		putfh_bytes = OPSIZE + NFS4_FHSIZE;
 		break;
-	case TC_FILE_PATH:
+	case VFILE_PATH:
 		assert(iov->file.path);
 		if (iov->file.path[0] == '/') {
 			// PUTROOTFH does not have args
@@ -97,12 +97,12 @@ static inline size_t tc_get_iov_overhead(const struct viovec *iov)
 		// OPEN, CLOSE, and GETFH
 		open_close_bytes = OPEN4SZ + CLOSE4SZ + OPSIZE * 3;
 		break;
-	case TC_FILE_HANDLE:
+	case VFILE_HANDLE:
 		assert(iov->file.handle);
 		putfh_bytes = PUTFH4SZ + NFS4_FHSIZE;
 		open_close_bytes = OPEN4SZ + CLOSE4SZ + OPSIZE * 2;
 		break;
-	case TC_FILE_CURRENT:
+	case VFILE_CURRENT:
 		if (iov->file.path) {
 			assert(iov->file.path[0] != '/');
 			n = tc_path_tokenize(iov->file.path, NULL);
@@ -111,7 +111,7 @@ static inline size_t tc_get_iov_overhead(const struct viovec *iov)
 			open_close_bytes = OPEN4SZ + CLOSE4SZ + OPSIZE * 3;
 		}
 		break;
-	case TC_FILE_SAVED:
+	case VFILE_SAVED:
 		putfh_bytes = OPSIZE;  // for RESTOREFH4
 		break;
 	default:

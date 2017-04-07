@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 			goto exit;
 		}
 		vset_up_creation(&dirs[i], path, 0755);
-		dirs[i].file.type = TC_FILE_CURRENT;
+		dirs[i].file.type = VFILE_CURRENT;
 	}
 
 	res = vec_mkdir(dirs, N, false);

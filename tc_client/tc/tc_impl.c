@@ -40,8 +40,8 @@ static pthread_t tc_counter_thread;
 static const char *tc_counter_path = "/tmp/tc-counters.txt";
 static int tc_counter_running = 1;
 
-const struct vattrs_masks TC_ATTRS_MASK_ALL = TC_MASK_INIT_ALL;
-const struct vattrs_masks TC_ATTRS_MASK_NONE = TC_MASK_INIT_NONE;
+const struct vattrs_masks VATTRS_MASK_ALL = VMASK_INIT_ALL;
+const struct vattrs_masks VATTRS_MASK_NONE = VMASK_INIT_NONE;
 
 bool tc_counter_printer(struct tc_func_counter *tfc, void *arg)
 {
@@ -268,7 +268,7 @@ bool resolve_symlinks(struct syminfo *syms, int count, vres *err) {
 		if (sym.src_path) {
 			attrs[attrs_count].file =
 			    vfile_from_path(sym.src_path);
-			attrs[attrs_count].masks = TC_ATTRS_MASK_NONE;
+			attrs[attrs_count].masks = VATTRS_MASK_NONE;
 			attrs[attrs_count].masks.has_mode = true;
 			attrs_original_indices[attrs_count] = i;
 			attrs_count++;
@@ -389,7 +389,7 @@ vres vec_getattrs(struct vattrs *attrs, int count, bool is_transaction)
 	for (i = 0; i < count; i++) {
 		if (S_ISLNK(attrs[i].mode)) {
 			vfile file = attrs[i].file;
-			assert(file.type == TC_FILE_PATH);
+			assert(file.type == VFILE_PATH);
 
 			paths[link_count] = file.path;
 
@@ -469,7 +469,7 @@ static int sca_stat_impl(vfile tcf, struct stat *buf, bool readlink)
 	vres tcres;
 	struct vattrs tca = {
 		.file = tcf,
-		.masks = TC_ATTRS_MASK_ALL,
+		.masks = VATTRS_MASK_ALL,
 	};
 
 	tcres = vec_lgetattrs(&tca, 1, false);
@@ -482,7 +482,7 @@ static int sca_stat_impl(vfile tcf, struct stat *buf, bool readlink)
 		return 0;
 	}
 
-	assert(tcf.type == TC_FILE_PATH);
+	assert(tcf.type == VFILE_PATH);
 
 	linkbuf = alloca(PATH_MAX);
 	link_target = alloca(PATH_MAX);
@@ -530,7 +530,7 @@ vres vec_setattrs(struct vattrs *attrs, int count, bool is_transaction)
 	bool had_link;
 
 	for(i = 0; i < count; i++) {
-		if (attrs[i].file.type == TC_FILE_PATH) {
+		if (attrs[i].file.type == VFILE_PATH) {
 			syminfo[i].src_path = attrs[i].file.path;
 		} else {
 			syminfo[i].src_path = NULL;
@@ -781,7 +781,7 @@ static vres nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
 
 	dirs = calloc(n, sizeof(*dirs));
 	dirs[0].file = vfile_from_path(new_auto_str(comps[0]));
-	dirs[0].masks = TC_ATTRS_MASK_NONE;
+	dirs[0].masks = VATTRS_MASK_NONE;
 	dirs[0].masks.has_mode = true;
 	for (i = 1; i < n; ++i) {
 		dirs[i].file = vfile_from_cfh(new_auto_str(comps[i]));
@@ -805,7 +805,7 @@ static vres nfs4_ensure_dir(slice_t *comps, int n, mode_t mode)
 		} else {
 			vset_up_creation(&dirs[absent],
 					   new_auto_str(comps[i]), mode);
-			dirs[absent].file.type = TC_FILE_CURRENT;
+			dirs[absent].file.type = VFILE_CURRENT;
 		}
 		++absent;
 	}

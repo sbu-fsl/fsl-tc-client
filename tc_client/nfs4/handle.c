@@ -62,7 +62,7 @@
 
 #define FSAL_PROXY_NFS_V4 4
 
-#define TC_FILE_START 0
+#define VFILE_START 0
 
 static clientid4 fs_clientid;
 static clientid4 tc_clientid;
@@ -2242,7 +2242,7 @@ static bool tc_set_cfh_to_handle(const struct file_handle *h)
  * however, when getting attributes of file "/a/b/c/d", we need to set current
  * FH to "/a/b/c/d" and "leaf" should be not NULL.
  *
- * TODO: add support of other vfile types; currently only TC_FILE_PATH is
+ * TODO: add support of other vfile types; currently only VFILE_PATH is
  * supported.
  *
  * Returns whether operations are successfully appended to "argoparray" for
@@ -2255,15 +2255,15 @@ static bool tc_set_current_fh(const vfile *tcf, slice_t *leaf, bool save)
         bool r;
         int saved_opcnt = opcnt;
 
-        if (tcf->type == TC_FILE_CURRENT) {
+        if (tcf->type == VFILE_CURRENT) {
                 r = tc_set_cfh_from_cfh(tcf->path, leaf);
-        } else if (tcf->type == TC_FILE_HANDLE) {
+        } else if (tcf->type == VFILE_HANDLE) {
                 r = tc_set_cfh_to_handle(tcf->handle);
                 fillslice(leaf, NULL, 0);
-	} else if (tcf->type == TC_FILE_DESCRIPTOR) {
+	} else if (tcf->type == VFILE_DESCRIPTOR) {
 		r = tc_prepare_putfh(((struct nfs4_fd_data *)tcf->fd_data)->fh4);
 		fillslice(leaf, NULL, 0);
-	} else if (tcf->type == TC_FILE_PATH) {
+	} else if (tcf->type == VFILE_PATH) {
 		r = tc_set_cfh_to_path(tcf->path, leaf, save);
 	} else {
 		NFS4_ERR("unsupported type: %d", tcf->type);
@@ -2279,7 +2279,7 @@ static bool tc_set_saved_fh(const vfile *tcf, slice_t *leaf)
         bool r;
         int saved_opcnt = opcnt;
 
-        if (tcf->type == TC_FILE_PATH) {
+        if (tcf->type == VFILE_PATH) {
                 r = tc_set_cfh_to_path(tcf->path, leaf, true);
         } else {
 		r = tc_set_current_fh(tcf, leaf, false) &&
@@ -2478,7 +2478,7 @@ static inline bool tc_prepare_rdwr(struct viovec *iov, bool write)
 
         if (!tc_has_enough_ops(1)) return false;
 
-	if (iov->file.type == TC_FILE_DESCRIPTOR) {
+	if (iov->file.type == VFILE_DESCRIPTOR) {
 		fd_data = (struct nfs4_fd_data *)iov->file.fd_data;
 		if (offset == TC_OFFSET_CUR) {
 			offset = fd_data->fd_cursor;
@@ -2785,7 +2785,7 @@ static inline RENAME4resok *tc_prepare_rename(const slice_t *srcname,
 
 static inline void vfile_set_handle(vfile *tcf, const nfs_fh4 *fh4)
 {
-        tcf->type = TC_FILE_HANDLE;
+        tcf->type = VFILE_HANDLE;
         tcf->handle = new_file_handle(fh4->nfs_fh4_len, fh4->nfs_fh4_val);
 }
 
@@ -3769,12 +3769,12 @@ static bool sca_open_file_if_necessary(const vfile *tcf, int flags,
         bool r = true;
         int saved_opcnt = opcnt;
 
-	if (tcf->type == TC_FILE_DESCRIPTOR) {
+	if (tcf->type == VFILE_DESCRIPTOR) {
 		return tc_prepare_putfh(
 		    ((struct nfs4_fd_data *)tcf->fd_data)->fh4);
 	}
 
-	if (tcf->type == TC_FILE_CURRENT &&
+	if (tcf->type == VFILE_CURRENT &&
 	    (tcf->path == NULL || strcmp(tcf->path, ".") == 0)) {
 		return true; /* no need to open */
 	}
@@ -4551,7 +4551,7 @@ static vres tc_nfs4_removev(vfile *files, int count)
 	vreset_compound(true);
 
 	for (i = 0; i < count; ++i) {
-		if (files[i].type == TC_FILE_NULL)
+		if (files[i].type == VFILE_NULL)
 			continue;
 		saved_opcnt = opcnt;
 		r = tc_set_current_fh(&files[i], &name, true) &&
@@ -4582,7 +4582,7 @@ static vres tc_nfs4_removev(vfile *files, int count)
 		}
 		if (resoparray[j].resop == NFS4_OP_REMOVE) {
 			// ignore invalid files
-			while (files[i].type == TC_FILE_NULL)
+			while (files[i].type == VFILE_NULL)
 				++i;
 			++i;
 		}

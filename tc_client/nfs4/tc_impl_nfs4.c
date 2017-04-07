@@ -265,8 +265,8 @@ static vfile *nfs4_compress_paths(struct viovec *iovs, int count)
 	saved_tcfs[0] = iovs[0].file;
 	for (i = 1; i < count; ++i) {
 		saved_tcfs[i] = iovs[i].file;
-		if (iovs[i].file.type != TC_FILE_PATH ||
-		    saved_tcfs[i - 1].type != TC_FILE_PATH) {
+		if (iovs[i].file.type != VFILE_PATH ||
+		    saved_tcfs[i - 1].type != VFILE_PATH) {
 			continue;
 		}
 		buf = malloc(PATH_MAX);
@@ -285,7 +285,7 @@ static vfile *nfs4_compress_paths(struct viovec *iovs, int count)
 			free(buf);
 			continue;
 		}
-		iovs[i].file.type = TC_FILE_CURRENT;
+		iovs[i].file.type = VFILE_CURRENT;
 		iovs[i].file.path = buf;
 		compressed = true;
 	}
@@ -321,7 +321,7 @@ static int nfs4_fill_fd_data(vfile *tcf)
 	struct nfs4_fd_data *fd_data;
 	struct tc_kfd *tcfd = NULL;
 
-	assert(tcf->type == TC_FILE_DESCRIPTOR);
+	assert(tcf->type == VFILE_DESCRIPTOR);
 	tcfd = tc_get_fd_struct(tcf->fd, false);
 	if (!tcfd) {
 		return -EINVAL;
@@ -355,7 +355,7 @@ static void nfs4_clear_fd_iovecs(struct viovec *iovs, int count)
 	int i;
 
 	for (i = 0; i < count; ++i) {
-		if (iovs[i].file.type == TC_FILE_DESCRIPTOR) {
+		if (iovs[i].file.type == VFILE_DESCRIPTOR) {
 			if (iovs[i].offset == TC_OFFSET_CUR) {
 				tcfd = tc_get_fd_struct(iovs[i].file.fd, true);
 				assert(tcfd);
@@ -373,7 +373,7 @@ static int nfs4_fill_fd_iovecs(struct viovec *iovs, int count)
 	int r;
 
 	for (i = 0; i < count; ++i) {
-		if (iovs[i].file.type == TC_FILE_DESCRIPTOR &&
+		if (iovs[i].file.type == VFILE_DESCRIPTOR &&
 		    (r = nfs4_fill_fd_data(&iovs[i].file)) != 0) {
 			nfs4_clear_fd_iovecs(iovs, --i);
 			return r;
@@ -389,7 +389,7 @@ vres nfs4_do_iovec(struct viovec *iovs, int count, bool istxn,
 	static const int CPD_LIMIT = (1 << 20);
 	int i;
 	int nparts;
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, count);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, count);
 	struct viov_array *parts;
 	vres tcres;
 
@@ -398,7 +398,7 @@ vres nfs4_do_iovec(struct viovec *iovs, int count, bool istxn,
 		iovs[i].is_failure = false;
 	}
 
-	/* deal with TC_FILE_DESCRIPTOR files */
+	/* deal with VFILE_DESCRIPTOR files */
 	tcres.err_no = nfs4_fill_fd_iovecs(iovs, count);
 	if (tcres.err_no != 0) {
 		tcres.index = 0;
@@ -518,7 +518,7 @@ vfile *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes)
 
 exit:
 	for (i = 0; i < count; ++i) {
-		if (attrs[i].file.type == TC_FILE_HANDLE) {
+		if (attrs[i].file.type == VFILE_HANDLE) {
 			del_file_handle(
 			    (struct file_handle *)attrs[i].file.handle);
 		}
@@ -562,8 +562,8 @@ vres nfs4_closev(vfile *files, int count)
 
 	n = 0;
 	for (i = 0; i < count; ++i) {
-		if (files[i].type != TC_FILE_NULL) {
-			assert(files[i].type == TC_FILE_DESCRIPTOR);
+		if (files[i].type != VFILE_NULL) {
+			assert(files[i].type == VFILE_DESCRIPTOR);
 			tcfd = tc_get_fd_struct(files[i].fd, false);
 			fh4s[n] = tcfd->fh;
 			sids[n] = tcfd->stateid;
@@ -582,13 +582,13 @@ vres nfs4_closev(vfile *files, int count)
 		}
 		for (i = finished; i < tcres.index + finished; ++i) {
 			tc_free_fd(files[i].fd);
-			files[i].type = TC_FILE_NULL;
+			files[i].type = VFILE_NULL;
 		}
 		finished += tcres.index;
 	}
 
 	for (i = 0; i < count; ++i) {
-		if (files[i].type != TC_FILE_NULL) {
+		if (files[i].type != VFILE_NULL) {
 			tc_free_fd(files[i].fd);
 		}
 	}
@@ -605,7 +605,7 @@ off_t nfs4_fseek(vfile *tcf, off_t offset, int whence)
 {
 	struct tc_kfd *tcfd;
 
-	assert(tcf->type == TC_FILE_DESCRIPTOR);
+	assert(tcf->type == VFILE_DESCRIPTOR);
 	tcfd = tc_get_fd_struct(tcf->fd, true);
 	assert(tcfd);
 	if (whence == SEEK_SET) {
@@ -650,7 +650,7 @@ static vfile *nfs4_process_vfiles(struct vattrs *attrs, int count)
 	for (i = 0; i < count; ++i) {
 		tcf = &attrs[i].file;
 		saved_tcfs[i] = *tcf;
-		if (tcf->type == TC_FILE_DESCRIPTOR) {
+		if (tcf->type == VFILE_DESCRIPTOR) {
 			tcfd = tc_get_fd_struct(tcf->fd, false);
 			if (!tcfd) {
 				nfs4_restore_vfiles(attrs, --i, saved_tcfs);
@@ -664,7 +664,7 @@ static vfile *nfs4_process_vfiles(struct vattrs *attrs, int count)
 				return NULL;
 			}
 			tc_put_fd_struct(&tcfd);
-			tcf->type = TC_FILE_HANDLE;
+			tcf->type = VFILE_HANDLE;
 			tcf->handle = h;
 		}
 	}
@@ -679,7 +679,7 @@ static void nfs4_restore_vfiles(struct vattrs *attrs, int count,
 
 	for (i = 0; i < count; ++i) {
 		if (saved_tcfs[i].type != attrs[i].file.type &&
-		    attrs[i].file.type == TC_FILE_HANDLE) {
+		    attrs[i].file.type == VFILE_HANDLE) {
 			del_file_handle(
 			    (struct file_handle *)attrs[i].file.handle);
 		}

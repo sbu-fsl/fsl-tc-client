@@ -59,18 +59,18 @@ void *vinit(const char *config_path, const char *log_path,
  */
 void vdeinit(void *module);
 
-enum TC_FILETYPE {
-	TC_FILE_NULL = 0,
-	TC_FILE_DESCRIPTOR,
-	TC_FILE_PATH,
-	TC_FILE_HANDLE,
-	TC_FILE_CURRENT,
-	TC_FILE_SAVED,
+enum VFILETYPE {
+	VFILE_NULL = 0,
+	VFILE_DESCRIPTOR,
+	VFILE_PATH,
+	VFILE_HANDLE,
+	VFILE_CURRENT,
+	VFILE_SAVED,
 };
 
-#define TC_FD_NULL -1
-#define TC_FD_CWD -2
-#define TC_FD_ABS -3
+#define VFD_NULL -1
+#define VFD_CWD -2
+#define VFD_ABS -3
 
 /* See http://lxr.free-electrons.com/source/include/linux/exportfs.h */
 #define FILEID_NFS_FH_TYPE 0x1001
@@ -78,25 +78,25 @@ enum TC_FILETYPE {
 /**
  * "type" is one of the six file types; "fd" and "path_or_handle" depend on
  * the file type:
- *	0. A "type" value of TC_FILE_NULL means the vfile is invalid or emtpy.
+ *	0. A "type" value of VFILE_NULL means the vfile is invalid or emtpy.
  *
- *	1. When "type" is TC_FILE_DESCRIPTOR, "fd" identifies the file we are
+ *	1. When "type" is VFILE_DESCRIPTOR, "fd" identifies the file we are
  *	operating on.
  *
- *	2. When "type" is TC_FILE_PATH, "fd" is the base file descriptor, and
+ *	2. When "type" is VFILE_PATH, "fd" is the base file descriptor, and
  *	"path_or_handle" is the file path.  The file is identified by resolving
  *	the path relative to "fd".  In this case, "fd" has two special values:
  *	(a) TC_FDCWD which means the current working directory, and
  *	(b) TC_FDABS which means the "path_or_handle" is an absolute path.
  *
- *	3. When "type" is TC_FILE_HANDLE, "fd" is "mount_fd", and
+ *	3. When "type" is VFILE_HANDLE, "fd" is "mount_fd", and
  *	"path_or_handle" points to "struct file_handle".  We expand the "type"
  *	of "struct file_handle" to include FILEID_NFS_FH_TYPE.
  *
- *	4. When "type" is TC_FILE_CURRENT, the "current filehandle" on the NFS
+ *	4. When "type" is VFILE_CURRENT, the "current filehandle" on the NFS
  *	server side is used.  "fd" and "path" are ignored.
  *
- *	5. When "type" is TC_FILE_SAVED, the "saved filehandle" on the NFS
+ *	5. When "type" is VFILE_SAVED, the "saved filehandle" on the NFS
  *	server side is used.  "fd" and "path" are ignored.
  *
  * See http://man7.org/linux/man-pages/man2/open_by_handle_at.2.html
@@ -119,8 +119,8 @@ static inline vfile vfile_from_path(const char *pathname) {
 	vfile tf;
 
 	assert(pathname);
-	tf.type = TC_FILE_PATH;
-	tf.fd = pathname[0] == '/' ? TC_FD_ABS : TC_FD_CWD;
+	tf.type = VFILE_PATH;
+	tf.fd = pathname[0] == '/' ? VFD_ABS : VFD_CWD;
 	tf.path = pathname;
 
 	return tf;
@@ -129,7 +129,7 @@ static inline vfile vfile_from_path(const char *pathname) {
 static inline vfile vfile_from_fd(int fd) {
 	vfile tf;
 
-	tf.type = TC_FILE_DESCRIPTOR;
+	tf.type = VFILE_DESCRIPTOR;
 	tf.fd = fd;
 	tf.fd_data = NULL;
 
@@ -140,7 +140,7 @@ static inline vfile vfile_current(void)
 {
 	vfile tf;
 
-	tf.type = TC_FILE_CURRENT;
+	tf.type = VFILE_CURRENT;
 	tf.fd = -1;     /* poison */
 	tf.path = NULL; /* poison */
 
@@ -157,7 +157,7 @@ static inline vfile vfile_from_cfh(const char *relpath) {
 		return vfile_from_path(relpath);
 	}
 
-	tf.type = TC_FILE_CURRENT;
+	tf.type = VFILE_CURRENT;
 	tf.fd = -1;	/* poison */
 	tf.path = relpath;
 
@@ -251,14 +251,14 @@ struct viov_array
 	struct viovec *iovs;
 };
 
-#define TC_IOV_ARRAY_INITIALIZER(iov, s)                                       \
+#define VIOV_ARRAY_INITIALIZER(iov, s)                                       \
 	{                                                                      \
 		.size = (s), .iovs = (iov),                                    \
 	}
 
 static inline struct viov_array viovs2array(struct viovec *iovs, int s)
 {
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, s);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, s);
 	return iova;
 }
 
@@ -346,7 +346,7 @@ vres vec_close(vfile *files, int count);
 
 /**
  * Reposition read/write file offset.
- * REQUIRE: tcf->type == TC_FILE_DESCRIPTOR
+ * REQUIRE: tcf->type == VFILE_DESCRIPTOR
  */
 off_t sca_fseek(vfile *tcf, off_t offset, int whence);
 
@@ -555,10 +555,10 @@ static inline void vattrs2stat(const struct vattrs *attrs, struct stat *st)
 		st->st_ctime = attrs->ctime.tv_sec;
 }
 
-extern const struct vattrs_masks TC_ATTRS_MASK_ALL;
-extern const struct vattrs_masks TC_ATTRS_MASK_NONE;
+extern const struct vattrs_masks VATTRS_MASK_ALL;
+extern const struct vattrs_masks VATTRS_MASK_NONE;
 
-#define TC_MASK_INIT_ALL                                                       \
+#define VMASK_INIT_ALL                                                       \
 	{                                                                      \
 		.has_mode = true, .has_size = true, .has_nlink = true,         \
 		.has_fileid = true, .has_uid = true, .has_gid = true,          \
@@ -566,7 +566,7 @@ extern const struct vattrs_masks TC_ATTRS_MASK_NONE;
 		.has_ctime = true, .has_blocks = true                          \
 	}
 
-#define TC_MASK_INIT_NONE                                                      \
+#define VMASK_INIT_NONE                                                      \
 	{                                                                      \
 		.has_mode = false, .has_size = false, .has_nlink = false,      \
 		.has_fileid = false, .has_uid = false, .has_gid = false,       \
@@ -679,9 +679,9 @@ static inline void vfree_attrs(struct vattrs *attrs, int count,
 	int i;
 	if (free_path) {
 		for (i = 0; i < count; ++i) {
-			if (attrs[i].file.type == TC_FILE_PATH)
+			if (attrs[i].file.type == VFILE_PATH)
 				free((char *)attrs[i].file.path);
-			else if (attrs[i].file.type == TC_FILE_HANDLE)
+			else if (attrs[i].file.type == VFILE_HANDLE)
 				free((char *)attrs[i].file.handle);
 		}
 	}
@@ -908,12 +908,7 @@ vres sca_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 /**
  * Remove a list of file-system objects (files or directories).
  */
-vres tc_rm(const char **objs, int count, bool recursive);
-
-static inline bool tc_rm_recursive(const char *dir)
-{
-	return vokay(tc_rm(&dir, 1, true));
-}
+vres vec_unlink_recursive(const char **objs, int count);
 
 #ifdef __cplusplus
 }

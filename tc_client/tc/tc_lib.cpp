@@ -105,7 +105,7 @@ static vres tc_cp_mkdirs(const char *src_dir, const char **dirs, int count,
 	for (int i = 0; i < count; i++) {
 		attrs[i].file = vfile_from_path(
 		    new_cp_target_path(dirs[i], src_dir, dst_dir));
-		attrs[i].masks = TC_ATTRS_MASK_NONE;
+		attrs[i].masks = VATTRS_MASK_NONE;
 		attrs[i].masks.has_mode = true;
 		attrs[i].mode = 0755;
 	}
@@ -270,7 +270,7 @@ static vres tc_cp_setattrs(const vector<struct vattrs> &srcs,
 		// honoring the mask I gave it, meaning the vattrs in the
 		// srcs vector had incorrect masks set.  So here, we explicitly
 		// override those incorrect masks with what we want to set.
-		dsts[i].masks = TC_ATTRS_MASK_NONE;
+		dsts[i].masks = VATTRS_MASK_NONE;
 		dsts[i].mode &= ~(S_IFMT);  // TODO: do this in vec_lsetattrs()
 		dsts[i].masks.has_mode = true;
 
@@ -327,7 +327,7 @@ vres sca_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 	vector<const char *> dirs;
 	vector<struct vattrs> files_to_copy;
 	vector<const char *> symlinks;
-	struct vattrs_masks listdir_mask = TC_ATTRS_MASK_NONE;
+	struct vattrs_masks listdir_mask = VATTRS_MASK_NONE;
 	listdir_mask.has_mode = true;
 	struct cp_cb_args cbargs;
 	vres tcres = {0};
@@ -393,8 +393,7 @@ vres sca_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 	return tcres;
 }
 
-// TODO: handle when "recursive" is false
-vres tc_rm(const char **objs, int count, bool recursive)
+vres vec_unlink_recursive(const char **objs, int count)
 {
 	vector<const char *> dirs;
 	vector<const char *> files_to_remove;
@@ -410,7 +409,7 @@ vres tc_rm(const char **objs, int count, bool recursive)
 		vector<struct vattrs> attrs(count);
 		for (int i = 0; i < count; ++i) {
 			attrs[i].file = vfile_from_path(objs[i]);
-			attrs[i].masks = TC_ATTRS_MASK_NONE;
+			attrs[i].masks = VATTRS_MASK_NONE;
 			attrs[i].masks.has_mode = true;
 		}
 

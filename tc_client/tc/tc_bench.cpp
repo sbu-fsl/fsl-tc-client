@@ -37,7 +37,7 @@ const size_t BUFSIZE = 4096;
 
 static void ResetTestDirectory(const char *dir)
 {
-	tc_rm_recursive(dir);
+	vec_unlink_recursive(&dir, 1);
 	sca_ensure_dir(dir, 0755, NULL);
 }
 
@@ -206,7 +206,7 @@ static vector<vattrs> NewTcAttrs(size_t nfiles, vattrs *values = nullptr)
 		if (values) {
 			attrs[i] = *values;
 		} else {
-			attrs[i].masks = TC_ATTRS_MASK_ALL;
+			attrs[i].masks = VATTRS_MASK_ALL;
 		}
 		attrs[i].file = vfile_from_path(paths[i]);
 	}
@@ -234,7 +234,7 @@ static vattrs GetAttrValuesToSet(int nattrs)
 {
 	vattrs attrs;
 
-	attrs.masks = TC_ATTRS_MASK_NONE;
+	attrs.masks = VATTRS_MASK_NONE;
 	if (nattrs >= 1) {
 		vattrs_set_mode(&attrs, S_IRUSR | S_IRGRP | S_IROTH);
 	}
@@ -557,7 +557,7 @@ static void BM_Listdir(benchmark::State &state)
 
 	while (state.KeepRunning()) {
 		vres tcres =
-		    vec_listdir(dirs.data(), nfiles, TC_ATTRS_MASK_ALL, 0,
+		    vec_listdir(dirs.data(), nfiles, VATTRS_MASK_ALL, 0,
 				false, DummyListDirCb, NULL, false);
 		assert(vokay(tcres));
 	}

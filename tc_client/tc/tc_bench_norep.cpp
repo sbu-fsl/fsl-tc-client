@@ -152,7 +152,7 @@ static void BM2_MkdirWithContents(int start, int csize)
 static void BM2_Listdir(int start, int csize)
 {
 	vector<const char *> dirs = NewPaths("Bench-Dirs/dir-%d", csize, start);
-	vres tcres = vec_listdir(dirs.data(), csize, TC_ATTRS_MASK_ALL, 0,
+	vres tcres = vec_listdir(dirs.data(), csize, VATTRS_MASK_ALL, 0,
 				   false, DummyListDirCb, NULL, false);
 	assert(vokay(tcres));
 	FreePaths(&dirs);

@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 			vset_up_creation(&dirs[n], prefix, 0755);
 		} else {
 			vset_up_creation(&dirs[n], DIR_PATHS[i], 0755);
-			dirs[n].file.type = TC_FILE_CURRENT;
+			dirs[n].file.type = VFILE_CURRENT;
 		}
 		fprintf(stderr, "prepare mkdir %s\n", dirs[n].file.path);
 		++n;

@@ -56,7 +56,7 @@ vfile *posix_openv(const char **paths, int count, int *flags, mode_t *modes)
 	tcfs = calloc(count, sizeof(*tcfs));
 	if (tcfs) {
 		for (i = 0; i < count; ++i) {
-			tcfs[i].type = TC_FILE_DESCRIPTOR;
+			tcfs[i].type = VFILE_DESCRIPTOR;
 			if (modes) {
 				fd = open(paths[i], flags[i], modes[i]);
 			} else {
@@ -80,7 +80,7 @@ vres posix_closev(vfile *tcfs, int count)
 	vres tcres = { .err_no = 0 };
 
 	for (i = 0; i < count; ++i) {
-		assert(tcfs[i].type == TC_FILE_DESCRIPTOR);
+		assert(tcfs[i].type == VFILE_DESCRIPTOR);
 		/* return error no in case of failure */
 		if (close(tcfs[i].fd) < 0) {
 			tcres = vfailure(i, errno);
@@ -116,16 +116,16 @@ int posix_close(vfile *tcf)
 
 off_t posix_fseek(vfile *tcf, off_t offset, int whence)
 {
-	assert(tcf->type == TC_FILE_DESCRIPTOR);
+	assert(tcf->type == VFILE_DESCRIPTOR);
 	return lseek(tcf->fd, offset, whence);
 }
 
 static int posix_stat(const vfile *tcf, struct stat *st)
 {
 	int rc;
-	if (tcf->type == TC_FILE_PATH) {
+	if (tcf->type == VFILE_PATH) {
 		rc = stat(tcf->path, st);
-	} else if (tcf->type == TC_FILE_DESCRIPTOR) {
+	} else if (tcf->type == VFILE_DESCRIPTOR) {
 		rc = fstat(tcf->fd, st);
 	} else {
 		rc = -1;
@@ -155,9 +155,9 @@ vres posix_readv(struct viovec *arg, int read_count, bool is_transaction)
 		 * then call open to obtain the file descriptor else
 		 * go ahead with the file descriptor specified by the user
 		 */
-		if (iov->file.type == TC_FILE_PATH) {
+		if (iov->file.type == VFILE_PATH) {
 			fd = open(iov->file.path, O_RDONLY);
-		} else if (iov->file.type == TC_FILE_DESCRIPTOR) {
+		} else if (iov->file.type == VFILE_DESCRIPTOR) {
 			fd = iov->file.fd;
 		} else {
 			POSIX_ERR("unsupported type: %d", iov->file.type);
@@ -177,7 +177,7 @@ vres posix_readv(struct viovec *arg, int read_count, bool is_transaction)
 			    pread(fd, iov->data, iov->length, iov->offset);
 		}
 		if (amount_read < 0) {
-			if (iov->file.type == TC_FILE_PATH) {
+			if (iov->file.type == VFILE_PATH) {
 				close(fd);
 			}
 			result = vfailure(i, errno);
@@ -199,7 +199,7 @@ vres posix_readv(struct viovec *arg, int read_count, bool is_transaction)
 			iov->is_eof = (iov->offset + iov->length) == st.st_size;
 		}
 
-		if (iov->file.type == TC_FILE_PATH && close(fd) < 0) {
+		if (iov->file.type == VFILE_PATH && close(fd) < 0) {
 			result = vfailure(i, errno);
 			break;
 		}
@@ -238,9 +238,9 @@ vres posix_writev(struct viovec *arg, int write_count, bool is_transaction)
 			flags |= O_SYNC;
 		}
 
-		if (iov->file.type == TC_FILE_PATH) {
+		if (iov->file.type == VFILE_PATH) {
 			fd = open(iov->file.path, flags);
-		} else if (iov->file.type == TC_FILE_DESCRIPTOR) {
+		} else if (iov->file.type == VFILE_DESCRIPTOR) {
 			fd = iov->file.fd;
 		} else {
 			POSIX_ERR("unsupported type: %d", iov->file.type);
@@ -255,7 +255,7 @@ vres posix_writev(struct viovec *arg, int write_count, bool is_transaction)
 		/* When appending to file we did not open, we need to use lseek
 		 * to set the offset to file size. */
 		if (offset == TC_OFFSET_END) {
-			if (iov->file.type == TC_FILE_PATH) {
+			if (iov->file.type == VFILE_PATH) {
 				/* Will be ignored because the file was opened
 				 * with O_APPEND, but it cannot be
 				 * TC_OFFSET_END which is negative when
@@ -276,7 +276,7 @@ vres posix_writev(struct viovec *arg, int write_count, bool is_transaction)
 			}
 
 			if (written < 0) {
-				if (iov->file.type == TC_FILE_PATH) {
+				if (iov->file.type == VFILE_PATH) {
 					close(fd);
 				}
 				result = vfailure(i, errno);
@@ -286,7 +286,7 @@ vres posix_writev(struct viovec *arg, int write_count, bool is_transaction)
 
 		/* set the length to number of bytes successfully written */
 		iov->length = written;
-		if (iov->file.type == TC_FILE_PATH && close(fd) < 0) {
+		if (iov->file.type == VFILE_PATH && close(fd) < 0) {
 			result = vfailure(i, errno);
 			break;
 		}
@@ -314,7 +314,7 @@ vres posix_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 		cur_attr = attrs + i;
 
 		/* get attributes */
-		if (cur_attr->file.type == TC_FILE_PATH)
+		if (cur_attr->file.type == VFILE_PATH)
 			res = lstat(cur_attr->file.path, &st);
 		else
 			res = fstat(cur_attr->file.fd, &st);
@@ -361,7 +361,7 @@ static int helper_set_attrs(struct vattrs *attrs)
 			POSIX_WARN("set_attrs() failed : cannot chmod symlink\n");
 			return -1;
 		}
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = chmod(attrs->file.path, attrs->mode);
 		else
 			res = fchmod(attrs->file.fd, attrs->mode);
@@ -372,7 +372,7 @@ static int helper_set_attrs(struct vattrs *attrs)
 
 	/* set the file size */
 	if (attrs->masks.has_size) {
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = truncate(attrs->file.path, attrs->size);
 		else
 			res = ftruncate(attrs->file.fd, attrs->size);
@@ -383,7 +383,7 @@ static int helper_set_attrs(struct vattrs *attrs)
 
 	/* set the UID and GID */
 	if (attrs->masks.has_uid || attrs->masks.has_gid) {
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = lchown(attrs->file.path, attrs->uid, attrs->gid);
 		else
 			res = fchown(attrs->file.fd, attrs->uid, attrs->gid);
@@ -395,7 +395,7 @@ static int helper_set_attrs(struct vattrs *attrs)
 	/* set the atime and mtime */
 	if (attrs->masks.has_atime || attrs->masks.has_mtime) {
 
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			lstat(attrs->file.path, &s);
 		else
 			fstat(attrs->file.fd, &s);
@@ -409,7 +409,7 @@ static int helper_set_attrs(struct vattrs *attrs)
 		if (attrs->masks.has_mtime)
 			TIMEVAL_TO_TIMESPEC(&times[1], &attrs->mtime);
 
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = lutimes(attrs->file.path, times);
 		else
 			res = futimes(attrs->file.fd, times);
@@ -473,8 +473,8 @@ vres posix_renamev(struct vfile_pair *pairs, int count, bool is_transaction)
 	while (i < count) {
 		cur_pair = pairs + i;
 
-		assert(cur_pair->src_file.type == TC_FILE_PATH &&
-		       cur_pair->dst_file.type == TC_FILE_PATH &&
+		assert(cur_pair->src_file.type == VFILE_PATH &&
+		       cur_pair->dst_file.type == VFILE_PATH &&
 		       cur_pair->src_file.path != NULL &&
 		       cur_pair->src_file.path != NULL);
 

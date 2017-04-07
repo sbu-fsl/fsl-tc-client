@@ -33,7 +33,7 @@ using std::vector;
 static inline struct viov_array vec2array(vector<struct viovec> &vec)
 {
 	struct viov_array iova =
-	    TC_IOV_ARRAY_INITIALIZER(vec.data(), (int)vec.size());
+	    VIOV_ARRAY_INITIALIZER(vec.data(), (int)vec.size());
 	return iova;
 }
 
@@ -45,7 +45,7 @@ TEST(IovecUtils, SplitOneBigIovec)
 	char *buf = (char *)malloc(LEN);
 
 	viov4creation(&big_iov, PATH, LEN, buf);
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(&big_iov, 1);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(&big_iov, 1);
 
 	vector<size_t> size_limits {64_KB, 128_KB, 256_KB, 512_KB, 1_MB};
 	for (size_t limit : size_limits) {
@@ -78,7 +78,7 @@ TEST(IovecUtils, SplitIovecsOfDifferentSizes)
 {
 	struct viovec iov;
 	viov2fd(&iov, 1, 0, 8_KB, new char[2_MB]);
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(&iov, 1);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(&iov, 1);
 	for (size_t s = 8_KB; s <= 2_MB; s += 8_KB) {
 		iov.length = s;
 		int nparts;
@@ -98,7 +98,7 @@ TEST(IovecUtils, SmallCpdsAreNotSplit)
 	}
 
 	for (int n = 1; n <= 5; ++n) {
-		struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, n);
+		struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, n);
 		int nparts;
 		auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
 		EXPECT_EQ(1, nparts);
@@ -121,7 +121,7 @@ TEST(IovecUtils, EofIsSetCorrectly)
 	viov2fd(iovs + 0, (1 << 30) + 1, 0, 512_KB, new char[512_KB]);
 	viov2fd(iovs + 1, (1 << 30) + 2, 0, 1_MB, new char[1_MB]);
 
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, 2);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, 2);
 	int nparts = 0;
 	auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
 	EXPECT_EQ(2, nparts);
@@ -146,7 +146,7 @@ TEST(IovecUtils, AdjacentOffsetsOfDifferentFilesAreNotMerged)
 	viov2fd(iovs + 1, (1 << 30) + 2, 512_KB, 512_KB, new char[512_KB]);
 	viov2fd(iovs + 2, (1 << 30) + 3, 1_MB, 512_KB, new char[512_KB]);
 
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, 3);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, 3);
 	int nparts;
 	auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
 
@@ -166,7 +166,7 @@ TEST(IovecUtils, SplitIovecDueToOverhead)
 	viov2fd(iovs + 0, (1 << 30) + 1, 0, 512_KB, new char[512_KB]);
 	viov2fd(iovs + 1, (1 << 30) + 2, 512_KB, 512_KB, new char[512_KB]);
 
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, 2);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, 2);
 	int nparts;
 	auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
 
@@ -213,7 +213,7 @@ TEST(IovecUtils, HandleShortRdWr)
 	viov2fd(iovs + 1, (1 << 30) + 2, 512_KB, 1_MB, new char[1_MB]);
 	viov2fd(iovs + 2, (1 << 30) + 3, 1_MB, 1_MB, new char[1_MB]);
 
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, 3);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, 3);
 	int nparts;
 	auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
 
@@ -240,7 +240,7 @@ TEST(IovecUtils, HandleOverlappedIovecs)
 	viov2fd(iovs + 0, (1 << 30) + 1, 0, 256_KB, new char[256_KB]);
 	viov2fd(iovs + 1, (1 << 30) + 1, 128_KB, 256_KB, new char[256_KB]);
 
-	struct viov_array iova = TC_IOV_ARRAY_INITIALIZER(iovs, 2);
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, 2);
 	int nparts;
 	auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
 

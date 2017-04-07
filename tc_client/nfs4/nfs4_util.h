@@ -66,7 +66,7 @@ struct nfs4_fd_data {
 #define MAX_DIR_DEPTH       10
 #define MAX_FILENAME_LENGTH 256
 #define MAX_FD              1024
-#define TC_FD_OFFSET	    (1 << 30)
+#define VFD_OFFSET	    (1 << 30)
 
 struct tc_kfd
 {
