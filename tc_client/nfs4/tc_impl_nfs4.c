@@ -161,8 +161,10 @@ void *nfs4_init(const char *config_path, const char *log_path,
 	op_ctx->export = exp;
 	op_ctx->fsal_export = exp->fsal_export;
 
-	LogCrit(COMPONENT_INIT, "Cache size: %d & expiration: %d",
+	LogCrit(COMPONENT_INIT, "Metadata Cache size: %d & expiration: %d",
 				exp->cache_size, exp->cache_expiration);
+	LogCrit(COMPONENT_INIT, "Data Cache size: %d & expiration: %d",
+				exp->data_cache_size, exp->data_cache_expiration);
 
 	rc = nfs4_chdir(exp->fullpath);
 	assert(rc == 0);
@@ -177,7 +179,9 @@ void *nfs4_init(const char *config_path, const char *log_path,
 
 	ctx->context = (void*)new_module;
 	ctx->cache_size = op_ctx->export->cache_size;
+	ctx->data_cache_size = op_ctx->export->data_cache_size;
 	ctx->cache_expiration = op_ctx->export->cache_expiration;
+	ctx->data_cache_expiration = op_ctx->export->data_cache_expiration;
 	return (void*)ctx;
 }
 

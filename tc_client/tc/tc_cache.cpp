@@ -3,9 +3,12 @@
 #include "tc_helper.h"
 
 #include "../tc_cache/TC_MetaDataCache.h"
+#include "../tc_cache/TC_DataCache.h"
+
 using namespace std;
 
 TC_MetaDataCache<string, DirEntry > *mdCache = NULL;
+TC_DataCache<string, DataBlock > *dataCache = NULL;
 int g_miss_count = 0;
 
 void reset_miss_count() {
@@ -22,9 +25,20 @@ void init_page_cache(uint64_t size, uint64_t time)
 	    size, time);
 }
 
+void init_data_cache(uint64_t size, uint64_t time)
+{
+	dataCache = new TC_DataCache<string, DataBlock>(
+		size, time);
+}
+
 void deinit_page_cache()
 {
 	mdCache->clear();
+}
+
+void deinit_data_cache()
+{
+	dataCache->clear();
 }
 
 void nfs_restore_FhToFilename(struct tc_attrs *attrs, int count,
@@ -182,21 +196,142 @@ off_t nfs_fseek(tc_file *tcf, off_t offset, int whence)
 	return nfs4_fseek(tcf, offset, whence);
 }
 
+void fill_newIovec(struct tc_iovec *fiovec, struct tc_iovec *siovec)
+{
+	memcpy((void *) fiovec, (void *) siovec, sizeof(struct tc_iovec));
+}
+
+struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
+                                         int *miss_count, bool *hitArray)
+{
+	struct tc_iovec *final_iovec = NULL;
+	struct tc_iovec *cur_siovec = NULL;
+	struct tc_iovec *cur_fiovec = NULL;
+
+	int i = 0;
+
+	final_iovec =
+		(struct tc_iovec *)malloc(sizeof(struct tc_iovec) * count);
+	if (final_iovec == NULL)
+		return NULL;
+
+	while (i < count) {
+		cur_siovec = siovec + i;
+		if (cur_siovec->file.type != TC_FILE_PATH) {
+			/* fill final_array[miss_count] */
+			cur_fiovec = final_iovec + *miss_count;
+			fill_newIovec(cur_fiovec, cur_siovec);
+			if (hitArray[i-1] == true &&
+				cur_fiovec->file.type == TC_FILE_CURRENT) {
+				char *new_path = (char *) malloc(strlen(siovec[i-1].file.path) +
+						strlen(siovec[i].file.path) + 2);
+				sprintf(new_path, "%s/%s", siovec[i-1].file.path, siovec[i].file.path);
+				cur_fiovec->file.path = new_path;
+				cur_fiovec->file.type = TC_FILE_PATH;
+			}
+			(*miss_count)++;
+			i++;
+			continue;
+		}
+		int hit = dataCache->get(cur_siovec->file.path, cur_siovec->offset,
+					 cur_siovec->length, cur_siovec->data);
+		if (hit == cur_siovec->length) {
+                        /* Cache hit */
+			hitArray[i] = true;
+		}
+		else if (hit > 0 && hit < cur_siovec->length) {
+			/*Handle partial hit*/
+			cur_fiovec = final_iovec + *miss_count;
+			fill_newIovec(cur_fiovec, cur_siovec);
+			cur_fiovec->offset = hit;
+			cur_fiovec->length = cur_fiovec->length - hit;
+			cur_fiovec->data = cur_fiovec->data + hit;
+			(*miss_count)++;
+		}
+		else {
+			cur_fiovec = final_iovec + *miss_count;
+			fill_newIovec(cur_fiovec, cur_siovec);
+			(*miss_count)++;
+		}
+		i++;
+	}
+	return final_iovec;
+}
+
+void update_dataCache(struct tc_iovec *siovec,
+			struct tc_iovec *final_iovec, int count,
+			bool *hitArray)
+{
+        int i = 0;
+        int j = 0;
+        struct tc_iovec *cur_siovec = NULL;
+        struct tc_iovec *cur_fiovec = NULL;
+
+        while (i < count) {
+                cur_siovec = siovec + i;
+                if (hitArray[i] == false && cur_siovec->file.type == TC_FILE_PATH) {
+                        cur_fiovec = final_iovec + j;
+
+                        dataCache->put(cur_fiovec->file.path, cur_fiovec->offset,
+					 cur_fiovec->length, cur_fiovec->data);
+
+                        memcpy(cur_siovec, cur_fiovec, sizeof(struct tc_iovec));
+
+                        j++;
+                }
+                else if (hitArray[i] == false) {
+                        cur_fiovec = final_iovec + j;
+			memcpy(cur_siovec, cur_fiovec, sizeof(struct tc_iovec));
+                        j++;
+                }
+
+                i++;
+        }
+}
+
 tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn)
 {
 	tc_res tcres = { .index = count, .err_no = 0 };
 	tc_file *saved_tcfs = NULL;
+	bool *hitArray = NULL;
+	int miss_count = 0;
+	tc_iovec *final_iovec = NULL;
 
 	saved_tcfs = nfs_updateIovec_FilenameToFh(iovs, count);
 	if (!saved_tcfs) {
 		return tc_failure(0, ENOMEM);
 	}
+	hitArray = new bool[count]();
+	if (hitArray == NULL)
+		return tc_failure(0, ENOMEM);
 
-	tcres = nfs4_readv(iovs, count, istxn);
+	std::fill_n(hitArray, count, false);
+
+	final_iovec = check_dataCache(iovs, count, &miss_count, hitArray);
+	if (final_iovec == NULL)
+		goto mem_failure2;
+
+	g_miss_count += miss_count;
+	if (miss_count == 0) {
+		/* Full cache hit */
+		goto exit;
+	}
+
+	tcres = nfs4_readv(final_iovec, miss_count, istxn);
+	if (tc_okay(tcres)) {
+		update_dataCache(iovs, final_iovec, count, hitArray);
+	}
 
 	nfs_restoreIovec_FhToFilename(iovs, count, saved_tcfs);
 
+exit:
+	delete hitArray;
+	free(final_iovec);
 	return tcres;
+
+mem_failure2:
+	delete hitArray;
+	return tc_failure(0, ENOMEM);;
 }
 
 tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)

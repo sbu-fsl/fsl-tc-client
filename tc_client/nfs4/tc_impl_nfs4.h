@@ -38,6 +38,8 @@ struct cache_context {
 	void *context;
 	uint64_t cache_size;
 	uint64_t cache_expiration;
+	uint64_t data_cache_size;
+	uint64_t data_cache_expiration;
 };
 
 void *nfs4_init(const char *config_path, const char *log_path,

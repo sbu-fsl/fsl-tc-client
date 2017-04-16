@@ -22,6 +22,10 @@ void init_page_cache(uint64_t size, uint64_t time);
  */
 void deinit_page_cache();
 
+void init_data_cache(uint64_t size, uint64_t time);
+
+void deinit_data_cache();
+
 tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes);
 
 tc_res nfs_closev(tc_file *tcfs, int count);

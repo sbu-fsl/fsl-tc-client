@@ -103,6 +103,9 @@ void *tc_init(const char *config_path, const char *log_path, uint16_t export_id)
 
 	init_page_cache(((struct cache_context*)context)->cache_size,
 			((struct cache_context*)context)->cache_expiration);
+	/*init_data_cache(((struct cache_context*)context)->data_cache_size,
+			((struct cache_context*)context)->data_cache_expiration);*/
+	init_data_cache(100,60000);
 
 	return context;
 }
@@ -122,6 +125,7 @@ void tc_deinit(void *module)
 	fclose(pfile);
 
 	deinit_page_cache();
+	deinit_data_cache();
 
 	if (TC_IMPL_IS_NFS4) {
 		nfs4_deinit(module);

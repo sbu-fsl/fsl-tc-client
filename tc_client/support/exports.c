@@ -1149,8 +1149,12 @@ static struct config_item export_params[] = {
 			 gsh_export, fsal_export),
 	CONF_ITEM_UI64("CacheSize", 0, 10000000, 0,
 			gsh_export, cache_size),
+	CONF_ITEM_UI64("DataCacheSize", 0, 10000000, 0,
+		       gsh_export, data_cache_size),
 	CONF_ITEM_UI64("CacheExpiration", 0, 10000000, 60000,
 			gsh_export, cache_expiration),
+	CONF_ITEM_UI64("DataCacheExpiration", 0, 10000000, 60000,
+		       gsh_export, data_cache_expiration),
 	CONFIG_EOL
 };
 
