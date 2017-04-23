@@ -266,6 +266,8 @@ void update_dataCache(struct tc_iovec *siovec,
         int j = 0;
         struct tc_iovec *cur_siovec = NULL;
         struct tc_iovec *cur_fiovec = NULL;
+	int t_len = 0;
+	int t_offset = 0;
 
         while (i < count) {
                 cur_siovec = siovec + i;
@@ -274,9 +276,13 @@ void update_dataCache(struct tc_iovec *siovec,
 
                         dataCache->put(cur_fiovec->file.path, cur_fiovec->offset,
 					 cur_fiovec->length, cur_fiovec->data);
-
-                        memcpy(cur_siovec, cur_fiovec, sizeof(struct tc_iovec));
-
+			cur_siovec->length = cur_fiovec->length + cur_fiovec->offset - 
+						cur_siovec->offset;
+			cur_siovec->is_failure = cur_fiovec->is_failure;
+			cur_siovec->is_eof = cur_fiovec->is_eof;
+			cur_siovec->is_write_stable = cur_fiovec->is_write_stable;
+                        //memcpy(cur_siovec, cur_fiovec, sizeof(struct tc_iovec));
+			
                         j++;
                 }
                 else if (hitArray[i] == false) {
@@ -345,6 +351,15 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
 	}
 
 	tcres = nfs4_writev(writes, write_count, is_transaction);
+
+	if (tc_okay(tcres)) {
+		for (int i = 0; i < write_count; i++) {
+			if (writes[i].file.type == TC_FILE_PATH) {
+				dataCache->put(writes[i].file.path, writes[i].offset,
+					writes[i].length, writes[i].data);
+			}
+		}
+	}
 
 	nfs_restoreIovec_FhToFilename(writes, write_count, saved_tcfs);
 
