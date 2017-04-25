@@ -31,26 +31,31 @@ public:
 	char *data;
 	int len;
 	int start_idx;	
+	string path;
+	size_t block_no;
 	//pthread_rwlock_t dataLock;
 
-	DataBlock(char *d, int size, int start) {
-#ifdef _DEBUG
-		cout << "DataBlock: constructor \n";
-#endif
+	DataBlock(char *d, int size, int start, string p, size_t b) {
  		//pthread_rwlock_init(&attrLock, NULL);
 		data = (char *) malloc(CACHE_BLOCK_SIZE);
 		len = size;
 		start_idx = start;
 		memcpy(data + start, d, size);
+		path = p;
+		block_no = b;
 	}
 
 	~DataBlock() {
 #ifdef _DEBUG
-		cout << "DataBlock: destructor \n";
+		cout << "DataBlock: destructor "<<path<<block_no<<endl;
 #endif
 		if (data != NULL) {
 			free(data);
 		}
+		//TC_DataCache::RemoveBlockFromMap(path, block_no);
+#ifdef _DEBUG
+		cout<<"Destructor for "<<path<<block_no;
+#endif
 		//pthread_rwlock_destroy(&dataLock);
 	}
 };
@@ -92,7 +97,8 @@ public:
 
 	inline void RemoveBlockFromMap(string path, size_t block_no)
 	{
-		cached_blocks[path].erase(block_no);
+		if (cached_blocks.find(path) != cached_blocks.end())
+			cached_blocks[path].erase(block_no);
 	}
 
 	void put(const string path, size_t offset, size_t length, char *data)
@@ -105,6 +111,9 @@ public:
 			return;
 		}
 		if (offset % CACHE_BLOCK_SIZE != 0) {
+#ifdef _DEBUG
+			printf("Not alligned with cache block");
+#endif
 			offset = offset - delta_offset;
 			string key = path + to_string(offset/CACHE_BLOCK_SIZE);
 			SharedPtr<DataBlock> ptrElem =
@@ -122,14 +131,20 @@ public:
 				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
                                                         TMutex, TEventMutex>::add(key, ptrElem);
 				AddBlockToMap(path, offset/CACHE_BLOCK_SIZE);
+#ifdef _DEBUG
+				cout<<"Updated "<<key<<std::endl;
+#endif
 			}
 			else {
 				DataBlock *db = new DataBlock(data,
 					CACHE_BLOCK_SIZE - delta_offset,
-					delta_offset);
+					delta_offset, path, offset/CACHE_BLOCK_SIZE);
 				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
                                                         TMutex, TEventMutex>::add(key, db);
 				AddBlockToMap(path, offset/CACHE_BLOCK_SIZE);
+#ifdef _DEBUG
+				cout<<"Added "<< key<< std::endl;
+#endif
 			}
 			write_len += CACHE_BLOCK_SIZE - delta_offset;
 			i += CACHE_BLOCK_SIZE;
@@ -156,20 +171,33 @@ public:
                                        	TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
                                                	        TMutex, TEventMutex>::add(key, ptrElem);
 					AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
+#ifdef _DEBUG
+					cout<<"Added "<<key<< std::endl;
+#endif
                                	}
 				else {
-					DataBlock *db = new DataBlock(data + write_len, length - write_len, 0);
+					DataBlock *db = new DataBlock(data + write_len,
+									length - write_len, 0,
+									path, (offset+i)/CACHE_BLOCK_SIZE);
 					TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
 						TMutex, TEventMutex>::add(key, db);
 					AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
+#ifdef _DEBUG
+					cout<<"Added "<<key<< std::endl;
+#endif
 				}
 				return;
 			}
 			else {
-				DataBlock *db = new DataBlock(data + write_len, CACHE_BLOCK_SIZE, 0);
+				DataBlock *db = new DataBlock(data + write_len, 
+								CACHE_BLOCK_SIZE, 0,
+								path, (offset+i)/CACHE_BLOCK_SIZE);
 				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
 						TMutex, TEventMutex>::add(key, db);
 				AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
+#ifdef _DEBUG
+				cout<<"Added "<<key<< std::endl;
+#endif
 			}
 			i += CACHE_BLOCK_SIZE;
 			write_len += CACHE_BLOCK_SIZE;
@@ -189,6 +217,9 @@ public:
 					StrategyCollection<TKey, TValue>,
 					TMutex, TEventMutex>::remove(key);
 				RemoveBlockFromMap(path, block_no);
+#ifdef _DEBUG
+				cout<<"Removed "<<key<< std::endl;
+#endif
 			}
 			cached_blocks.erase(path);
 		}
@@ -206,7 +237,7 @@ public:
 		size_t read_len = 0;
 		size_t delta_offset = offset % CACHE_BLOCK_SIZE;
 
-		if (length < CACHE_BLOCK_SIZE || offset % CACHE_BLOCK_SIZE != 0) {
+		if (length < CACHE_BLOCK_SIZE) {
 			return 0;
 		}
 		while(true) {
@@ -216,13 +247,27 @@ public:
                         SharedPtr<DataBlock> ptrElem = 
 					TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>::get(key);
                         if (ptrElem.isNull() || ptrElem->start_idx != 0) {
+#ifdef _DEBUG
+				cout<<"Found "<<key<<"Bytes "<<read_len<< std::endl;
+#endif
                                 return read_len;
                         }
-                        memcpy(buf + read_len, ptrElem->data + delta_offset, ptrElem->len - delta_offset);
+			if (ptrElem->len - delta_offset < length - read_len) {
+				memcpy(buf + read_len, ptrElem->data + delta_offset,
+						ptrElem->len - delta_offset);
+				read_len += ptrElem->len - delta_offset;
+			}
+			else {
+				memcpy(buf + read_len, ptrElem->data + delta_offset,
+						length - read_len);
+				read_len = length;
+			}
 			//Handle case when less len needs to be copied
-			read_len += ptrElem->len - delta_offset;
 			delta_offset = 0;
                         if (length <= read_len){
+#ifdef _DEBUG
+				cout<<"Found "<<key<<"Bytes "<<read_len<< std::endl;
+#endif
                                 return read_len;
                         }
                         i += CACHE_BLOCK_SIZE;

@@ -1609,6 +1609,81 @@ TYPED_TEST_P(TcTest, TcRmRecursive)
 	EXPECT_TRUE(tc_rm_recursive("NonExistDir"));
 }
 
+TYPED_TEST_P(TcTest, UnalignedCacheRead)
+{
+        const char *PATHS[] = { "WritevCanCreateFiles1.txt",
+                                "WritevCanCreateFiles2.txt",
+                                "WritevCanCreateFiles3.txt",
+                                "WritevCanCreateFiles4.txt" };
+        const int count = sizeof(PATHS)/sizeof(PATHS[0]);
+
+        Removev(PATHS, count);
+
+        tc_iovec *writev = (tc_iovec *)malloc(sizeof(tc_iovec) * count);
+        for (int i = 0; i < count; ++i) {
+                tc_iov4creation(&writev[i], PATHS[i], 4096,
+                                getRandomBytes(4096));
+        }
+
+        EXPECT_OK(tc_writev(writev, count, false));
+
+        tc_iovec *readv = (tc_iovec *)malloc(sizeof(tc_iovec) * count);
+        for (int i = 0; i < count; ++i) {
+                tc_iov2path(&readv[i], PATHS[i], 50, 2000,
+                            (char *)malloc(2000));
+        }
+
+        EXPECT_OK(tc_readv(readv, count, false));
+	for (int i = 0; i < count; ++i) {
+		EXPECT_EQ(0, memcmp(writev[i].data+50, readv[i].data, 2000));
+	}
+
+        free_iovec(writev, count);
+        free_iovec(readv, count);
+}
+
+TYPED_TEST_P(TcTest, UnalignedCacheWrite)
+{
+        const char *PATHS[] = { "WritevCanCreateFiles1.txt",
+                                "WritevCanCreateFiles2.txt",
+                                "WritevCanCreateFiles3.txt",
+                                "WritevCanCreateFiles4.txt" };
+        const int count = sizeof(PATHS)/sizeof(PATHS[0]);
+
+        Removev(PATHS, count);
+
+        tc_iovec *writev = (tc_iovec *)malloc(sizeof(tc_iovec) * count);
+        for (int i = 0; i < count; ++i) {
+                tc_iov4creation(&writev[i], PATHS[i], 4096,
+                                getRandomBytes(4096));
+        }
+
+        EXPECT_OK(tc_writev(writev, count, false));
+
+	tc_iovec *writev2 = (tc_iovec *)malloc(sizeof(tc_iovec) * count);
+	for (int i = 0; i < count; ++i) {
+		tc_iov2path(&writev2[i], PATHS[i], 50, 2000,
+			getRandomBytes(2000));
+	}
+
+	EXPECT_OK(tc_writev(writev2, count, false));
+
+        tc_iovec *readv = (tc_iovec *)malloc(sizeof(tc_iovec) * count);
+        for (int i = 0; i < count; ++i) {
+                tc_iov2path(&readv[i], PATHS[i], 50, 2000,
+                            (char *)malloc(2000));
+        }
+
+        EXPECT_OK(tc_readv(readv, count, false));
+        for (int i = 0; i < count; ++i) {
+		EXPECT_TRUE(compare_content(writev2, readv, count));
+        }
+
+        free_iovec(writev, count);
+        free_iovec(readv, count);
+}
+
+
 REGISTER_TYPED_TEST_CASE_P(TcTest,
 			   WritevCanCreateFiles,
 			   TestFileDesc,
@@ -1647,7 +1722,9 @@ REGISTER_TYPED_TEST_CASE_P(TcTest,
 			   TcRmBasic,
 			   TcRmManyFiles,
 			   TcRmRecursive,
-			   RequestDoesNotFitIntoOneCompound);
+			   RequestDoesNotFitIntoOneCompound,
+			   UnalignedCacheRead,
+			   UnalignedCacheWrite);
 
 typedef ::testing::Types<TcNFS4Impl, TcPosixImpl> TcImpls;
 INSTANTIATE_TYPED_TEST_CASE_P(TC, TcTest, TcImpls);
