@@ -340,7 +340,8 @@ mem_failure2:
 	return tc_failure(0, ENOMEM);;
 }
 
-tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
+tc_res nfs_writev(struct tc_iovec *writes, int write_count,
+			bool is_transaction)
 {
 	tc_res tcres = { .index = write_count, .err_no = 0 };
 	tc_file *saved_tcfs = NULL;
@@ -354,9 +355,12 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
 
 	if (tc_okay(tcres)) {
 		for (int i = 0; i < write_count; i++) {
-			if (writes[i].file.type == TC_FILE_PATH) {
-				dataCache->put(writes[i].file.path, writes[i].offset,
-					writes[i].length, writes[i].data);
+			if (writes[i].file.type == TC_FILE_PATH && 
+				writes[i].offset != TC_OFFSET_END) {
+				dataCache->put(writes[i].file.path,
+						writes[i].offset,
+						writes[i].length,
+						writes[i].data);
 			}
 		}
 	}
@@ -866,7 +870,10 @@ tc_res nfs_removev(tc_file *tc_files, int count, bool is_transaction)
 
 	if (tc_okay(tcres)) {
 		for (int i = 0; i < count; i++) {
-			mdCache->remove(tc_files[i].path);
+			if (tc_files[i].type == TC_FILE_PATH) {
+				dataCache->remove(tc_files[i].path);
+				mdCache->remove(tc_files[i].path);
+			}
 		}
 	}
 	return tcres;

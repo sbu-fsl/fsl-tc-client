@@ -90,12 +90,9 @@ public:
 		cached_blocks[path].insert(block_no);
 	}
 
-	void RemoveBlockFromMap(string path, size_t block_no)
+	inline void RemoveBlockFromMap(string path, size_t block_no)
 	{
 		cached_blocks[path].erase(block_no);
-		if (cached_blocks[path].empty()) {
-			cached_blocks.erase(path);
-		}
 	}
 
 	void put(const string path, size_t offset, size_t length, char *data)
@@ -181,6 +178,20 @@ public:
 
 	void remove(string path)
 	{
+		unordered_map<string, unordered_set<size_t>>::iterator it;
+		string key;
+
+		it = cached_blocks.find(path);
+		if (it != cached_blocks.end()) {
+			for (const auto& block_no: it->second) {
+				key = path + to_string(block_no);
+				TC_AbstractCache<TKey, TValue, 
+					StrategyCollection<TKey, TValue>,
+					TMutex, TEventMutex>::remove(key);
+				RemoveBlockFromMap(path, block_no);
+			}
+			cached_blocks.erase(path);
+		}
 		return;
 	}
 
