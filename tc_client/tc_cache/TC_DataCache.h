@@ -13,6 +13,7 @@
 #include <map>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unordered_set>
 #include "TC_AbstractCache.h"
 #include "Poco/StrategyCollection.h"
 #include "Poco/SharedPtr.h"
@@ -65,6 +66,7 @@ class TC_DataCache: public TC_AbstractCache<TKey, TValue, StrategyCollection<TKe
 	/// It cache entries for a fixed time period (per default 10 minutes)
 	/// but also limits the size of the cache (per default: 1024).
 {
+	unordered_map<string, unordered_set<size_t>> cached_blocks;
 public:
 	TC_DataCache(long cacheSize = 1024, Timestamp::TimeDiff expire = 600000): 
 		TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>(StrategyCollection<TKey, TValue>())
@@ -81,6 +83,19 @@ public:
 #ifdef _DEBUG
 		std::cout << "TC_DataCache - Destructor" << std::endl;
 #endif
+	}
+
+	inline void AddBlockToMap(string path, size_t block_no)
+	{
+		cached_blocks[path].insert(block_no);
+	}
+
+	void RemoveBlockFromMap(string path, size_t block_no)
+	{
+		cached_blocks[path].erase(block_no);
+		if (cached_blocks[path].empty()) {
+			cached_blocks.erase(path);
+		}
 	}
 
 	void put(const string path, size_t offset, size_t length, char *data)
@@ -109,6 +124,7 @@ public:
 
 				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
                                                         TMutex, TEventMutex>::add(key, ptrElem);
+				AddBlockToMap(path, offset/CACHE_BLOCK_SIZE);
 			}
 			else {
 				DataBlock *db = new DataBlock(data,
@@ -116,6 +132,7 @@ public:
 					delta_offset);
 				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
                                                         TMutex, TEventMutex>::add(key, db);
+				AddBlockToMap(path, offset/CACHE_BLOCK_SIZE);
 			}
 			write_len += CACHE_BLOCK_SIZE - delta_offset;
 			i += CACHE_BLOCK_SIZE;
@@ -141,11 +158,13 @@ public:
 */
                                        	TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
                                                	        TMutex, TEventMutex>::add(key, ptrElem);
+					AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
                                	}
 				else {
 					DataBlock *db = new DataBlock(data + write_len, length - write_len, 0);
 					TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
 						TMutex, TEventMutex>::add(key, db);
+					AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
 				}
 				return;
 			}
@@ -153,6 +172,7 @@ public:
 				DataBlock *db = new DataBlock(data + write_len, CACHE_BLOCK_SIZE, 0);
 				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
 						TMutex, TEventMutex>::add(key, db);
+				AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
 			}
 			i += CACHE_BLOCK_SIZE;
 			write_len += CACHE_BLOCK_SIZE;
