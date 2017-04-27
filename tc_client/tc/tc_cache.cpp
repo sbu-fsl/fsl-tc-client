@@ -8,7 +8,7 @@
 using namespace std;
 
 TC_MetaDataCache<string, DirEntry > *mdCache = NULL;
-TC_DataCache<string, DataBlock > *dataCache = NULL;
+TC_DataCache *dataCache = NULL;
 int g_miss_count = 0;
 
 void reset_miss_count() {
@@ -27,8 +27,7 @@ void init_page_cache(uint64_t size, uint64_t time)
 
 void init_data_cache(uint64_t size, uint64_t time)
 {
-	dataCache = new TC_DataCache<string, DataBlock>(
-		size, time);
+	dataCache = new TC_DataCache(size, time);
 }
 
 void deinit_page_cache()

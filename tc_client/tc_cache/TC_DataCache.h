@@ -26,6 +26,54 @@ using namespace Poco;
 
 #define CACHE_BLOCK_SIZE 512
 
+/*template <
+        class string,
+        class DataBlock,
+        class FastMutex = FastMutex,
+        class  FastMutex = FastMutex
+>*/
+class DataBlock;
+
+class TC_DataCache: public TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>>//, StrategyCollection<string, DataBlock>, FastMutex,  FastMutex>
+{
+        unordered_map<string, unordered_set<size_t>> cached_blocks;
+public:
+        TC_DataCache(long cacheSize = 1024, Timestamp::TimeDiff expire = 600000):
+                TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>, FastMutex, FastMutex>(StrategyCollection<string, DataBlock>())
+        {
+#ifdef _DEBUG
+                std::cout << "TC_DataCache - Constructor" << std::endl;
+#endif
+                this->_strategy.pushBack(new TC_LRUStrategy<string, DataBlock>(cacheSize));
+                this->_strategy.pushBack(new TC_ExpireStrategy<string, DataBlock>(expire));
+        }
+
+        ~TC_DataCache()
+        {
+#ifdef _DEBUG
+                std::cout << "TC_DataCache - Destructor" << std::endl;
+#endif
+        }
+
+        inline void AddBlockToMap(string path, size_t block_no)
+        {
+                cached_blocks[path].insert(block_no);
+        }
+
+        inline void RemoveBlockFromMap(string path, size_t block_no)
+        {
+                if (cached_blocks.find(path) != cached_blocks.end())
+                        cached_blocks[path].erase(block_no);
+        }
+	void put(const string path, size_t offset, size_t length, char *data);
+	void remove(string path);
+	void remove(string path, size_t offset, size_t length);
+	int get(const string path, size_t offset, size_t length, char *buf);
+private:
+        TC_DataCache(const TC_DataCache& aCache);
+        TC_DataCache& operator = (const TC_DataCache& aCache);
+};
+
 class DataBlock {
 public:
 	char *data;
@@ -33,9 +81,11 @@ public:
 	int start_idx;	
 	string path;
 	size_t block_no;
+	TC_DataCache *data_cache;
 	//pthread_rwlock_t dataLock;
 
-	DataBlock(char *d, int size, int start, string p, size_t b) {
+	DataBlock(char *d, int size, int start, string p, size_t b,
+			TC_DataCache *dc) {
  		//pthread_rwlock_init(&attrLock, NULL);
 		data = (char *) malloc(CACHE_BLOCK_SIZE);
 		len = size;
@@ -43,6 +93,7 @@ public:
 		memcpy(data + start, d, size);
 		path = p;
 		block_no = b;
+		data_cache = dc;
 	}
 
 	~DataBlock() {
@@ -52,7 +103,7 @@ public:
 		if (data != NULL) {
 			free(data);
 		}
-		//TC_DataCache::RemoveBlockFromMap(path, block_no);
+		data_cache->RemoveBlockFromMap(path, block_no);
 #ifdef _DEBUG
 		cout<<"Destructor for "<<path<<block_no;
 #endif
@@ -60,48 +111,7 @@ public:
 	}
 };
 
-template < 
-	class TKey,
-	class TValue,
-	class TMutex = FastMutex, 
-	class TEventMutex = FastMutex
->
-class TC_DataCache: public TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>
-	/// An TC_DataCache combines LRU caching and time based expire caching.
-	/// It cache entries for a fixed time period (per default 10 minutes)
-	/// but also limits the size of the cache (per default: 1024).
-{
-	unordered_map<string, unordered_set<size_t>> cached_blocks;
-public:
-	TC_DataCache(long cacheSize = 1024, Timestamp::TimeDiff expire = 600000): 
-		TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>(StrategyCollection<TKey, TValue>())
-	{
-#ifdef _DEBUG
-		std::cout << "TC_DataCache - Constructor" << std::endl;
-#endif
-		this->_strategy.pushBack(new TC_LRUStrategy<TKey, TValue>(cacheSize));
-		this->_strategy.pushBack(new TC_ExpireStrategy<TKey, TValue>(expire));
-	}
-
-	~TC_DataCache()
-	{
-#ifdef _DEBUG
-		std::cout << "TC_DataCache - Destructor" << std::endl;
-#endif
-	}
-
-	inline void AddBlockToMap(string path, size_t block_no)
-	{
-		cached_blocks[path].insert(block_no);
-	}
-
-	inline void RemoveBlockFromMap(string path, size_t block_no)
-	{
-		if (cached_blocks.find(path) != cached_blocks.end())
-			cached_blocks[path].erase(block_no);
-	}
-
-	void put(const string path, size_t offset, size_t length, char *data)
+void TC_DataCache::put(const string path, size_t offset, size_t length, char *data)
  	{
 		size_t i = 0;
 		size_t write_len = 0;
@@ -117,8 +127,8 @@ public:
 			offset = offset - delta_offset;
 			string key = path + to_string(offset/CACHE_BLOCK_SIZE);
 			SharedPtr<DataBlock> ptrElem =
-				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
-                                                TMutex, TEventMutex>::get(key);
+				TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>,
+                                                FastMutex,  FastMutex>::get(key);
 			if (!ptrElem.isNull()) {
 				memcpy(ptrElem->data + delta_offset,
 					data, CACHE_BLOCK_SIZE - delta_offset);
@@ -128,8 +138,8 @@ public:
 					ptrElem->len = CACHE_BLOCK_SIZE - delta_offset;
 				}
 
-				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
-                                                        TMutex, TEventMutex>::add(key, ptrElem);
+				TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>,
+                                                        FastMutex,  FastMutex>::add(key, ptrElem);
 				AddBlockToMap(path, offset/CACHE_BLOCK_SIZE);
 #ifdef _DEBUG
 				cout<<"Updated "<<key<<std::endl;
@@ -138,9 +148,10 @@ public:
 			else {
 				DataBlock *db = new DataBlock(data,
 					CACHE_BLOCK_SIZE - delta_offset,
-					delta_offset, path, offset/CACHE_BLOCK_SIZE);
-				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
-                                                        TMutex, TEventMutex>::add(key, db);
+					delta_offset, path, offset/CACHE_BLOCK_SIZE,
+					this);
+				TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>,
+                                                        FastMutex,  FastMutex>::add(key, db);
 				AddBlockToMap(path, offset/CACHE_BLOCK_SIZE);
 #ifdef _DEBUG
 				cout<<"Added "<< key<< std::endl;
@@ -153,8 +164,8 @@ public:
 			string key = path + to_string((offset+i)/CACHE_BLOCK_SIZE);
 			if (length - write_len < CACHE_BLOCK_SIZE) {
 				SharedPtr<DataBlock> ptrElem =
-                                       TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
-                                               TMutex, TEventMutex>::get(key);
+                                       TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>,
+                                               FastMutex,  FastMutex>::get(key);
                                	if (!ptrElem.isNull()) {
 					memcpy(ptrElem->data,
 						data + write_len, length - write_len);
@@ -168,8 +179,8 @@ public:
 					}
 						//What if within a block CCCCCXCCCCCC
 */
-                                       	TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
-                                               	        TMutex, TEventMutex>::add(key, ptrElem);
+                                       	TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>,
+                                               	        FastMutex,  FastMutex>::add(key, ptrElem);
 					AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
 #ifdef _DEBUG
 					cout<<"Added "<<key<< std::endl;
@@ -177,10 +188,11 @@ public:
                                	}
 				else {
 					DataBlock *db = new DataBlock(data + write_len,
-									length - write_len, 0,
-									path, (offset+i)/CACHE_BLOCK_SIZE);
-					TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
-						TMutex, TEventMutex>::add(key, db);
+								length - write_len, 0,
+								path, (offset+i)/CACHE_BLOCK_SIZE,
+								this);
+					TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>,
+						FastMutex,  FastMutex>::add(key, db);
 					AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
 #ifdef _DEBUG
 					cout<<"Added "<<key<< std::endl;
@@ -191,9 +203,9 @@ public:
 			else {
 				DataBlock *db = new DataBlock(data + write_len, 
 								CACHE_BLOCK_SIZE, 0,
-								path, (offset+i)/CACHE_BLOCK_SIZE);
-				TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>,
-						TMutex, TEventMutex>::add(key, db);
+								path, (offset+i)/CACHE_BLOCK_SIZE, this);
+				TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>,
+						FastMutex,  FastMutex>::add(key, db);
 				AddBlockToMap(path, (offset+i)/CACHE_BLOCK_SIZE);
 #ifdef _DEBUG
 				cout<<"Added "<<key<< std::endl;
@@ -204,7 +216,7 @@ public:
 		}
 	}
 
-	void remove(string path)
+	void TC_DataCache::remove(string path)
 	{
 		unordered_map<string, unordered_set<size_t>>::iterator it;
 		string key;
@@ -213,10 +225,9 @@ public:
 		if (it != cached_blocks.end()) {
 			for (const auto& block_no: it->second) {
 				key = path + to_string(block_no);
-				TC_AbstractCache<TKey, TValue, 
-					StrategyCollection<TKey, TValue>,
-					TMutex, TEventMutex>::remove(key);
-				RemoveBlockFromMap(path, block_no);
+				TC_AbstractCache<string, DataBlock, 
+					StrategyCollection<string, DataBlock>,
+					FastMutex,  FastMutex>::remove(key);
 #ifdef _DEBUG
 				cout<<"Removed "<<key<< std::endl;
 #endif
@@ -226,12 +237,34 @@ public:
 		return;
 	}
 
-	void remove(string path, size_t offset, size_t length)
+	void TC_DataCache::remove(string path, size_t offset, size_t length)
 	{
+		unordered_map<string, unordered_set<size_t>>::iterator it;
+		string key;
+
+		it = cached_blocks.find(path);
+		if (it != cached_blocks.end()) {
+			for (const auto& block_no: it->second) {
+				if (block_no < offset/CACHE_BLOCK_SIZE ||
+					block_no >= (length+offset)/CACHE_BLOCK_SIZE)
+					continue;
+				key = path + to_string(block_no);
+				TC_AbstractCache<string, DataBlock,
+					StrategyCollection<string, DataBlock>,
+					FastMutex,  FastMutex>::remove(key);
+				RemoveBlockFromMap(path, block_no);
+ #ifdef _DEBUG
+				cout<<"Removed "<<key<< std::endl;
+#endif
+			}
+			if (it->second.empty()) {
+				cached_blocks.erase(path);
+			}
+		}
 		return;
 	}
 
-	int get(const string path, size_t offset, size_t length, char *buf)
+	int TC_DataCache::get(const string path, size_t offset, size_t length, char *buf)
 	{
                 size_t i = 0;
 		size_t read_len = 0;
@@ -245,7 +278,7 @@ public:
 				offset = offset - delta_offset;
 			string key = path + to_string((offset+i)/CACHE_BLOCK_SIZE);
                         SharedPtr<DataBlock> ptrElem = 
-					TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>::get(key);
+					TC_AbstractCache<string, DataBlock, StrategyCollection<string, DataBlock>, FastMutex,  FastMutex>::get(key);
                         if (ptrElem.isNull() || ptrElem->start_idx != 0) {
 #ifdef _DEBUG
 				cout<<"Found "<<key<<"Bytes "<<read_len<< std::endl;
@@ -273,10 +306,5 @@ public:
                         i += CACHE_BLOCK_SIZE;
                 }
 	}
-
-private:
-	TC_DataCache(const TC_DataCache& aCache);
-	TC_DataCache& operator = (const TC_DataCache& aCache);
-};
 
 #endif // TC_DataCache_INCLUDED
