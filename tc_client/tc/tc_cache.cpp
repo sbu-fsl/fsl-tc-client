@@ -186,7 +186,31 @@ tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 	tc_res tcres = { .index = count, .err_no = 0 };
 	tc_file *file;
 
-	return nfs4_openv(paths, count, flags, modes, &attrs);
+	file = nfs4_openv(paths, count, flags, modes, &attrs);
+
+	for (int i = 0; i < tcres.index; i++) {
+		SharedPtr<DirEntry> ptrElem = mdCache->get(paths[i]);
+		if (!ptrElem.isNull()) {
+			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
+			if(ptrElem->attrs.st_ctim.tv_sec != attrs[i].ctime.tv_sec ||
+				ptrElem->attrs.st_ctim.tv_nsec != attrs[i].ctime.tv_nsec) {
+				//Data cache contains stale data
+				dataCache->remove(paths[i]);
+			}
+			//Update metadata cache
+			tc_attrs2stat(&attrs[i], &(ptrElem)->attrs);
+
+			pthread_rwlock_unlock(&((ptrElem)->attrLock));
+		}
+		else {
+			DirEntry de(paths[i]);
+			tc_attrs2stat(&attrs[i], &de.attrs);
+			de.fh = NULL;
+			mdCache->add(de.path, de);
+		}
+	}
+
+	return file;
 }
 
 tc_res nfs_closev(tc_file *tcfs, int count)
