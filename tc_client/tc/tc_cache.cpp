@@ -182,7 +182,11 @@ void nfs_restoreIovec_FhToFilename(struct tc_iovec *iovs, int count,
 
 tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 {
-	return nfs4_openv(paths, count, flags, modes);
+	struct tc_attrs *attrs;
+	tc_res tcres = { .index = count, .err_no = 0 };
+	tc_file *file;
+
+	return nfs4_openv(paths, count, flags, modes, &attrs);
 }
 
 tc_res nfs_closev(tc_file *tcfs, int count)

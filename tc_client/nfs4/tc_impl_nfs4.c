@@ -482,14 +482,14 @@ tc_res nfs4_writev(struct tc_iovec *iovs, int count, bool istxn)
 	return nfs4_do_iovec(iovs, count, istxn, nfs4_do_writev);
 }
 
-tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes)
+tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes,
+		    struct tc_attrs **attrs)
 {
 	int i;
 	int finished;
 	tc_res tcres;
 	tc_file *tcfs;
 	struct gsh_export *export = op_ctx->export;
-	struct tc_attrs *attrs;
 	stateid4 *sids;
 	struct tc_kfd *tcfd;
 	nfs_fh4 fh4;
@@ -498,21 +498,21 @@ tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes)
 		return NULL;
 	}
 
-	attrs = alloca(count * sizeof(*attrs));
+	*attrs = alloca(count * sizeof(struct tc_attrs));
 	sids = alloca(count * sizeof(*sids));
 	for (i = 0; i < count; ++i) {
 		if (flags[i] & O_CREAT) {
-			tc_set_up_creation(attrs + i, paths[i],
+			tc_set_up_creation(*attrs + i, paths[i],
 					   modes ? modes[i] : 0);
 		} else {
-			attrs[i].file = tc_file_from_path(paths[i]);
+			(*attrs)[i].file = tc_file_from_path(paths[i]);
 		}
 	}
 
 	tcfs = calloc(count, sizeof(*tcfs));
 	for (finished = 0; finished < count; ) {
 		tcres = export->fsal_export->obj_ops->tc_openv(
-		    attrs + finished, count - finished, flags + finished,
+		    *attrs + finished, count - finished, flags + finished,
 		    sids + finished);
 		if (!tc_okay(tcres)) {
 			nfs4_closev(tcfs, finished);
@@ -521,12 +521,12 @@ tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes)
 		}
 
 		for (i = finished; i < finished + tcres.index; ++i) {
-			fh4.nfs_fh4_len = attrs[i].file.handle->handle_bytes;
+			fh4.nfs_fh4_len = (*attrs)[i].file.handle->handle_bytes;
 			fh4.nfs_fh4_val =
-			    (char *)attrs[i].file.handle->f_handle;
+			    (char *)(*attrs)[i].file.handle->f_handle;
 			tcfd =
 			    tc_get_fd_struct(tc_alloc_fd(sids + i, &fh4), true);
-			tcfd->filesize = attrs[i].size;
+			tcfd->filesize = (*attrs)[i].size;
 			tcfs[i] = tc_file_from_fd(tcfd->fd);
 			tc_put_fd_struct(&tcfd);
 		}
@@ -535,9 +535,9 @@ tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes)
 
 exit:
 	for (i = 0; i < count; ++i) {
-		if (attrs[i].file.type == TC_FILE_HANDLE) {
+		if ((*attrs)[i].file.type == TC_FILE_HANDLE) {
 			del_file_handle(
-			    (struct file_handle *)attrs[i].file.handle);
+			    (struct file_handle *)(*attrs)[i].file.handle);
 		}
 	}
 

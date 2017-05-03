@@ -69,7 +69,8 @@ tc_res nfs4_writev(struct tc_iovec *writes, int write_count,
  *
  * Returns a list of tc_file that the caller is responsible for freeing.
  */
-tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes);
+tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes,
+			struct tc_attrs **attrs);
 
 /**
  *
