@@ -2372,6 +2372,23 @@ static bool tc_open_file_if_necessary(const tc_file *tcf, int flags,
 				      const tc_file **opened_file);
 
 /**
+ * Set up the GETATTR operation.
+ */
+static inline GETATTR4resok *tc_prepare_getattr(char *fattr_blob,
+                                                const struct bitmap4 *bm4)
+{
+        GETATTR4resok *atok;
+
+        if (!tc_has_enough_ops(1)) return NULL;
+
+        atok = fs_fill_getattr_reply(resoparray + opcnt, fattr_blob,
+                                     FATTR_BLOB_SZ);
+        COMPOUNDV4_ARG_ADD_OP_GETATTR(opcnt, argoparray, *bm4);
+
+        return atok;
+}
+
+/**
  * Send multiple reads for one or more files
  * "iovs" - an array of tc_iovec with size "count"
  * tc_res.index - Returns the position (read) inside the array that failed (in
@@ -2393,6 +2410,10 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
         bool r;
         int saved_opcnt;
         const tc_file *saved_file;
+	char *fattr_blobs;
+	fattr_blobs = (char *)malloc(count * FATTR_BLOB_SZ);
+	GETATTR4resok *atok;
+	int attr_count = 0;
 
 	LogDebug(COMPONENT_FSAL, "ktcread() called\n");
 
@@ -2417,7 +2438,10 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
 		COMPOUNDV4_ARG_ADD_OP_CLOSE_NOSTATE(opcnt, argoparray);
 		opened_file = NULL;
 	}
-
+	for (i = 0; i < count; i++) {
+		atok = tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
+					&fs_bitmap_getattr);
+	}
 	tcres.index = count;
 	rc = fs_nfsv4_call(op_ctx->creds, &tcres.err_no);
 	if (rc != RPC_SUCCESS) {    /* RPC failed */
@@ -2445,11 +2469,17 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
                         i++;
 		}
 		else if (resoparray[j].resop == NFS4_OP_GETATTR) {
-			//Piggy-back attrs
+			fattr4_to_tc_attrs(
+                            &resoparray[j]
+                                 .nfs_resop4_u.opgetattr.GETATTR4res_u.resok4
+                                 .obj_attributes,
+                            attrs + attr_count);
+                        ++attr_count;
 		}
 	}
 
 exit:
+	free(fattr_blobs);
         return tcres;
 }
 
@@ -2505,6 +2535,10 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
         bool r;
         int saved_opcnt = 0;
         const tc_file *saved_file;
+	char *fattr_blobs;
+        fattr_blobs = (char *)malloc(count * FATTR_BLOB_SZ);
+        GETATTR4resok *atok;
+        int attr_count = 0;
 
 	LogDebug(COMPONENT_FSAL, "ktcwrite() called\n");
 
@@ -2532,6 +2566,11 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
 		COMPOUNDV4_ARG_ADD_OP_CLOSE(opcnt, argoparray, (&CURSID));
                 opened_file = NULL;
 	}
+
+	for (i = 0; i < count; i++) {
+                atok = tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
+                                        &fs_bitmap_getattr);
+        }
 
         tcres.index = count;
 	rc = fs_nfsv4_call(op_ctx->creds, &tcres.err_no);
@@ -2563,7 +2602,12 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
 			i++;
                 }
 		else if (resoparray[j].resop == NFS4_OP_GETATTR) {
-			//Piggy-back attrs
+			fattr4_to_tc_attrs(
+                            &resoparray[j]
+                                 .nfs_resop4_u.opgetattr.GETATTR4res_u.resok4
+                                 .obj_attributes,
+                            attrs + attr_count);
+                        ++attr_count;
 		}
         }
 
@@ -2598,23 +2642,6 @@ static inline CREATE4resok *tc_prepare_mkdir(slice_t name, fattr4 *fattr)
 	COMPOUNDV4_ARG_ADD_OP_MKDIR(opcnt, argoparray, name, *fattr);
 
 	return crok;
-}
-
-/**
- * Set up the GETATTR operation.
- */
-static inline GETATTR4resok *tc_prepare_getattr(char *fattr_blob,
-						const struct bitmap4 *bm4)
-{
-	GETATTR4resok *atok;
-
-        if (!tc_has_enough_ops(1)) return NULL;
-
-	atok = fs_fill_getattr_reply(resoparray + opcnt, fattr_blob,
-				     FATTR_BLOB_SZ);
-	COMPOUNDV4_ARG_ADD_OP_GETATTR(opcnt, argoparray, *bm4);
-
-        return atok;
 }
 
 /**
