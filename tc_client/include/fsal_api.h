@@ -1310,10 +1310,12 @@ struct fsal_obj_ops {
 				 struct fsal_obj_handle **new_obj);
 
 /* Multiple open..read..close in a single compound */
-	tc_res (*tc_readv)(struct tc_iovec *iovs, int count);
+	tc_res (*tc_readv)(struct tc_iovec *iovs, int count,
+				struct tc_attrs *attrs);
 
 /* Multiple open..write..close in a single compound */
-	tc_res (*tc_writev)(struct tc_iovec *iovs, int count);
+	tc_res (*tc_writev)(struct tc_iovec *iovs, int count,
+				struct tc_attrs *attrs);
 
 	tc_res (*tc_openv)(struct tc_attrs *attrs, int count, int *flags,
 			   stateid4 *sids);

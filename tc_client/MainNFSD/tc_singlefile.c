@@ -115,9 +115,9 @@ int tc_singlefile(char *input_path, unsigned int block_size,
 		user_arg->file = tc_file_from_path(temp_path[0]);
 
 		if (rw == 0) {
-			nfs4_readv(user_arg, ops_per_comp, FALSE);
+			nfs4_readv(user_arg, ops_per_comp, FALSE, NULL);
 		} else {
-			nfs4_writev(user_arg, ops_per_comp, FALSE);
+			nfs4_writev(user_arg, ops_per_comp, FALSE, NULL);
 		}
 
 		j = j + ops_per_comp;

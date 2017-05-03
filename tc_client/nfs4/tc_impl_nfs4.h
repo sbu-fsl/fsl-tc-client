@@ -53,7 +53,8 @@ void nfs4_deinit(void *arg);
  * @read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res nfs4_readv(struct tc_iovec *reads, int read_count, bool is_transaction);
+tc_res nfs4_readv(struct tc_iovec *reads, int read_count, bool is_transaction,
+		struct tc_attrs *attrs);
 
 /**
  * @writes - Array of writes for one or more files
@@ -62,7 +63,7 @@ tc_res nfs4_readv(struct tc_iovec *reads, int read_count, bool is_transaction);
  *              (Or number of reads)
  */
 tc_res nfs4_writev(struct tc_iovec *writes, int write_count,
-		   bool is_transaction);
+		   bool is_transaction, struct tc_attrs *attrs);
 
 /**
  * Open a list of files specified by paths

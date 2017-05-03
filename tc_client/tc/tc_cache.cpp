@@ -329,6 +329,7 @@ tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn)
 	bool *hitArray = NULL;
 	int miss_count = 0;
 	tc_iovec *final_iovec = NULL;
+	struct tc_attrs *attrs = NULL;
 
 	saved_tcfs = nfs_updateIovec_FilenameToFh(iovs, count);
 	if (!saved_tcfs) {
@@ -349,8 +350,8 @@ tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn)
 		/* Full cache hit */
 		goto exit;
 	}
-
-	tcres = nfs4_readv(final_iovec, miss_count, istxn);
+	attrs = (struct tc_attrs *) malloc(miss_count * sizeof(struct tc_attrs));
+	tcres = nfs4_readv(final_iovec, miss_count, istxn, attrs);
 	if (tc_okay(tcres)) {
 		update_dataCache(iovs, final_iovec, count, hitArray);
 	}
@@ -360,6 +361,7 @@ tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn)
 exit:
 	delete hitArray;
 	free(final_iovec);
+	free(attrs);
 	return tcres;
 
 mem_failure2:
@@ -372,13 +374,15 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count,
 {
 	tc_res tcres = { .index = write_count, .err_no = 0 };
 	tc_file *saved_tcfs = NULL;
+	struct tc_attrs *attrs = NULL;
 
 	saved_tcfs = nfs_updateIovec_FilenameToFh(writes, write_count);
 	if (!saved_tcfs) {
 		return tc_failure(0, ENOMEM);
 	}
-
-	tcres = nfs4_writev(writes, write_count, is_transaction);
+	attrs = (struct tc_attrs *) malloc(write_count* 
+					sizeof(struct tc_attrs));
+	tcres = nfs4_writev(writes, write_count, is_transaction, attrs);
 
 	if (tc_okay(tcres)) {
 		for (int i = 0; i < write_count; i++) {
@@ -393,6 +397,7 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count,
 	}
 
 	nfs_restoreIovec_FhToFilename(writes, write_count, saved_tcfs);
+	free(attrs);
 
 	return tcres;
 }

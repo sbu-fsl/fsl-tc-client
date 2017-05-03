@@ -2380,7 +2380,8 @@ static bool tc_open_file_if_necessary(const tc_file *tcf, int flags,
  * of the putrootfh, lookup, open or close.
  * Caller has to make sure iovs and fields inside are allocated and freed.
  */
-static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count)
+static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
+			    struct tc_attrs *attrs)
 {
 	tc_res tcres = { 0 };
 	int rc;
@@ -2443,6 +2444,9 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count)
 			iovs[i].is_eof = read_res->eof;
                         i++;
 		}
+		else if (resoparray[j].resop == NFS4_OP_GETATTR) {
+			//Piggy-back attrs
+		}
 	}
 
 exit:
@@ -2487,7 +2491,8 @@ static inline bool tc_prepare_rdwr(struct tc_iovec *iov, bool write)
  * of the putrootfh, lookup, open or close.
  * Caller has to make sure iovs and fields inside are allocated and freed.
  */
-static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count)
+static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
+			     struct tc_attrs *attrs)
 {
 	tc_res tcres = { 0 };
 	int rc;
@@ -2557,6 +2562,9 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count)
 			    (write_res->committed != UNSTABLE4);
 			i++;
                 }
+		else if (resoparray[j].resop == NFS4_OP_GETATTR) {
+			//Piggy-back attrs
+		}
         }
 
 exit:

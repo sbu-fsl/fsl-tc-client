@@ -166,9 +166,9 @@ int tc_seq(char *input_path, int block_size, int num_files, int num_ops,
 			user_arg->file = tc_file_from_path(temp_path);
 
 			if (rw == 0) {
-				nfs4_readv(user_arg, ops_per_comp, FALSE);
+				nfs4_readv(user_arg, ops_per_comp, FALSE, NULL);
 			} else {
-				nfs4_writev(user_arg, ops_per_comp, FALSE);
+				nfs4_writev(user_arg, ops_per_comp, FALSE, NULL);
 			}
 			i++;
 		}

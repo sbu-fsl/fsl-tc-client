@@ -226,7 +226,8 @@ void nfs4_deinit(void *arg)
  * read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res nfs4_do_readv(struct tc_iovec *iovs, int read_count, bool istxn)
+tc_res nfs4_do_readv(struct tc_iovec *iovs, int read_count, bool istxn,
+		     struct tc_attrs *attrs)
 {
 	struct gsh_export *export = op_ctx->export;
 	tc_res tcres = { .index = 0, .err_no = (int)ENOENT };
@@ -245,7 +246,7 @@ tc_res nfs4_do_readv(struct tc_iovec *iovs, int read_count, bool istxn)
 
 	for (finished = 0; finished < read_count; finished += tcres.index) {
 		tcres = export->fsal_export->obj_ops->tc_readv(
-		    iovs + finished, read_count - finished);
+		    iovs + finished, read_count - finished, attrs + finished);
 		if (!tc_okay(tcres)) {
 			tcres.index += finished;
 			break;
@@ -401,7 +402,8 @@ static int nfs4_fill_fd_iovecs(struct tc_iovec *iovs, int count)
 }
 
 tc_res nfs4_do_iovec(struct tc_iovec *iovs, int count, bool istxn,
-		     tc_res (*fn)(struct tc_iovec *iovs, int count, bool istxn))
+		     tc_res (*fn)(struct tc_iovec *iovs, int count, bool istxn,
+				  struct tc_attrs *attrs), struct tc_attrs *attrs)
 {
 	static const int CPD_LIMIT = (1 << 20);
 	int i;
@@ -425,8 +427,8 @@ tc_res nfs4_do_iovec(struct tc_iovec *iovs, int count, bool istxn,
 	parts = tc_split_iov_array(&iova, CPD_LIMIT, &nparts);
 
 	for (i = 0; i < nparts; ++i) {
-		tcres = fn(parts[i].iovs, parts[i].size, istxn);
-		if (!tc_okay(tcres)) {
+		tcres = fn(parts[i].iovs, parts[i].size, istxn, attrs);
+		if (!tc_okay(tcres)){ 
 			/* TODO: FIX tcres */
 			goto exit;
 		}
@@ -438,8 +440,9 @@ exit:
 	return tcres;
 }
 
-tc_res nfs4_readv(struct tc_iovec *iovs, int count, bool istxn) {
-	return nfs4_do_iovec(iovs, count, istxn, nfs4_do_readv);
+tc_res nfs4_readv(struct tc_iovec *iovs, int count, bool istxn,
+		  struct tc_attrs *attrs) {
+	return nfs4_do_iovec(iovs, count, istxn, nfs4_do_readv, attrs);
 }
 
 /*
@@ -448,7 +451,8 @@ tc_res nfs4_readv(struct tc_iovec *iovs, int count, bool istxn) {
  * read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res nfs4_do_writev(struct tc_iovec *iovs, int write_count, bool istxn)
+tc_res nfs4_do_writev(struct tc_iovec *iovs, int write_count, bool istxn,
+		      struct tc_attrs *attrs)
 {
 	struct gsh_export *export = op_ctx->export;
 	tc_res tcres = { .index = 0, .err_no = (int)ENOENT };
@@ -467,7 +471,7 @@ tc_res nfs4_do_writev(struct tc_iovec *iovs, int write_count, bool istxn)
 
 	for (finished = 0; finished < write_count; finished += tcres.index) {
 		tcres = export->fsal_export->obj_ops->tc_writev(
-		    iovs + finished, write_count - finished);
+		    iovs + finished, write_count - finished, attrs + finished);
 		if (!tc_okay(tcres)) {
 			tcres.index += finished;
 			break;
@@ -477,9 +481,10 @@ tc_res nfs4_do_writev(struct tc_iovec *iovs, int write_count, bool istxn)
 	return tcres;
 }
 
-tc_res nfs4_writev(struct tc_iovec *iovs, int count, bool istxn)
+tc_res nfs4_writev(struct tc_iovec *iovs, int count, bool istxn,
+		   struct tc_attrs *attrs)
 {
-	return nfs4_do_iovec(iovs, count, istxn, nfs4_do_writev);
+	return nfs4_do_iovec(iovs, count, istxn, nfs4_do_writev, attrs);
 }
 
 tc_file *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes,
