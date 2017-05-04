@@ -353,6 +353,14 @@ tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn)
 	attrs = (struct tc_attrs *) malloc(miss_count * sizeof(struct tc_attrs));
 	tcres = nfs4_readv(final_iovec, miss_count, istxn, attrs);
 	if (tc_okay(tcres)) {
+		for (int i = 0; i < miss_count; i++) {
+			if (final_iovec[i].file.type == TC_FILE_PATH) {
+				DirEntry de(final_iovec[i].file.path);
+				tc_attrs2stat(&attrs[i], &de.attrs);
+				de.fh = NULL;
+				mdCache->add(de.path, de);
+			}
+		}
 		update_dataCache(iovs, final_iovec, count, hitArray);
 	}
 
@@ -392,6 +400,12 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count,
 						writes[i].offset,
 						writes[i].length,
 						writes[i].data);
+			}
+			if (writes[i].file.type == TC_FILE_PATH) {
+				DirEntry de(writes[i].file.path);
+				tc_attrs2stat(&attrs[i], &de.attrs);
+				de.fh = NULL;
+				mdCache->add(de.path, de);
 			}
 		}
 	}
