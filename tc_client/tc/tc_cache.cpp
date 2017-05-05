@@ -234,21 +234,85 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 	struct tc_iovec *final_iovec = NULL;
 	struct tc_iovec *cur_siovec = NULL;
 	struct tc_iovec *cur_fiovec = NULL;
-
+	size_t *hits = NULL;
+	int hit_count = 0;
 	int i = 0;
 
+	struct tc_attrs *attrs = (tc_attrs *)malloc(count*sizeof(tc_attrs));
+	if (attrs == NULL)
+		return NULL;
 	final_iovec =
 		(struct tc_iovec *)malloc(sizeof(struct tc_iovec) * count);
-	if (final_iovec == NULL)
+	if (final_iovec == NULL) {
+		free(attrs);
 		return NULL;
+	}
+	hits = (size_t *) malloc(sizeof(size_t)*count);
+	if (hits == NULL) {
+		free(attrs);
+		free(final_iovec);
+		return NULL;
+	}
 
-	while (i < count) {
+	for(i = 0; i < count; i++) {
 		cur_siovec = siovec + i;
 		if (cur_siovec->file.type != TC_FILE_PATH) {
+			hits[i] = 0;
+			continue;
+		}
+		/*int hit = dataCache->get(cur_siovec->file.path, cur_siovec->offset,
+				cur_siovec->length, cur_siovec->data);*/
+		int hit = 0;
+		if (hit == 0) {
+			hits[i] = 0;
+			continue;
+		}
+		SharedPtr<DirEntry> ptrElem = mdCache->get(cur_siovec->file.path);
+		if (!ptrElem.isNull()) {
+			printf("Data Cache hit. MDCache hit.\n");
+			//Add to getattrs
+			hits[i] = hit;
+			attrs[hit_count].file = cur_siovec->file;
+			attrs[hit_count].masks = TC_ATTRS_MASK_ALL; 
+			hit_count++;
+		}
+		else {
+			printf("Data Cache hit. MDCache miss.\n");
+			hits[i] = 0;
+			//Remove from data cache?
+		}
+	}
+	//Do getattrs
+	if (hit_count != 0) {
+		tc_res tcres = { .index = hit_count, .err_no = 0 };
+		tcres = nfs4_lgetattrsv(attrs, hit_count, false);
+		int l = 0;
+		if (tc_okay(tcres)) {
+			//Compare attrs in loop. If ctime is different, set hits[i] to 0.
+			for (int k = 0; k < count; k++) {
+				if (hits[k] == 0)
+					continue;
+				cur_siovec = siovec + k;
+				SharedPtr<DirEntry> ptrElem = mdCache->get(cur_siovec->file.path);
+				if (ptrElem.isNull() || ptrElem->attrs.st_ctim.tv_sec !=
+					attrs[l].ctime.tv_sec) {
+					hits[k] = 0;
+				}
+				l++;
+			}
+		}
+		else {
+			goto exit;
+		}
+	}
+	i = 0;
+	while (i < count) {
+		cur_siovec = siovec + i;
+		if (hits[i] == 0) {
 			/* fill final_array[miss_count] */
 			cur_fiovec = final_iovec + *miss_count;
 			fill_newIovec(cur_fiovec, cur_siovec);
-			if (hitArray[i-1] == true &&
+			if (i > 0 && hitArray[i-1] == true &&
 				cur_fiovec->file.type == TC_FILE_CURRENT) {
 				char *new_path = (char *) malloc(strlen(siovec[i-1].file.path) +
 						strlen(siovec[i].file.path) + 2);
@@ -260,19 +324,17 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 			i++;
 			continue;
 		}
-		int hit = dataCache->get(cur_siovec->file.path, cur_siovec->offset,
-					 cur_siovec->length, cur_siovec->data);
-		if (hit == cur_siovec->length) {
+		if (hits[i] == cur_siovec->length) {
                         /* Cache hit */
 			hitArray[i] = true;
 		}
-		else if (hit > 0 && hit < cur_siovec->length) {
+		else if (hits[i] > 0) {
 			/*Handle partial hit*/
 			cur_fiovec = final_iovec + *miss_count;
 			fill_newIovec(cur_fiovec, cur_siovec);
-			cur_fiovec->offset = hit;
-			cur_fiovec->length = cur_fiovec->length - hit;
-			cur_fiovec->data = cur_fiovec->data + hit;
+			cur_fiovec->offset = hits[i];
+			cur_fiovec->length = cur_fiovec->length - hits[i];
+			cur_fiovec->data = cur_fiovec->data + hits[i];
 			(*miss_count)++;
 		}
 		else {
@@ -282,6 +344,10 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 		}
 		i++;
 	}
+exit:
+	free(attrs);
+	free(hits);
+
 	return final_iovec;
 }
 
