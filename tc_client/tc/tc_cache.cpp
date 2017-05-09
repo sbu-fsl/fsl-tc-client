@@ -9,6 +9,7 @@ using namespace std;
 
 TC_MetaDataCache<string, DirEntry > *mdCache = NULL;
 TC_DataCache *dataCache = NULL;
+unordered_map<int, string> *fd_to_path_map = NULL;;
 int g_miss_count = 0;
 
 void reset_miss_count() {
@@ -28,6 +29,7 @@ void init_page_cache(uint64_t size, uint64_t time)
 void init_data_cache(uint64_t size, uint64_t time)
 {
 	dataCache = new TC_DataCache(size, time);
+	fd_to_path_map = new unordered_map<int, string>();
 }
 
 void deinit_page_cache()
@@ -208,6 +210,7 @@ tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 			de.fh = NULL;
 			mdCache->add(de.path, de);
 		}
+		(*fd_to_path_map)[file[i].fd] = paths[i];
 	}
 
 	return file;
@@ -215,7 +218,14 @@ tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 
 tc_res nfs_closev(tc_file *tcfs, int count)
 {
-	return nfs4_closev(tcfs, count);
+	tc_res tcres = { .index = count, .err_no = 0 };
+
+	tcres = nfs4_closev(tcfs, count);
+	for (int i = 0; i < tcres.index; i++) {
+		fd_to_path_map->erase(tcfs[i].fd);
+	}
+
+	return tcres;
 }
 
 off_t nfs_fseek(tc_file *tcf, off_t offset, int whence)
@@ -256,13 +266,22 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 
 	for(i = 0; i < count; i++) {
 		cur_siovec = siovec + i;
-		if (cur_siovec->file.type != TC_FILE_PATH) {
+		if (cur_siovec->file.type != TC_FILE_PATH &&
+			cur_siovec->file.type != TC_FILE_DESCRIPTOR) {
 			hits[i] = 0;
 			continue;
 		}
-		/*int hit = dataCache->get(cur_siovec->file.path, cur_siovec->offset,
-				cur_siovec->length, cur_siovec->data);*/
-		int hit = 0;
+		if (cur_siovec->file.type == TC_FILE_DESCRIPTOR) {
+			unordered_map<int, string>::iterator it =
+				fd_to_path_map->find(cur_siovec->file.fd);
+			if (it != fd_to_path_map->end()) {
+				cur_siovec->file.path = it->second.c_str();
+			}
+			else
+				continue;
+		}
+		int hit = dataCache->get(cur_siovec->file.path, cur_siovec->offset,
+					cur_siovec->length, cur_siovec->data);
 		if (hit == 0) {
 			hits[i] = 0;
 			continue;
@@ -361,10 +380,20 @@ void update_dataCache(struct tc_iovec *siovec,
         struct tc_iovec *cur_fiovec = NULL;
 	int t_len = 0;
 	int t_offset = 0;
+	unordered_map<int, string>::iterator it;
 
         while (i < count) {
                 cur_siovec = siovec + i;
-                if (hitArray[i] == false && cur_siovec->file.type == TC_FILE_PATH) {
+		if (hitArray[i] == false && 
+			cur_siovec->file.type == TC_FILE_DESCRIPTOR) {
+			cur_fiovec = final_iovec + j;
+			it = fd_to_path_map->find(cur_siovec->file.fd);
+			if (it != fd_to_path_map->end()) {
+				cur_fiovec->file.path = it->second.c_str();
+			}
+		}
+                if (hitArray[i] == false && (cur_siovec->file.type == TC_FILE_PATH ||
+			it != fd_to_path_map->end())) {
                         cur_fiovec = final_iovec + j;
 
                         dataCache->put(cur_fiovec->file.path, cur_fiovec->offset,
@@ -460,14 +489,25 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count,
 
 	if (tc_okay(tcres)) {
 		for (int i = 0; i < write_count; i++) {
-			if (writes[i].file.type == TC_FILE_PATH && 
+			if (writes[i].file.type == TC_FILE_DESCRIPTOR) {
+				unordered_map<int, string>::iterator it =
+                                  fd_to_path_map->find(writes[i].file.fd);
+				if (it != fd_to_path_map->end()) {
+					writes[i].file.path = it->second.c_str();
+				}
+				else
+					continue;
+			}
+			if ((writes[i].file.type == TC_FILE_PATH ||
+				writes[i].file.type == TC_FILE_DESCRIPTOR) &&
 				writes[i].offset != TC_OFFSET_END) {
 				dataCache->put(writes[i].file.path,
 						writes[i].offset,
 						writes[i].length,
 						writes[i].data);
 			}
-			if (writes[i].file.type == TC_FILE_PATH) {
+			if (writes[i].file.type == TC_FILE_PATH ||
+				writes[i].file.type == TC_FILE_DESCRIPTOR) {
 				DirEntry de(writes[i].file.path);
 				tc_attrs2stat(&attrs[i], &de.attrs);
 				de.fh = NULL;
