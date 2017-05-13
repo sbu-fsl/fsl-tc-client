@@ -65,6 +65,13 @@ public:
                 if (cached_blocks.find(path) != cached_blocks.end())
                         cached_blocks[path].erase(block_no);
         }
+	bool isCached(string path)
+	{
+		if (cached_blocks.find(path) != cached_blocks.end())
+			return true;
+		else
+			return false;
+	}
 	void put(const string path, size_t offset, size_t length, char *data);
 	void remove(string path);
 	void remove(string path, size_t offset, size_t length);

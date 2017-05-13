@@ -314,7 +314,8 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 				cur_siovec = siovec + k;
 				SharedPtr<DirEntry> ptrElem = mdCache->get(cur_siovec->file.path);
 				if (ptrElem.isNull() || ptrElem->attrs.st_ctim.tv_sec !=
-					attrs[l].ctime.tv_sec) {
+					attrs[l].ctime.tv_sec || ptrElem->attrs.st_ctim.tv_nsec !=
+					attrs[l].ctime.tv_nsec) {
 					hits[k] = 0;
 				}
 				l++;
@@ -472,6 +473,78 @@ mem_failure2:
 	return tc_failure(0, ENOMEM);;
 }
 
+tc_res check_and_remove(struct tc_iovec *writes, int write_count)
+{
+	int hit;
+	int hit_count = 0;
+	int *hits = (int *) malloc(write_count * sizeof(int));
+	struct tc_attrs *attrs = (tc_attrs *)malloc(write_count*sizeof(struct tc_attrs));
+	tc_res tcres = { .index = hit_count, .err_no = 0 };
+	if (attrs == NULL) {
+		free(hits);
+		return tcres;
+	}
+	SharedPtr<DirEntry> *ptrElem = new SharedPtr<DirEntry>[write_count]();
+	if (ptrElem == NULL) {
+		return tcres;
+	}
+
+	for (int i = 0; i < write_count; i++) {
+		//Read from md cache
+		if (writes[i].file.type != TC_FILE_DESCRIPTOR &&
+				writes[i].file.type != TC_FILE_PATH)
+		{
+			hits[i] = 0;
+			continue;
+		}
+		if (writes[i].file.type == TC_FILE_DESCRIPTOR) {
+			unordered_map<int, string>::iterator it =
+				fd_to_path_map->find(writes[i].file.fd);
+			if (it != fd_to_path_map->end()) {
+				writes[i].file.path = it->second.c_str();
+			}
+			else{
+				hits[i] = 0;
+				continue;
+			}
+		}
+		ptrElem[i] = mdCache->get(writes[i].file.path);
+		if (!ptrElem[i].isNull() && dataCache->isCached(writes[i].file.path)) {	
+			//If present in both add to getattrs
+			hits[i] = 1;
+			attrs[hit_count].file = writes[i].file;
+			attrs[hit_count].masks = TC_ATTRS_MASK_ALL;
+			hit_count++;
+		}
+		else
+			hits[i] = 0;
+	}
+	if (hit_count != 0) {
+		tcres = { .index = hit_count, .err_no = 0 };
+		tcres = nfs4_lgetattrsv(attrs, hit_count, false);
+		int l = 0;
+		if (!tc_okay(tcres)) {
+			free(hits);
+			free(attrs);
+			delete[] ptrElem;
+			return tcres;
+		}
+		for (int k = 0; k < write_count; k++) {
+			if (hits[k] == 0)
+				continue;
+			if (ptrElem[l]->attrs.st_ctim.tv_sec != attrs[l].ctime.tv_sec ||
+				ptrElem[l]->attrs.st_ctim.tv_nsec != attrs[l].ctime.tv_nsec) {
+				dataCache->remove(writes[k].file.path);
+			}
+		}
+	}
+	free(hits);
+	free(attrs);
+	delete[] ptrElem;
+
+	return tcres;
+}
+
 tc_res nfs_writev(struct tc_iovec *writes, int write_count,
 			bool is_transaction)
 {
@@ -485,6 +558,12 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count,
 	}
 	attrs = (struct tc_attrs *) malloc(write_count* 
 					sizeof(struct tc_attrs));
+	tcres = check_and_remove(writes, write_count);
+	if (!tc_okay(tcres))
+	{
+		free(attrs);
+		return tcres;
+	}
 	tcres = nfs4_writev(writes, write_count, is_transaction, attrs);
 
 	if (tc_okay(tcres)) {
