@@ -80,6 +80,35 @@ static void BM2_OpenClose(int start, int csize)
 	OpenClose(start, csize, O_RDONLY);
 }
 
+static void ReadWrite4K(int start, int csize, int flags, bool read)
+{
+	vector<const char *> paths =
+	    NewPaths("files-4K/%04d", csize, start);
+	vfile *files =
+	    vec_open_simple(paths.data(), csize, flags, 0644);
+	assert(files);
+	auto iovs = NewIovecs(files, csize, 0);
+
+	auto iofunc = read ? vec_read : vec_write;
+
+	vres tcres = iofunc(iovs.data(), csize, false);
+	assert(vokay(tcres));
+
+	vec_close(files, csize);
+	FreePaths(&paths);
+	FreeIovecs(&iovs);
+
+}
+static void BM2_Read4KDirect(int start, int csize)
+{
+	ReadWrite4K(start, csize, O_RDONLY | O_SYNC | O_DIRECT, true);
+
+}
+static void BM2_Write4KSync(int start, int csize)
+{
+	ReadWrite4K(start, csize, O_WRONLY | O_CREAT | O_SYNC, false);
+}
+
 static void BM2_Append(int start, int csize)
 {
 	vector<const char *> paths =
@@ -272,6 +301,10 @@ static BM_func GetBenchmarkFunction()
 		return BM2_Append;
 	} else if (FLAGS_op == "SSCopy") {
 		return BM2_SSCopy;
+	} else if (FLAGS_op == "Read4KDirect") {
+		return BM2_Read4KDirect;
+	} else if (FLAGS_op == "Write4KSync") {
+		return BM2_Write4KSync;
 	} else {
 		fprintf(stderr, "Unknown operation: %s\n", FLAGS_op.c_str());
 		return nullptr;
