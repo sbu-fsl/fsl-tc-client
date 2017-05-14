@@ -318,6 +318,9 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 					attrs[l].ctime.tv_nsec) {
 					hits[k] = 0;
 				}
+				else if (ptrElem->attrs.st_size <= cur_siovec->offset + cur_siovec->length){
+					cur_siovec->is_eof = true;
+				}
 				l++;
 			}
 		}
@@ -577,20 +580,31 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count,
 				else
 					continue;
 			}
-			if ((writes[i].file.type == TC_FILE_PATH ||
-				writes[i].file.type == TC_FILE_DESCRIPTOR) &&
-				writes[i].offset != TC_OFFSET_END) {
-				dataCache->put(writes[i].file.path,
-						writes[i].offset,
-						writes[i].length,
-						writes[i].data);
-			}
 			if (writes[i].file.type == TC_FILE_PATH ||
 				writes[i].file.type == TC_FILE_DESCRIPTOR) {
 				DirEntry de(writes[i].file.path);
 				tc_attrs2stat(&attrs[i], &de.attrs);
 				de.fh = NULL;
 				mdCache->add(de.path, de);
+			}
+			if (writes[i].file.type == TC_FILE_PATH ||
+				writes[i].file.type == TC_FILE_DESCRIPTOR) {
+				if (writes[i].offset != TC_OFFSET_END &&
+					writes[i].offset != TC_OFFSET_CUR) {
+					dataCache->put(writes[i].file.path,
+							writes[i].offset,
+							writes[i].length,
+							writes[i].data);
+				}
+				else if (writes[i].offset == TC_OFFSET_END){
+					dataCache->put(writes[i].file.path,
+							attrs[i].size - writes[i].length,
+							writes[i].length,
+							writes[i].data);
+				}
+				else if (writes[i].offset == TC_OFFSET_CUR) {
+					//Can this be handled?
+				}
 			}
 		}
 	}
