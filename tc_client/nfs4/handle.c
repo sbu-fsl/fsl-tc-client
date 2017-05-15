@@ -285,6 +285,8 @@ static struct fs_obj_handle *fs_alloc_handle(struct fsal_export *exp,
 					       const nfs_fh4 *fh,
 					       const struct attrlist *attr);
 
+void fattr4_to_tc_attrs(const fattr4 *attr4, struct tc_attrs *tca);
+
 static int nfsstat4_to_errno(nfsstat4 nfsstat)
 {
 	if (nfsstat <= NFS4ERR_MLINK) { /* 31 */
