@@ -24,6 +24,8 @@
 using namespace std;
 using namespace Poco;
 
+#define MD_REFRESH_TIME 5
+
 class DirEntry {
 public:
 	string path;
@@ -33,6 +35,7 @@ public:
 	bool has_listdir;
 	unordered_map<string, SharedPtr<DirEntry>> children;
 	pthread_rwlock_t attrLock;
+	time_t timestamp;
 
 	DirEntry(string p, void *f = nullptr, struct stat *a = nullptr) : path(p) {
 #ifdef _DEBUG
@@ -40,6 +43,7 @@ public:
 #endif
  		pthread_rwlock_init(&attrLock, NULL);
 		has_listdir = false;
+		timestamp = time(NULL);
 	}
 
 	~DirEntry() {

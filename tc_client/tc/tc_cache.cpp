@@ -201,7 +201,7 @@ tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 			}
 			//Update metadata cache
 			tc_attrs2stat(&attrs[i], &(ptrElem)->attrs);
-
+			ptrElem->timestamp = time(NULL);
 			pthread_rwlock_unlock(&((ptrElem)->attrLock));
 		}
 		else {
@@ -453,7 +453,16 @@ tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn)
 	tcres = nfs4_readv(final_iovec, miss_count, istxn, attrs);
 	if (tc_okay(tcres)) {
 		for (int i = 0; i < miss_count; i++) {
-			if (final_iovec[i].file.type == TC_FILE_PATH) {
+			if (final_iovec[i].file.type == TC_FILE_PATH || 
+				final_iovec[i].file.type == TC_FILE_DESCRIPTOR) {
+				if (final_iovec[i].file.type == TC_FILE_DESCRIPTOR) {
+					unordered_map<int, string>::iterator it =
+						fd_to_path_map->find(final_iovec[i].file.fd);
+					if (it != fd_to_path_map->end())
+						final_iovec[i].file.path = it->second.c_str();
+					else
+						continue;
+				}
 				DirEntry de(final_iovec[i].file.path);
 				tc_attrs2stat(&attrs[i], &de.attrs);
 				de.fh = NULL;
@@ -655,7 +664,7 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 		}
 		SharedPtr<DirEntry> ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
-		if (!ptrElem.isNull()) {
+		if (!ptrElem.isNull() && (time(NULL) - ptrElem->timestamp <= MD_REFRESH_TIME)) {
 			/* Cache hit */
 			pthread_rwlock_rdlock(&((ptrElem)->attrLock));
 
@@ -786,7 +795,7 @@ void setattr_update_pageCache(struct tc_attrs *sAttrs, int count)
 			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
 
 			tc_attrs2stat(cur_sAttr, &(ptrElem)->attrs);
-			// Do we need to update FH??
+			ptrElem->timestamp = time(NULL);
 
 			pthread_rwlock_unlock(&((ptrElem)->attrLock));
 		}
@@ -877,7 +886,8 @@ const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int coun
 	while (i < count) {
 		curDir = dirs[i];
 		curElem = mdCache->get(curDir);
-		if (curElem.isNull() || !(curElem)->has_listdir) {
+		if (curElem.isNull() || !(curElem)->has_listdir || 
+				(time(NULL) - curElem->timestamp > MD_REFRESH_TIME)) {
 			(*miss_count)++;
 			finalDirs[j++] = curDir;
 		} else {
