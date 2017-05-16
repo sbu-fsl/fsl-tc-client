@@ -22,8 +22,7 @@ int get_miss_count() {
 
 void init_page_cache(uint64_t size, uint64_t time)
 {
-	mdCache = new TC_MetaDataCache<string, DirEntry>(
-	    size, time);
+	mdCache = new TC_MetaDataCache<string, DirEntry>(size, time);
 }
 
 void init_data_cache(uint64_t size, uint64_t time)
@@ -43,7 +42,7 @@ void deinit_data_cache()
 }
 
 void nfs_restore_FhToFilename(struct tc_attrs *attrs, int count,
-				  tc_file *saved_tcfs);
+			      tc_file *saved_tcfs);
 
 struct file_handle *copyFH(const struct file_handle *old)
 {
@@ -182,6 +181,16 @@ void nfs_restoreIovec_FhToFilename(struct tc_iovec *iovs, int count,
 	free(saved_tcfs);
 }
 
+/**
+ * Validate memtadata cache by comparing the timestamp of cached entry with the
+ * latest timestamp from the server side.
+ * Return whether the metadata cache entry is valid.
+ */
+static bool validate_metacache(DirEntry *dentry, const struct tc_attrs *attrs)
+{
+	return timespec_diff(&dentry->attrs.st_ctim, &attrs->ctime) == 0;
+}
+
 tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 {
 	struct tc_attrs *attrs;
@@ -194,8 +203,7 @@ tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 		SharedPtr<DirEntry> ptrElem = mdCache->get(paths[i]);
 		if (!ptrElem.isNull()) {
 			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
-			if(ptrElem->attrs.st_ctim.tv_sec != attrs[i].ctime.tv_sec ||
-				ptrElem->attrs.st_ctim.tv_nsec != attrs[i].ctime.tv_nsec) {
+			if (!validate_metacache(ptrElem.get(), &attrs[i])) {
 				//Data cache contains stale data
 				dataCache->remove(paths[i]);
 			}
@@ -239,7 +247,7 @@ void fill_newIovec(struct tc_iovec *fiovec, struct tc_iovec *siovec)
 }
 
 struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
-                                         int *miss_count, bool *hitArray)
+				 int *miss_count, bool *hitArray)
 {
 	struct tc_iovec *final_iovec = NULL;
 	struct tc_iovec *cur_siovec = NULL;
@@ -280,8 +288,9 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 			else
 				continue;
 		}
-		int hit = dataCache->get(cur_siovec->file.path, cur_siovec->offset,
-					cur_siovec->length, cur_siovec->data);
+		int hit =
+		    dataCache->get(cur_siovec->file.path, cur_siovec->offset,
+				   cur_siovec->length, cur_siovec->data);
 		if (hit == 0) {
 			hits[i] = 0;
 			continue;
@@ -490,7 +499,8 @@ tc_res check_and_remove(struct tc_iovec *writes, int write_count)
 	int hit;
 	int hit_count = 0;
 	int *hits = (int *) malloc(write_count * sizeof(int));
-	struct tc_attrs *attrs = (tc_attrs *)malloc(write_count*sizeof(struct tc_attrs));
+	struct tc_attrs *attrs =
+	    (tc_attrs *)malloc(write_count * sizeof(struct tc_attrs));
 	tc_res tcres = { .index = hit_count, .err_no = 0 };
 	if (attrs == NULL) {
 		free(hits);
@@ -504,8 +514,7 @@ tc_res check_and_remove(struct tc_iovec *writes, int write_count)
 	for (int i = 0; i < write_count; i++) {
 		//Read from md cache
 		if (writes[i].file.type != TC_FILE_DESCRIPTOR &&
-				writes[i].file.type != TC_FILE_PATH)
-		{
+		    writes[i].file.type != TC_FILE_PATH) {
 			hits[i] = 0;
 			continue;
 		}
@@ -521,15 +530,16 @@ tc_res check_and_remove(struct tc_iovec *writes, int write_count)
 			}
 		}
 		ptrElem[i] = mdCache->get(writes[i].file.path);
-		if (!ptrElem[i].isNull() && dataCache->isCached(writes[i].file.path)) {	
+		if (!ptrElem[i].isNull() &&
+		    dataCache->isCached(writes[i].file.path)) {
 			//If present in both add to getattrs
 			hits[i] = 1;
 			attrs[hit_count].file = writes[i].file;
 			attrs[hit_count].masks = TC_ATTRS_MASK_ALL;
 			hit_count++;
-		}
-		else
+		} else {
 			hits[i] = 0;
+		}
 	}
 	if (hit_count != 0) {
 		tcres = { .index = hit_count, .err_no = 0 };
@@ -544,8 +554,7 @@ tc_res check_and_remove(struct tc_iovec *writes, int write_count)
 		for (int k = 0; k < write_count; k++) {
 			if (hits[k] == 0)
 				continue;
-			if (ptrElem[l]->attrs.st_ctim.tv_sec != attrs[l].ctime.tv_sec ||
-				ptrElem[l]->attrs.st_ctim.tv_nsec != attrs[l].ctime.tv_nsec) {
+			if (!validate_metacache(ptrElem[l].get(), &attrs[l])) {
 				dataCache->remove(writes[k].file.path);
 			}
 		}
@@ -557,8 +566,7 @@ tc_res check_and_remove(struct tc_iovec *writes, int write_count)
 	return tcres;
 }
 
-tc_res nfs_writev(struct tc_iovec *writes, int write_count,
-			bool is_transaction)
+tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
 {
 	tc_res tcres = { .index = write_count, .err_no = 0 };
 	tc_file *saved_tcfs = NULL;
@@ -629,7 +637,7 @@ void fill_newAttr(struct tc_attrs *fAttrs, struct tc_attrs *sAttrs)
 	memcpy((void *)&fAttrs->file, (void *)&sAttrs->file, sizeof(tc_file));
 }
 
-struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
+struct tc_attrs *getattr_check_pagecache(struct tc_attrs *sAttrs, int count,
 					 int *miss_count, bool *hitArray)
 {
 	struct tc_attrs *final_attrs = NULL;
@@ -650,11 +658,14 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 			cur_fAttr = final_attrs + *miss_count;
 			fill_newAttr(cur_fAttr, cur_sAttr);
 			cur_fAttr->masks = TC_MASK_INIT_ALL;
-			if (hitArray[i-1] == true &&
-				cur_fAttr->file.type == TC_FILE_CURRENT) {
-				char *new_path = (char *) malloc(strlen(sAttrs[i-1].file.path) +
-						strlen(sAttrs[i].file.path) + 2);
-				sprintf(new_path, "%s/%s", sAttrs[i-1].file.path, sAttrs[i].file.path);
+			if (hitArray[i - 1] == true &&
+			    cur_fAttr->file.type == TC_FILE_CURRENT) {
+				char *new_path = (char *)malloc(
+				    strlen(sAttrs[i - 1].file.path) +
+				    strlen(sAttrs[i].file.path) + 2);
+				sprintf(new_path, "%s/%s",
+					sAttrs[i - 1].file.path,
+					sAttrs[i].file.path);
 				cur_fAttr->file.path = new_path;
 				cur_fAttr->file.type = TC_FILE_PATH;
 			}
@@ -664,7 +675,8 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 		}
 		SharedPtr<DirEntry> ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
-		if (!ptrElem.isNull() && (time(NULL) - ptrElem->timestamp <= MD_REFRESH_TIME)) {
+		if (!ptrElem.isNull() &&
+		    (time(NULL) - ptrElem->timestamp <= MD_REFRESH_TIME)) {
 			/* Cache hit */
 			pthread_rwlock_rdlock(&((ptrElem)->attrLock));
 
@@ -687,7 +699,7 @@ struct tc_attrs *getattr_check_pageCache(struct tc_attrs *sAttrs, int count,
 	return final_attrs;
 }
 
-void getattr_update_pageCache(struct tc_attrs *sAttrs,
+void getattr_update_pagecache(struct tc_attrs *sAttrs,
 			      struct tc_attrs *final_attrs, int count,
 			      bool *hitArray)
 {
@@ -742,7 +754,7 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 
 	std::fill_n(hitArray, count, false);
 
-	final_attrs = getattr_check_pageCache(attrs, count, &miss_count, hitArray);
+	final_attrs = getattr_check_pagecache(attrs, count, &miss_count, hitArray);
 	if (final_attrs == NULL)
 		goto mem_failure2;
 
@@ -755,7 +767,7 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	tcres = nfs4_lgetattrsv(final_attrs, miss_count, is_transaction);
 
 	if (tc_okay(tcres)) {
-		getattr_update_pageCache(attrs, final_attrs, count, hitArray);
+		getattr_update_pagecache(attrs, final_attrs, count, hitArray);
 	}
 
 exit:
@@ -777,7 +789,7 @@ mem_failure2:
 	return tc_failure(0, ENOMEM);
 }
 
-void setattr_update_pageCache(struct tc_attrs *sAttrs, int count)
+static void setattr_update_pagecache(struct tc_attrs *sAttrs, int count)
 {
 	int i = 0;
 	struct tc_attrs *cur_sAttr = NULL;
@@ -817,7 +829,7 @@ tc_res nfs_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	tcres = nfs4_lsetattrsv(attrs, count, is_transaction);
 	nfs_restoreAttr_FhToFilename(attrs, count, saved_tcfs);
 	if (tc_okay(tcres)) {
-		setattr_update_pageCache(attrs, count);
+		setattr_update_pagecache(attrs, count);
 	}
 	
 	return tcres;
@@ -831,7 +843,7 @@ struct listDirPxy
 };
 
 static bool poco_direntry(const struct tc_attrs *dentry, const char *dir,
-			     void *cbarg)
+			  void *cbarg)
 {
 	struct listDirPxy *temp = (struct listDirPxy *)cbarg;
 	struct tc_attrs finalDentry;
@@ -869,8 +881,8 @@ static bool poco_direntry(const struct tc_attrs *dentry, const char *dir,
 	return true;
 }
 
-const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int count,
-			       int *miss_count)
+static const char **listdir_check_pagecache(bool *hitArray, const char **dirs,
+					    int count, int *miss_count)
 {
 	const char **finalDirs;
 	int i = 0;
@@ -886,8 +898,8 @@ const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int coun
 	while (i < count) {
 		curDir = dirs[i];
 		curElem = mdCache->get(curDir);
-		if (curElem.isNull() || !(curElem)->has_listdir || 
-				(time(NULL) - curElem->timestamp > MD_REFRESH_TIME)) {
+		if (curElem.isNull() || !(curElem)->has_listdir ||
+		    (time(NULL) - curElem->timestamp > MD_REFRESH_TIME)) {
 			(*miss_count)++;
 			finalDirs[j++] = curDir;
 		} else {
@@ -900,8 +912,9 @@ const char **listdir_check_pagecache(bool *hitArray, const char **dirs, int coun
 	return finalDirs;
 }
 
-void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem, tc_listdirv_cb cb,
-		     void *cbarg, struct tc_attrs_masks masks)
+void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem,
+		     tc_listdirv_cb cb, void *cbarg,
+		     struct tc_attrs_masks masks)
 {
 	SharedPtr<DirEntry> fileEntry = NULL;
 	struct tc_attrs finalDentry;
@@ -917,8 +930,8 @@ void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem, tc_listdi
 }
 
 void reply_from_pagecache(const char **dirs, int count, bool *hitArray,
-			  tc_listdirv_cb cb,
-			  void *cbarg, struct tc_attrs_masks masks)
+			  tc_listdirv_cb cb, void *cbarg,
+			  struct tc_attrs_masks masks)
 {
 	int i = 0;
 	SharedPtr<DirEntry> curElem;
