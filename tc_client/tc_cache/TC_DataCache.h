@@ -11,10 +11,11 @@
 
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unordered_set>
-#include "TC_AbstractCache.h"
+#include "Poco/AbstractCache.h"
 #include "Poco/StrategyCollection.h"
 #include "Poco/SharedPtr.h"
 #include "Poco/ExpireStrategy.h"
@@ -34,7 +35,7 @@ using namespace Poco;
 class DataBlock;
 
 // FIXME: use FastMutex or not?
-typedef TC_AbstractCache<std::string, DataBlock,
+typedef AbstractCache<std::string, DataBlock,
 			 StrategyCollection<std::string, DataBlock>, FastMutex,
 			 FastMutex> DataCacheBase;
 
@@ -222,7 +223,7 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 
 void TC_DataCache::remove(string path)
 {
-	unordered_map<string, unordered_set<size_t> >::iterator it;
+	std::unordered_map<string, unordered_set<size_t> >::iterator it;
 	string key;
 
 	it = cached_blocks.find(path);
@@ -241,7 +242,7 @@ void TC_DataCache::remove(string path)
 
 void TC_DataCache::remove(string path, size_t offset, size_t length)
 {
-	unordered_map<string, unordered_set<size_t> >::iterator it;
+	std::unordered_map<string, unordered_set<size_t> >::iterator it;
 	string key;
 
 	it = cached_blocks.find(path);

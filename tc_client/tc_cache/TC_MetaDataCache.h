@@ -12,9 +12,10 @@
 
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "TC_AbstractCache.h"
+#include "Poco/AbstractCache.h"
 #include "Poco/StrategyCollection.h"
 #include "Poco/SharedPtr.h"
 #include "Poco/LRUStrategy.h"
@@ -33,7 +34,7 @@ public:
 	struct stat attrs;
 	SharedPtr<DirEntry> parent;
 	bool has_listdir;
-	unordered_map<string, SharedPtr<DirEntry>> children;
+	std::unordered_map<string, SharedPtr<DirEntry>> children;
 	pthread_rwlock_t attrLock;
 	time_t timestamp;
 
@@ -69,14 +70,14 @@ template <
 	class TMutex = FastMutex, 
 	class TEventMutex = FastMutex
 >
-class TC_MetaDataCache: public TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>
+class TC_MetaDataCache: public AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>
 	/// An TC_MetaDataCache combines LRU caching and time based expire caching.
 	/// It cache entries for a fixed time period (per default 10 minutes)
 	/// but also limits the size of the cache (per default: 1024).
 {
 public:
 	TC_MetaDataCache(long cacheSize = 1024, Timestamp::TimeDiff expire = 600000): 
-		TC_AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>(StrategyCollection<TKey, TValue>())
+		AbstractCache<TKey, TValue, StrategyCollection<TKey, TValue>, TMutex, TEventMutex>(StrategyCollection<TKey, TValue>())
 	{
 #ifdef _DEBUG
 		std::cout << "TC_MetaDataCache - Constructor" << std::endl;
