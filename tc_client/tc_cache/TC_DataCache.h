@@ -17,8 +17,8 @@
 #include "TC_AbstractCache.h"
 #include "Poco/StrategyCollection.h"
 #include "Poco/SharedPtr.h"
-#include "TC_ExpireStrategy.h"
-#include "TC_LRUStrategy.h"
+#include "Poco/ExpireStrategy.h"
+#include "Poco/LRUStrategy.h"
 #include "TC_Debug.h"
 //remove this
 using namespace Poco;
@@ -49,9 +49,9 @@ public:
                 std::cout << "TC_DataCache - Constructor" << std::endl;
 #endif
 		_strategy.pushBack(
-		    new TC_LRUStrategy<std::string, DataBlock>(cacheSize));
+		    new LRUStrategy<std::string, DataBlock>(cacheSize));
 		_strategy.pushBack(
-		    new TC_ExpireStrategy<std::string, DataBlock>(expire));
+		    new ExpireStrategy<std::string, DataBlock>(expire));
 	}
 
         ~TC_DataCache()
@@ -84,7 +84,7 @@ public:
 
 private:
         TC_DataCache(const TC_DataCache& aCache);
-        TC_DataCache& operator = (const TC_DataCache& aCache);
+	TC_DataCache &operator=(const TC_DataCache &aCache);
 };
 
 class DataBlock {

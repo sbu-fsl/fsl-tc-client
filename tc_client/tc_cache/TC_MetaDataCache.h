@@ -17,8 +17,8 @@
 #include "TC_AbstractCache.h"
 #include "Poco/StrategyCollection.h"
 #include "Poco/SharedPtr.h"
-#include "TC_ExpireStrategy.h"
-#include "TC_LRUStrategy.h"
+#include "Poco/LRUStrategy.h"
+#include "Poco/ExpireStrategy.h"
 #include "TC_Debug.h"
 
 using namespace std;
@@ -81,8 +81,8 @@ public:
 #ifdef _DEBUG
 		std::cout << "TC_MetaDataCache - Constructor" << std::endl;
 #endif
-		this->_strategy.pushBack(new TC_LRUStrategy<TKey, TValue>(cacheSize));
-		this->_strategy.pushBack(new TC_ExpireStrategy<TKey, TValue>(expire));
+		this->_strategy.pushBack(new Poco::LRUStrategy<TKey, TValue>(cacheSize));
+		this->_strategy.pushBack(new Poco::ExpireStrategy<TKey, TValue>(expire));
 	}
 
 	~TC_MetaDataCache()
