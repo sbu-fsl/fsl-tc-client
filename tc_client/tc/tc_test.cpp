@@ -49,32 +49,8 @@
 #include "path_utils.h"
 #include "log.h"
 
-#define TCTEST_ERR(fmt, args...) LogCrit(COMPONENT_TC_TEST, fmt, ##args)
-#define TCTEST_WARN(fmt, args...) LogWarn(COMPONENT_TC_TEST, fmt, ##args)
-#define TCTEST_INFO(fmt, args...) LogInfo(COMPONENT_TC_TEST, fmt, ##args)
-#define TCTEST_DEBUG(fmt, args...) LogDebug(COMPONENT_TC_TEST, fmt, ##args)
-
-#define EXPECT_OK(x)                                                           \
-	EXPECT_TRUE(tc_okay(x)) << "Failed at " << x.index << ": "             \
-				<< strerror(x.err_no)
-#define EXPECT_NOTNULL(x) EXPECT_TRUE(x != NULL) << #x << " is NULL"
-
 #define new_auto_path(fmt, args...)                                            \
 	tc_format_path((char *)alloca(PATH_MAX), fmt, ##args)
-
-namespace
-{
-void DoParallel(int nthread, std::function<void(int)> worker)
-{
-	std::list<std::thread> threads;
-	for (int i = 0; i < nthread; ++i) {
-		threads.emplace_back(worker, i);
-	}
-	for (auto it = threads.begin(); it != threads.end(); ++it) {
-		it->join();
-	}
-}
-} // anonymous namespace
 
 /**
  * Ensure files or directories do not exist before test.
@@ -100,8 +76,6 @@ static tc_iovec *build_iovec(tc_file *files, int count, int offset)
 
 	return iov;
 }
-
-static char *getRandomBytes(int N);
 
 static void tc_touchv(const char **paths, int count, int filesize)
 {
@@ -929,39 +903,6 @@ TYPED_TEST_P(TcTest, SessionTimeout)
 	EXPECT_OK(tc_readv(&iov, 1, false));
 
 	free(data1);
-}
-
-static char *getRandomBytes(int N)
-{
-	int fd;
-	char *buf;
-	ssize_t ret;
-	ssize_t n;
-
-	buf = (char *)malloc(N);
-	if (!buf) {
-		return NULL;
-	}
-
-	fd = open("/dev/urandom", O_RDONLY);
-	if (fd < 0) {
-		free(buf);
-		return NULL;
-	}
-
-	n = 0;
-	while (n < N) {
-		ret = read(fd, buf + n, MIN(16384, N - n));
-		if (ret < 0) {
-			free(buf);
-			close(fd);
-			return NULL;
-		}
-		n += ret;
-	}
-
-	close(fd);
-	return buf;
 }
 
 static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)

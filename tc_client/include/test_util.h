@@ -20,8 +20,25 @@
 #ifndef __TC_TC_TEST_UTIL_H__
 #define __TC_TC_TEST_UTIL_H__
 
+#include <thread>
+#include <functional>
+
 constexpr size_t operator"" _KB(unsigned long long a) { return a << 10; }
 constexpr size_t operator"" _MB(unsigned long long a) { return a << 20; }
 constexpr size_t operator"" _GB(unsigned long long a) { return a << 30; }
+
+#define TCTEST_ERR(fmt, args...) LogCrit(COMPONENT_TC_TEST, fmt, ##args)
+#define TCTEST_WARN(fmt, args...) LogWarn(COMPONENT_TC_TEST, fmt, ##args)
+#define TCTEST_INFO(fmt, args...) LogInfo(COMPONENT_TC_TEST, fmt, ##args)
+#define TCTEST_DEBUG(fmt, args...) LogDebug(COMPONENT_TC_TEST, fmt, ##args)
+
+#define EXPECT_OK(x)                                                           \
+	EXPECT_TRUE(tc_okay(x)) << "Failed at " << x.index << ": "             \
+				<< strerror(x.err_no)
+#define EXPECT_NOTNULL(x) EXPECT_TRUE(x != NULL) << #x << " is NULL"
+
+char *getRandomBytes(int N);
+
+void DoParallel(int nthread, std::function<void(int)> worker);
 
 #endif  // __TC_TC_TEST_UTIL_H__

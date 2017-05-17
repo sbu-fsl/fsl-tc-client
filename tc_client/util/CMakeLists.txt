@@ -15,6 +15,7 @@ set(util_SRC
   bench.cpp
   fileutil.cpp
   iovec_utils.cpp
+  test_util.cpp
 )
 
 include_directories(
