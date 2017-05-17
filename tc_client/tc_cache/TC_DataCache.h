@@ -26,6 +26,8 @@ using namespace Poco;
 
 #define CACHE_BLOCK_SIZE 512
 
+#define CACHE_EXPIRE_SECONDS (60 * 1000000)
+
 /*template <
         class string,
         class DataBlock,
@@ -41,9 +43,10 @@ typedef AbstractCache<std::string, DataBlock,
 
 class TC_DataCache : public DataCacheBase
 {
-	std::unordered_map<std::string, unordered_set<size_t>> cached_blocks;
+	std::unordered_map<std::string, std::unordered_set<size_t>> cached_blocks;
 public:
-  TC_DataCache(long cacheSize = 1024, Timestamp::TimeDiff expire = 600000)
+  TC_DataCache(long cacheSize = 1024,
+	       Timestamp::TimeDiff expire = CACHE_EXPIRE_SECONDS)
       : DataCacheBase(StrategyCollection<std::string, DataBlock>())
 	{
 #ifdef _DEBUG
@@ -69,8 +72,9 @@ public:
 
         inline void RemoveBlockFromMap(std::string path, size_t block_no)
         {
-                if (cached_blocks.find(path) != cached_blocks.end())
-                        cached_blocks[path].erase(block_no);
+		auto it = cached_blocks.find(path);
+                if (it != cached_blocks.end())
+                        it->second.erase(block_no);
         }
 	bool isCached(std::string path)
 	{
@@ -141,7 +145,7 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 		printf("Not alligned with cache block");
 #endif
 		offset = offset - delta_offset;
-		string key = path + to_string(offset / CACHE_BLOCK_SIZE);
+		std::string key = path + std::to_string(offset / CACHE_BLOCK_SIZE);
 		SharedPtr<DataBlock> ptrElem = DataCacheBase::get(key);
 		if (!ptrElem.isNull()) {
 			memcpy(ptrElem->data + delta_offset, data,
@@ -171,7 +175,7 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 		i += CACHE_BLOCK_SIZE;
 	}
 	while (write_len < length) {
-		string key = path + to_string((offset + i) / CACHE_BLOCK_SIZE);
+		std::string key = path + std::to_string((offset + i) / CACHE_BLOCK_SIZE);
 		if (length - write_len < CACHE_BLOCK_SIZE) {
 			SharedPtr<DataBlock> ptrElem = DataCacheBase::get(key);
 			if (!ptrElem.isNull()) {
@@ -221,15 +225,15 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 	}
 }
 
-void TC_DataCache::remove(string path)
+void TC_DataCache::remove(std::string path)
 {
-	std::unordered_map<string, unordered_set<size_t> >::iterator it;
-	string key;
+	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
+	std::string key;
 
 	it = cached_blocks.find(path);
 	if (it != cached_blocks.end()) {
 		for (const auto &block_no : it->second) {
-			key = path + to_string(block_no);
+			key = path + std::to_string(block_no);
 			DataCacheBase::remove(key);
 #ifdef _DEBUG
 			cout << "Removed " << key << std::endl;
@@ -240,10 +244,10 @@ void TC_DataCache::remove(string path)
 	return;
 }
 
-void TC_DataCache::remove(string path, size_t offset, size_t length)
+void TC_DataCache::remove(std::string path, size_t offset, size_t length)
 {
-	std::unordered_map<string, unordered_set<size_t> >::iterator it;
-	string key;
+	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
+	std::string key;
 
 	it = cached_blocks.find(path);
 	if (it != cached_blocks.end()) {
@@ -251,7 +255,7 @@ void TC_DataCache::remove(string path, size_t offset, size_t length)
 			if (block_no < offset / CACHE_BLOCK_SIZE ||
 			    block_no >= (length + offset) / CACHE_BLOCK_SIZE)
 				continue;
-			key = path + to_string(block_no);
+			key = path + std::to_string(block_no);
 			DataCacheBase::remove(key);
 			RemoveBlockFromMap(path, block_no);
 #ifdef _DEBUG
@@ -265,7 +269,7 @@ void TC_DataCache::remove(string path, size_t offset, size_t length)
 	return;
 }
 
-int TC_DataCache::get(const string path, size_t offset, size_t length,
+int TC_DataCache::get(const std::string path, size_t offset, size_t length,
 		      char *buf)
 {
 	size_t i = 0;
@@ -278,7 +282,7 @@ int TC_DataCache::get(const string path, size_t offset, size_t length,
 	while (true) {
 		if (offset % CACHE_BLOCK_SIZE != 0)
 			offset = offset - delta_offset;
-		string key = path + to_string((offset + i) / CACHE_BLOCK_SIZE);
+		std::string key = path + std::to_string((offset + i) / CACHE_BLOCK_SIZE);
 		SharedPtr<DataBlock> ptrElem = DataCacheBase::get(key);
 		if (ptrElem.isNull() || ptrElem->start_idx != 0) {
 #ifdef _DEBUG

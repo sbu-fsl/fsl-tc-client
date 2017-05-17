@@ -78,6 +78,7 @@ function (add_unittest TestName LibName)
 endfunction (add_unittest)
 
 add_unittest(tc_test tc_impl)
+add_unittest(tc_datacache_test tc_impl)
 
 find_package(gflags REQUIRED)
 add_executable(tc_bench tc_bench.cpp)
