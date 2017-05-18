@@ -48,7 +48,7 @@ public:
   zipf_distribution(result_type num, input_type shift, input_type exp,
 		    result_type seed)
     : num_(num), shift_(shift), exp_(exp),
-      dist_(make_dist(num, shift, exp)), eng_(seed) {
+	eng_(seed), dist_(make_dist(num, shift, exp)) {
         assert(exp > 0);
   }
 

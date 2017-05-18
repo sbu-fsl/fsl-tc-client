@@ -39,6 +39,7 @@
 #include <pthread.h>
 #include <signal.h>		/* for sigaction */
 #include <errno.h>
+#include <libgen.h>		/* used for 'dirname' */
 #include "../nfs4/nfs4_util.h"
 
 static char exe_path[PATH_MAX];
@@ -52,15 +53,16 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	tc_res res;
-	char data[32];
 	struct tc_attrs attrs1;
 	struct tc_attrs attrs2;
-	int i;
 
 	/* Locate and use the default config file in the repo.  Before running
 	 * this example, please update the config file to a correct NFS server.
 	 */
-	readlink("/proc/self/exe", exe_path, PATH_MAX);
+	if (readlink("/proc/self/exe", exe_path, PATH_MAX) < 0) {
+		perror("readlink");
+		exit(EXIT_FAILURE);
+	}
 	snprintf(tc_config_path, PATH_MAX,
 		 "%s/../../../config/tc.ganesha.conf", dirname(exe_path));
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
@@ -106,7 +108,7 @@ int main(int argc, char *argv[])
 	if (tc_okay(res)) {
 		fprintf(stderr,
 			"Successfully sent getattr for %s "
-			"size: %u\n", TC_TEST_NFS_FILE, attrs1.size);
+			"size: %zu\n", TC_TEST_NFS_FILE, attrs1.size);
 	} else {
 		fprintf(stderr,
 			"Failed to getattr file \"%s\" at the %d-th operation "
@@ -126,7 +128,7 @@ int main(int argc, char *argv[])
 	if (tc_okay(res)) {
 		fprintf(stderr,
 			"Successfully sent setattr for %s "
-			"size: %u\n", TC_TEST_NFS_FILE, attrs1.size);
+			"size: %zu\n", TC_TEST_NFS_FILE, attrs1.size);
 	} else {
 		fprintf(stderr,
 			"Failed to getattr file \"%s\" at the %d-th operation "
@@ -148,7 +150,7 @@ int main(int argc, char *argv[])
 	if (tc_okay(res)) {
 		fprintf(stderr,
 			"Successfully sent getattr for %s "
-			"size: %u\n", TC_TEST_NFS_FILE, attrs2.size);
+			"size: %zu\n", TC_TEST_NFS_FILE, attrs2.size);
 	} else {
 		fprintf(stderr,
 			"Failed to getattr file \"%s\" at the %d-th operation "

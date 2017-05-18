@@ -327,7 +327,7 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 					attrs[l].ctime.tv_nsec) {
 					hits[k] = 0;
 				}
-				else if (ptrElem->attrs.st_size <= cur_siovec->offset + cur_siovec->length){
+				else if ((size_t)ptrElem->attrs.st_size <= cur_siovec->offset + cur_siovec->length){
 					cur_siovec->is_eof = true;
 				}
 				l++;
@@ -345,6 +345,7 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 			cur_fiovec = final_iovec + *miss_count;
 			fill_newIovec(cur_fiovec, cur_siovec);
 			if (i > 0 && hitArray[i-1] == true &&
+			// is this logic correct? , when is new_path freed
 				cur_fiovec->file.type == TC_FILE_CURRENT) {
 				char *new_path = (char *) malloc(strlen(siovec[i-1].file.path) +
 						strlen(siovec[i].file.path) + 2);
@@ -362,6 +363,7 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 		}
 		else if (hits[i] > 0) {
 			/*Handle partial hit*/
+			// requires miss_count to be initialized by user
 			cur_fiovec = final_iovec + *miss_count;
 			fill_newIovec(cur_fiovec, cur_siovec);
 			cur_fiovec->offset = hits[i];
@@ -391,8 +393,6 @@ void update_dataCache(struct tc_iovec *siovec,
         int j = 0;
         struct tc_iovec *cur_siovec = NULL;
         struct tc_iovec *cur_fiovec = NULL;
-	int t_len = 0;
-	int t_offset = 0;
 	unordered_map<int, string>::iterator it;
 
         while (i < count) {
@@ -484,19 +484,19 @@ tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn)
 	nfs_restoreIovec_FhToFilename(iovs, count, saved_tcfs);
 
 exit:
-	delete hitArray;
+	delete[] hitArray;
+	// TODO fix new_path memory leak
 	free(final_iovec);
 	free(attrs);
 	return tcres;
 
 mem_failure2:
-	delete hitArray;
+	delete[] hitArray;
 	return tc_failure(0, ENOMEM);;
 }
 
 tc_res check_and_remove(struct tc_iovec *writes, int write_count)
 {
-	int hit;
 	int hit_count = 0;
 	int *hits = (int *) malloc(write_count * sizeof(int));
 	struct tc_attrs *attrs =
@@ -655,9 +655,11 @@ struct tc_attrs *getattr_check_pagecache(struct tc_attrs *sAttrs, int count,
 		cur_sAttr = sAttrs + i;
 		if (cur_sAttr->file.type != TC_FILE_PATH) {
 			/* fill final_array[miss_count] */
+			// same comment as for data cache
 			cur_fAttr = final_attrs + *miss_count;
 			fill_newAttr(cur_fAttr, cur_sAttr);
 			cur_fAttr->masks = TC_MASK_INIT_ALL;
+			// same comment as for data cache
 			if (hitArray[i - 1] == true &&
 			    cur_fAttr->file.type == TC_FILE_CURRENT) {
 				char *new_path = (char *)malloc(
@@ -742,7 +744,6 @@ void getattr_update_pagecache(struct tc_attrs *sAttrs,
 tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 {
 	tc_res tcres = { .index = count, .err_no = 0 };
-	tc_file *saved_tcfs = NULL;
 	struct tc_attrs *final_attrs = NULL;
 	int miss_count = 0;
 	bool *hitArray = NULL;
@@ -771,6 +772,7 @@ tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	}
 
 exit:
+	// this should be done above too
 	for (int i = 0; i < count; i++) {
 		if (hitArray[i] == false) {
 			if (attrs[i].file.type == TC_FILE_CURRENT &&
@@ -779,13 +781,13 @@ exit:
 			j++;
 		}
 	}
-	delete hitArray;
+	delete[] hitArray;
 	free(final_attrs);
 
 	return tcres;
 
 mem_failure2:
-	delete hitArray;
+	delete[] hitArray;
 	return tc_failure(0, ENOMEM);
 }
 
@@ -806,6 +808,7 @@ static void setattr_update_pagecache(struct tc_attrs *sAttrs, int count)
 			/* Update cache */
 			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
 
+			// why not use cache's update method
 			tc_attrs2stat(cur_sAttr, &(ptrElem)->attrs);
 			ptrElem->timestamp = time(NULL);
 
@@ -957,8 +960,9 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 {
 	tc_res tcres = { .index = count, .err_no = 0 };
 	struct listDirPxy *temp = NULL;
+	// TODO fix memory leak
 	const char **finalDirs;
-	int miss_count;
+	int miss_count = 0;
 	bool *hitArray = NULL;
 	temp = new listDirPxy;
 	if (temp == NULL)
@@ -984,8 +988,8 @@ tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 
 	reply_from_pagecache(dirs, count, hitArray, cb, cbarg, masks);
 
-dir_failure:
-	delete hitArray;
+//dir_failure:
+	delete[] hitArray;
 bool_failure:
 	delete temp;
 failure:

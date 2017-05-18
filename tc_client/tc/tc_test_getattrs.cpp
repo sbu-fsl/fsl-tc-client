@@ -77,31 +77,6 @@ static vector<const char *> NewPaths(const char *format, int n, int l)
 	return paths;
 }
 
-static void FreePaths(vector<const char *> *paths)
-{
-	for (auto p : *paths)
-		free((char *)p);
-}
-
-static vector<tc_iovec> NewIovecs(tc_file *files, int n, size_t offset = 0)
-{
-	vector<tc_iovec> iovs(n);
-	for (int i = 0; i < n; ++i) {
-		iovs[i].file = files[i];
-		iovs[i].offset = offset;
-		iovs[i].length = BUFSIZE;
-		iovs[i].data = (char *)malloc(PATH_MAX);
-		iovs[i].is_write_stable = true;
-	}
-	return iovs;
-}
-
-static void FreeIovecs(vector<tc_iovec> *iovs)
-{
-	for (auto iov : *iovs)
-		free((char *)iov.data);
-}
-
 static vector<tc_attrs> NewTcAttrs(size_t nfiles, int nloop, tc_attrs *values = nullptr)
 {
 	vector<const char *> paths = NewPaths("tc_cache/file-%d", nfiles, nloop);
@@ -140,27 +115,6 @@ static inline struct timespec totimespec(long sec, long nsec)
 		.tv_nsec = nsec,
 	};
 	return tm;
-}
-
-static tc_attrs GetAttrValuesToSet(int nattrs)
-{
-	tc_attrs attrs;
-
-	attrs.masks = TC_ATTRS_MASK_NONE;
-	if (nattrs >= 1) {
-		tc_attrs_set_mode(&attrs, S_IRUSR | S_IRGRP | S_IROTH);
-	}
-	if (nattrs >= 2) {
-		tc_attrs_set_uid(&attrs, 0);
-		tc_attrs_set_gid(&attrs, 0);
-	}
-	if (nattrs >= 3) {
-		tc_attrs_set_atime(&attrs, totimespec(time(NULL), 0));
-	}
-	if (nattrs >= 4) {
-		tc_attrs_set_size(&attrs, 8192);
-	}
-	return attrs;
 }
 
 static void* SetUp()
@@ -246,8 +200,7 @@ void tc_getattrs_bench(size_t n, int l, int r) {
 int main(int argc, char **argv)
 {
 	extern char *optarg;
-	extern int optind, optopt;
-	int c, r;
+	int c;
 	size_t nfiles = 1;	// no of ops in the vector of tc_attrs
 	int repetitions = 1;	// no of repetitions for the experiment
 	int nloops = 1;		// no of loops per repetition

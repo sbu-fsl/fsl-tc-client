@@ -245,8 +245,8 @@ static tc_res tc_dup_files(const vector<struct tc_attrs> &srcs,
 			tcres = tc_ldupv(&ext, 1, false);
 			if (!tc_okay(tcres)) {
 				fprintf(stderr, "failed to duplicate file %s "
-						"to %s at offset %s: %s",
-					srcs[i], ext.dst_path, offset,
+						"to %s at offset %zu: %s",
+					ext.src_path, ext.dst_path, offset,
 					strerror(tcres.err_no));
 				break;
 			}
@@ -264,7 +264,7 @@ static tc_res tc_cp_setattrs(const vector<struct tc_attrs> &srcs,
 			     const char *src_dir, const char *dst_dir)
 {
 	vector<struct tc_attrs> dsts(srcs);
-	for (int i = 0; i < srcs.size(); i++) {
+	for (unsigned int i = 0; i < srcs.size(); i++) {
 		// Workaround -- was getting invalid argument error from
 		// lsetattrsv().  The issue was that tc_listdirv() was not
 		// honoring the mask I gave it, meaning the tc_attrs in the
@@ -298,7 +298,7 @@ tc_res tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 				    bufsizes.data(), count, false);
 	if (!tc_okay(tcres)) {
 		fprintf(stderr, "tc_readlinkv failed: %s at %d (%s)\n",
-			tcres.index, strerror(tcres.err_no),
+			strerror(tcres.err_no), tcres.index,
 			links[tcres.index]);
 		free(linkbufs);
 		return tcres;
@@ -311,8 +311,8 @@ tc_res tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 	tcres = tc_symlinkv((const char **)bufs.data(), newlinks.data(), count,
 			    false);
 	if (!tc_okay(tcres)) {
-		fprintf(stderr, "tc_readlinkv failed: %s at %d (%s)\n",
-			tcres.index, strerror(tcres.err_no),
+		fprintf(stderr, "tc_symlinkv failed: %s at %d (%s)\n",
+			strerror(tcres.err_no), tcres.index,
 			links[tcres.index]);
 	}
 
@@ -337,7 +337,7 @@ tc_res tc_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 
 	dirs.push_back(strdup(src_dir));
 
-	int created = 0;  // index to directories created so far
+	unsigned int created = 0;  // index to directories created so far
 	while (created < dirs.size() || !files_to_copy.empty()) {
 		int n = dirs.size() - created;
 		tcres = tc_listdirv(dirs.data() + created, n, listdir_mask, 0,
@@ -354,7 +354,7 @@ tc_res tc_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 
 		if (symlink) {
 			std::vector<const char *> paths(files_to_copy.size());
-			for (int i = 0; i < paths.size(); i++) {
+			for (unsigned int i = 0; i < paths.size(); i++) {
 				paths[i] = files_to_copy[i].file.path;
 			}
 			tcres = tc_symlink_objs(paths, src_dir, dst);
@@ -415,7 +415,7 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 			attrs[i].masks.has_mode = true;
 		}
 
-		for (int i = 0; i < attrs.size(); ) {
+		for (int i = 0; (size_t)i < attrs.size(); ) {
 			tc_res tcres = tc_getattrsv(attrs.data() + i,
 						    attrs.size() - i, false);
 			if (tc_okay(tcres)) {
@@ -424,12 +424,14 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 				// ignore not existed entries
 				attrs.erase(attrs.begin() + (i + tcres.index));
 				i += tcres.index - 1;
+				if (i < 0)
+					i = 0;
 			} else {
 				return tcres;
 			}
 		}
 
-		for (int i = 0; i < attrs.size(); ++i) {
+		for (unsigned int i = 0; i < attrs.size(); ++i) {
 			if (S_ISDIR(attrs[i].mode)) {
 				dirs.push_back(strdup(objs[i]));
 			} else {
@@ -438,7 +440,7 @@ tc_res tc_rm(const char **objs, int count, bool recursive)
 		}
 	}
 
-	int emptied = 0;  // index to directories emptied so far
+	unsigned int emptied = 0;  // index to directories emptied so far
 	while (emptied < dirs.size() || !files_to_remove.empty()) {
 		tc_res tcres =
 		    tc_unlinkv(files_to_remove.data(), files_to_remove.size());

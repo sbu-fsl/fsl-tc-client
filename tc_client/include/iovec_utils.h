@@ -43,7 +43,7 @@ const size_t TC_SPLIT_THRESHOLD = 4096;
  *
  */
 struct tc_iov_array *tc_split_iov_array(const struct tc_iov_array *iova,
-					int size_limit, int *nparts);
+					size_t size_limit, int *nparts);
 
 /**
  * Update the original "iova" from the results of its split parts.

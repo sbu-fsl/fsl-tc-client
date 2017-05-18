@@ -68,20 +68,17 @@ int tc_dist(char *input_path, unsigned int block_size, unsigned int num_files,
 {
 	struct fsal_module *new_module = NULL;
 	struct gsh_export *export = NULL;
-	struct fsal_obj_handle *vfs0_handle = NULL;
-	fsal_status_t fsal_status = { 0, 0 };
 	struct req_op_context req_ctx;
 	struct tc_iovec *user_arg = NULL;
 	struct tc_iovec *cur_arg = NULL;
 	char *temp_path[MAX_READ_COUNT];
-	char *data_buf = NULL;
 	unsigned int *op_array = NULL;
         unsigned int *temp_array = NULL;
 	int input_len = 0;
 	int i = 0;
 	int j = 0;
 	int k = 0;
-	clock_t t;
+	// clock_t t;
 	float time_taken;
 	struct timeval tv1, tv2;
 

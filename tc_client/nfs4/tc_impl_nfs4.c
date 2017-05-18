@@ -161,9 +161,9 @@ void *nfs4_init(const char *config_path, const char *log_path,
 	op_ctx->export = exp;
 	op_ctx->fsal_export = exp->fsal_export;
 
-	LogCrit(COMPONENT_INIT, "Metadata Cache size: %d & expiration: %d",
+	LogCrit(COMPONENT_INIT, "Metadata Cache size: %lu & expiration: %lu",
 				exp->cache_size, exp->cache_expiration);
-	LogCrit(COMPONENT_INIT, "Data Cache size: %d & expiration: %d",
+	LogCrit(COMPONENT_INIT, "Data Cache size: %lu & expiration: %lu",
 				exp->data_cache_size, exp->data_cache_expiration);
 
 	rc = nfs4_chdir(exp->fullpath);
@@ -192,13 +192,12 @@ void *nfs4_init(const char *config_path, const char *log_path,
 void nfs4_deinit(void *arg)
 {
 	struct fsal_module *module = NULL;
-	fsal_status_t fsal_status = { 0, 0 };
 	struct gsh_export *export = op_ctx->export;
 
 	/* Close all open fds, client might have forgot to close them */
 	nfs4_close_all();
 
-	fsal_status = export->fsal_export->obj_ops->tc_destroysession();
+	export->fsal_export->obj_ops->tc_destroysession();
 
 	if (op_ctx != NULL) {
 		free(op_ctx);
@@ -254,84 +253,6 @@ tc_res nfs4_do_readv(struct tc_iovec *iovs, int read_count, bool istxn,
 	}
 
 	return tcres;
-}
-
-static void nfs4_decompress_paths(struct tc_iovec *iovs, int count,
-				  tc_file *saved_tcfs);
-/**
- * Use relative paths to shorten path lookups.
- *
- * Returns the saved tc_files if the iovs has been changed, or NULL if we
- * cannot compress the paths.
- */
-static tc_file *nfs4_compress_paths(struct tc_iovec *iovs, int count)
-{
-	tc_file *saved_tcfs = NULL;
-	char *buf;
-	int i;
-	bool compressed = false;
-
-	if (iovs == NULL || count <= 1) {
-		return NULL;
-	}
-
-	saved_tcfs = calloc(count, sizeof(*saved_tcfs));
-	if (!saved_tcfs) {
-		return NULL;
-	}
-
-	saved_tcfs[0] = iovs[0].file;
-	for (i = 1; i < count; ++i) {
-		saved_tcfs[i] = iovs[i].file;
-		if (iovs[i].file.type != TC_FILE_PATH ||
-		    saved_tcfs[i - 1].type != TC_FILE_PATH) {
-			continue;
-		}
-		buf = malloc(PATH_MAX);
-		if (!buf) {
-			nfs4_decompress_paths(iovs, i, saved_tcfs);
-			return NULL;
-		}
-		if (tc_path_rebase(saved_tcfs[i - 1].path, iovs[i].file.path,
-				   buf, PATH_MAX) < 0) {
-			free(buf);
-			nfs4_decompress_paths(iovs, i, saved_tcfs);
-			return NULL;
-		}
-		if (tc_path_tokenize(buf, NULL) >=
-		    tc_path_tokenize(iovs[i].file.path, NULL)) {
-			free(buf);
-			continue;
-		}
-		iovs[i].file.type = TC_FILE_CURRENT;
-		iovs[i].file.path = buf;
-		compressed = true;
-	}
-
-	if (!compressed) {
-		free(saved_tcfs);
-		saved_tcfs = NULL;
-	}
-
-	return saved_tcfs;
-}
-
-static void nfs4_decompress_paths(struct tc_iovec *iovs, int count,
-				  tc_file *saved_tcfs)
-{
-	int i;
-
-	if (saved_tcfs == NULL) {
-		return;
-	}
-
-	for (i = 0; i < count; ++i) {
-		if (!tc_cmp_file(&iovs[i].file, saved_tcfs + i)) {
-			free((char *)iovs[i].file.path);
-			iovs[i].file = saved_tcfs[i];
-		}
-	}
-	free(saved_tcfs);
 }
 
 static int nfs4_fill_fd_data(tc_file *tcf)

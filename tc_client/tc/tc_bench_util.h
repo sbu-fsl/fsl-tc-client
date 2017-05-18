@@ -67,12 +67,14 @@ void FreeFilePairsToCopy(std::vector<tc_extent_pair> *pairs);
 // dummy callback
 bool DummyListDirCb(const struct tc_attrs *entry, const char *dir, void *cbarg);
 
-// There average directory width is 17:
-//
-// #find linux-4.6.3/ -type d | \
-//  while read dname; do ls -l $dname | wc -l; done  | \
-//  awk '{s += $1} END {print s/NR;}'
-// 16.8402
+/*
+There average directory width is 17:
+
+#find linux-4.6.3/ -type d | \
+while read dname; do ls -l $dname | wc -l; done  | \
+awk '{s += $1} END {print s/NR;}'
+16.8402
+*/
 void CreateDirsWithContents(std::vector<const char *>& dirs);
 
 void* SetUp(bool istc);

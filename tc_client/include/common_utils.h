@@ -276,7 +276,7 @@ timespec_add_nsecs(nsecs_elapsed_t interval,
 {
 	timespec->tv_sec += (interval / NS_PER_SEC);
 	timespec->tv_nsec += (interval % NS_PER_SEC);
-	if (timespec->tv_nsec > NS_PER_SEC) {
+	if ((nsecs_elapsed_t)timespec->tv_nsec > NS_PER_SEC) {
 		timespec->tv_sec += (timespec->tv_nsec / NS_PER_SEC);
 		timespec->tv_nsec = timespec->tv_nsec % NS_PER_SEC;
 	}
@@ -368,7 +368,7 @@ static inline void now(struct timespec *ts)
 
 static inline int strmaxcpy(char *dest, const char *src, size_t dest_size)
 {
-	int len = strlen(src);
+	size_t len = strlen(src);
 	if (len >= dest_size)
 		return -1;
 

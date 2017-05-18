@@ -31,6 +31,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <errno.h>
+#include <libgen.h>		/* used for 'dirname' */
 #include "../nfs4/nfs4_util.h"
 
 static char exe_path[PATH_MAX];
@@ -51,7 +52,10 @@ int main(int argc, char *argv[])
 
 	/* Locate and use the default config file.  Please update the config
 	 * file to the correct NFS server. */
-	readlink("/proc/self/exe", exe_path, PATH_MAX);
+	if (readlink("/proc/self/exe", exe_path, PATH_MAX) < 0) {
+		perror("readlink");
+		exit(EXIT_FAILURE);
+	}
 	snprintf(tc_config_path, PATH_MAX,
 		 "%s/../../../config/tc.proxy.conf", dirname(exe_path));
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
@@ -92,7 +96,7 @@ int main(int argc, char *argv[])
         /* Check results. */
 	if (tc_okay(res)) {
 		fprintf(stderr,
-			"Successfully read the first %d bytes of file \"%s\" "
+			"Successfully read the first %zu bytes of file \"%s\" "
 			"via NFS.\n",
 			read_iovec[0].length, TC_TEST_NFS_FILE0);
 	} else {

@@ -329,6 +329,16 @@ char *nfsstat4_to_str(nfsstat4 code)
 		return "NFS4ERR_BADLABEL";
 	case NFS4ERR_UNION_NOTSUPP:
 		return "NFS4ERR_UNION_NOTSUPP";
+
+	/* NFS End-to-end Data Integrity */
+	case NFS4ERR_PROT_NOTSUPP:
+		return "NFS4ERR_PROT_NOTSUPP";
+	case NFS4ERR_PROT_INVAL:
+		return "NFS4ERR_PROT_INVAL";
+	case NFS4ERR_PROT_FAIL:
+		return "NFS4ERR_PROT_FAIL";
+	case NFS4ERR_PROT_LATFAIL:
+		return "NFS4ERR_PROT_LATFAIL";
 	case NFS4ERR_REPLAY:
 		return "NFS4ERR_REPLAY";
 	}

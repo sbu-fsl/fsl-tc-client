@@ -127,7 +127,7 @@ static void BM2_Readlink(int start, int csize)
 	vector<char *> bufs(csize);
 	vector<size_t> buf_sizes(csize, PATH_MAX);
 
-	for (size_t i = 0; i < csize; ++i) {
+	for (size_t i = 0; i < (size_t)csize; ++i) {
 		bufs[i] = (char *)malloc(PATH_MAX);
 	}
 
@@ -135,7 +135,7 @@ static void BM2_Readlink(int start, int csize)
 				    csize, false);
 	assert(tc_okay(tcres));
 
-	for (size_t i = 0; i < csize; ++i) {
+	for (size_t i = 0; i < (size_t)csize; ++i) {
 		free(bufs[i]);
 	}
 	FreePaths(&links);
@@ -209,7 +209,7 @@ static void BM2_Mkdir(int start, int csize)
 	vector<const char *> paths = NewPaths("Bench-Dirs/dir-%d", csize, start);
 	vector<tc_attrs> dirs(csize);
 
-	for (size_t i = 0; i < csize; ++i) {
+	for (size_t i = 0; i < (size_t)csize; ++i) {
 		tc_set_up_creation(&dirs[i], paths[i], 0755);
 	}
 	tc_res tcres = tc_mkdirv(dirs.data(), csize, false);
@@ -224,7 +224,7 @@ static void BM2_Rename(int start, int csize)
 	vector<const char *> dsts = NewPaths("Bench-Files/newfile-%d", csize, start);
 	vector<tc_file_pair> pairs(csize);
 
-	for (size_t i = 0; i < csize; ++i) {
+	for (size_t i = 0; i < (size_t)csize; ++i) {
 		pairs[i].src_file = tc_file_from_path(srcs[i]);
 		pairs[i].dst_file = tc_file_from_path(dsts[i]);
 	}

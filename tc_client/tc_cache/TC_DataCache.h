@@ -98,14 +98,14 @@ private:
 class DataBlock {
 public:
 	char *data;
-	int len;
+	size_t len;
 	int start_idx;	
 	std::string path;
 	size_t block_no;
 	TC_DataCache *data_cache;
 	//pthread_rwlock_t dataLock;
 
-	DataBlock(char *d, int size, int start, std::string p, size_t b,
+	DataBlock(char *d, size_t size, int start, std::string p, size_t b,
 		  TC_DataCache *dc)
 	{
 		//pthread_rwlock_init(&attrLock, NULL);
@@ -138,7 +138,6 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 {
 	size_t i = 0;
 	size_t write_len = 0;
-	int block_size;
 	int delta_offset = offset % CACHE_BLOCK_SIZE;
 	if (length < CACHE_BLOCK_SIZE) {
 		return;

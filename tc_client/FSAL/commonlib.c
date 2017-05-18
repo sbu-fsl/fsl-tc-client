@@ -1509,7 +1509,6 @@ int decode_fsid(char *buf,
 int subfsal_commit(void *node, void *link_mem, void *self_struct,
 		   struct config_error_type *err_type)
 {
-	fsal_status_t status;
 	struct fsal_module *fsal_next;
 	struct subfsal_args *subfsal = (struct subfsal_args *) self_struct;
 	int errcnt = 0;

@@ -72,10 +72,14 @@ void free_iovec(struct tc_iovec *iovec, int count)
 char *get_tc_config_file(char *buf, int buf_size)
 {
 	char path[PATH_MAX];
-	readlink("/proc/self/exe", path, PATH_MAX);
-	snprintf(buf, buf_size,
-		 "%s/../../../config/tc.ganesha.conf", dirname(path));
-	return buf;
+	memset(path, 0, PATH_MAX);
+	if (readlink("/proc/self/exe", path, PATH_MAX) < 0) {
+		return NULL;
+	} else {
+		snprintf(buf, buf_size,
+			"%s/../../../config/tc.ganesha.conf", dirname(path));
+		return buf;
+	}
 }
 
 bool compare_content(struct tc_iovec *iovec1, struct tc_iovec *iovec2,

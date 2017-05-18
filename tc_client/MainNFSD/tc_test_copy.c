@@ -56,7 +56,6 @@ int main(int argc, char *argv[])
 	struct tc_extent_pair pairs[2];
 	struct tc_iovec iov[4];
 	tc_res res;
-	const char *data = "hello world";
 	const char *srcdir = "/vfs0/srcdir";
 	const char *dstdir = "/vfs0/dstdir";
 	const char *fname1 = "file-1.txt";
@@ -66,7 +65,10 @@ int main(int argc, char *argv[])
 	/* Locate and use the default config file in the repo.  Before running
 	 * this example, please update the config file to a correct NFS server.
 	 */
-	readlink("/proc/self/exe", exe_path, PATH_MAX);
+	if (readlink("/proc/self/exe", exe_path, PATH_MAX) < 0) {
+		perror("readlink");
+		exit(EXIT_FAILURE);
+	}
 	snprintf(tc_config_path, PATH_MAX,
 		 "%s/../../../config/tc.ganesha.conf", dirname(exe_path));
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
@@ -134,7 +136,7 @@ int main(int argc, char *argv[])
 	/* Check results. */
 	if (tc_okay(res)) {
 		fprintf(stderr,
-			"Successfully write files: %d bytes in %s; %d bytes "
+			"Successfully write files: %zu bytes in %s; %zu bytes "
 			"in %s via NFS.\n",
 			iov[0].length, fname1, iov[1].length, fname2);
 	} else {

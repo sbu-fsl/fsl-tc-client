@@ -32,6 +32,7 @@
 #include "tc_helper.h"
 #include "log.h"
 #include "splice_copy.h"
+#include "path_utils.h"
 
 /*
  * open routine for POSIX files
@@ -120,19 +121,6 @@ off_t posix_fseek(tc_file *tcf, off_t offset, int whence)
 	return lseek(tcf->fd, offset, whence);
 }
 
-static int posix_stat(const tc_file *tcf, struct stat *st)
-{
-	int rc;
-	if (tcf->type == TC_FILE_PATH) {
-		rc = stat(tcf->path, st);
-	} else if (tcf->type == TC_FILE_DESCRIPTOR) {
-		rc = fstat(tcf->fd, st);
-	} else {
-		rc = -1;
-	}
-	return rc;
-}
-
 /*
  * arg - Array of reads for one or more files
  *       Contains file-path, read length, offset, etc.
@@ -143,7 +131,6 @@ tc_res posix_readv(struct tc_iovec *arg, int read_count, bool is_transaction)
 {
 	int fd, i = 0;
 	ssize_t amount_read;
-	tc_file file = { 0 };
 	struct tc_iovec *iov = NULL;
 	tc_res result = { .index = -1, .err_no = 0 };
 	struct stat st;
@@ -305,7 +292,7 @@ tc_res posix_writev(struct tc_iovec *arg, int write_count, bool is_transaction)
 
 tc_res posix_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 {
-	int fd = -1, i = 0, res = 0;
+	int i = 0, res = 0;
 	struct tc_attrs *cur_attr = NULL;
 	tc_res result = { .index = -1, .err_no = 0 };
 	struct stat st;
@@ -431,7 +418,7 @@ exit:
  */
 tc_res posix_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 {
-	int fd = -1, i = 0;
+	int i = 0;
 	struct tc_attrs *cur_attr = NULL;
 	tc_res result = { .index = -1, .err_no = 0 };
 
@@ -627,9 +614,7 @@ static int posix_listdir(struct glist_head *dir_queue, const char *dir,
 	struct tc_attrs cur_attr;
 	struct dirent *dp;
 	int path_len;
-	char *path;
 	struct stat st;
-	struct tc_posix_dir_to_list *dle;
 	int ret = 0;
 
 	assert(dir != NULL);

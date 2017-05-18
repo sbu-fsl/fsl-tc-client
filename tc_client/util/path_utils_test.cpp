@@ -73,7 +73,7 @@ TEST(PathUtilsTest, TokenizeTest) {
 			      const vector<string> &expected) {
 		slice_t *results;
 		int ret = tc_path_tokenize(input, &results);
-		EXPECT_EQ(expected.size(), ret);
+		EXPECT_EQ(expected.size(), (size_t)ret);
 		for (int i = 0; i < ret; ++i) {
 			EXPECT_EQ(expected[i],
 				  string(results[i].data, results[i].size));
@@ -131,7 +131,7 @@ TEST(PathUtilsTest, JoinTest) {
 			} else {
 				ret = tc_path_join(p1, p2, path, 1024);
 			}
-			EXPECT_EQ(strlen(exp), ret);
+			EXPECT_EQ(strlen(exp), (size_t)ret);
 			EXPECT_STREQ(exp, path) << p1 << " + " << p2
 						<< " should be " << exp
 						<< " instead of " << path;
@@ -217,7 +217,7 @@ TEST(PathUtilsTest, DirAndBaseName) {
 	EXPECT_EQ(0, cmpslice(tc_path_basename(P), toslice("")));
 
 	P = "";
-	EXPECT_EQ(0, tc_path_dirname(P).size);
+	EXPECT_EQ((size_t)0, tc_path_dirname(P).size);
 	EXPECT_EQ(0, tc_path_basename(P).size);
 
 	P = "/a/b//";

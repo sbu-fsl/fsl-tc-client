@@ -160,7 +160,7 @@ static inline bool cache_inode_lru_fds_available(void)
 			"FD Hard Limit Exceeded.  Disabling FD Cache and waking"
 			" LRU thread.");
 		LogCrit(COMPONENT_CACHE_INODE_LRU,
-			"open_fd_count = %zd; fds_hard_limit = %zd\n",
+			"open_fd_count = %zd; fds_hard_limit = %u\n",
 			open_fd_count, lru_state.fds_hard_limit);
 		lru_state.caching_fds = false;
 		lru_wake_thread();

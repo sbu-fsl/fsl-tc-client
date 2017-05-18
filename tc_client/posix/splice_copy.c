@@ -46,7 +46,7 @@ ssize_t splice_copy_file(const char *src, size_t offset, size_t count,
 		count = st.st_size - offset;
 	}
 
-	dstfd = open(dst, O_WRONLY | O_CREAT);
+	dstfd = open(dst, O_WRONLY | O_CREAT, 0644);
 	if (dstfd < 0) {
 		close(srcfd);
 		return -errno;

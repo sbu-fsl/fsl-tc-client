@@ -49,7 +49,7 @@ int GetFileExtents(const Slice& file_path,
   // find the first data extent
   uint64_t scanned = 0;
   int i = 0;
-  for (; scanned < file_size; ++i) {
+  for (; scanned < (size_t)file_size; ++i) {
     off_t begin = lseek(fd, scanned, SEEK_DATA);
     if (begin == ((off_t) -1)) {
       if (errno == ENXIO) {

@@ -2225,26 +2225,6 @@ static fattr_xdr_result decode_fs_charset_cap(XDR *xdr,
 	return FATTR_XDR_NOOP;
 }
 
-static fattr_xdr_result encode_protection_types(XDR *xdr,
-						struct xdr_attrs_args *args)
-{
-	fattr4_protection_types pt;
-
-	/* TODO to support get_protection_type in 2.1? */
-	/* get_protection_type4(args->data, &pt); */
-
-	if (!xdr_fattr4_protection_types(xdr, &pt))
-		return FATTR_XDR_FAILED;
-
-	return FATTR_XDR_SUCCESS;
-}
-
-static fattr_xdr_result decode_protection_types(XDR *xdr,
-						struct xdr_attrs_args *args)
-{
-	return FATTR_XDR_NOOP;
-}
-
 /* NFS V4.0+ attributes
  * This array reflects the tables on page 39-46 of RFC3530
  * indexed by attribute number

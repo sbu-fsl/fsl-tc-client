@@ -32,8 +32,8 @@ class FileUtilsTest : public ::testing::Test {
       DeleteFile(test_file);
     }
     memset(buf, '1', 1_b);
-    EXPECT_EQ(1_b, WriteToFile(test_file, Slice(buf, 1_b)));
-    EXPECT_EQ(1_b, GetFileSize(test_file));
+    EXPECT_EQ((ssize_t)1_b, WriteToFile(test_file, Slice(buf, 1_b)));
+    EXPECT_EQ((ssize_t)1_b, GetFileSize(test_file));
   }
 
   virtual void TearDown() {
@@ -42,12 +42,12 @@ class FileUtilsTest : public ::testing::Test {
 
 TEST_F(FileUtilsTest, ReadFromFileWorks) {
   char buf2[1_b];
-  EXPECT_EQ(1_b, ReadFromFile(test_file, 1_b, buf2));
+  EXPECT_EQ((ssize_t)1_b, ReadFromFile(test_file, 1_b, buf2));
   EXPECT_EQ(0, memcmp(buf, buf2, 1_b));
 }
 
 TEST_F(FileUtilsTest, PWriteCanExtendFile) {
-  EXPECT_EQ(1_b, PWrite(test_file, 2_b, 1_b, buf));
+  EXPECT_EQ((ssize_t)1_b, PWrite(test_file, 2_b, 1_b, buf));
   EXPECT_EQ(3_b, GetFileSize(test_file));
 
   EXPECT_EQ(1_b, PWrite(test_file, 5_b, 1_b, buf));

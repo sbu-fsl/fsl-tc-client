@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <signal.h>		/* for sigaction */
 #include <errno.h>
+#include <libgen.h>		/* used for 'dirname' */
 #include "../nfs4/nfs4_util.h"
 
 static char exe_path[PATH_MAX];
@@ -28,13 +29,14 @@ static char tc_config_path[PATH_MAX];
 int main(int argc, char *argv[])
 {
 	void *context = NULL;
-	int rc = -1;
 	tc_res res;
-	tc_file file1;
 
 	/* Locate and use the default config file.  Please update the config
 	 * file to the correct NFS server. */
-	readlink("/proc/self/exe", exe_path, PATH_MAX);
+	if (readlink("/proc/self/exe", exe_path, PATH_MAX) < 0) {
+		perror("readlink");
+		exit(EXIT_FAILURE);
+	}
 	snprintf(tc_config_path, PATH_MAX,
 		 "%s/../../../config/tc.ganesha.conf", dirname(exe_path));
 	fprintf(stderr, "using config file: %s\n", tc_config_path);

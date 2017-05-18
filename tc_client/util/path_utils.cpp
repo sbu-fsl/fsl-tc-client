@@ -36,7 +36,7 @@ static std::vector<Slice> tc_get_path_components(Slice path)
 	const char *start = path.data();
 	path.trim('/');
 	int beg = 0;
-	int end = 0;   // component within [beg, end)
+	unsigned int end = 0;   // component within [beg, end)
 	while (end < path.size()) {
 		while (end < path.size() && path[end] != '/') {
 			++end;
@@ -85,7 +85,7 @@ int tc_path_tokenize_s(slice_t path, slice_t **components)
 	if (!sls) {
 		return -1;
 	}
-	for (int i = 0; i < comps.size(); ++i) {
+	for (unsigned int i = 0; i < comps.size(); ++i) {
 		sls[i].data = comps[i].data();
 		sls[i].size = comps[i].size();
 	}
@@ -152,13 +152,14 @@ static int tc_path_append_impl(buf_t *pbuf, slice_t comp)
 	if (comp.size == 0) {
 		return 0;
 	}
-	if (comp.size > buf_remaining(pbuf)) {
+	if (comp.size > (size_t)buf_remaining(pbuf)) {
 		return -1;
 	}
 	if (pbuf->size != 0) {
 		buf_append_char(pbuf, '/');
 	}
 	buf_append_slice(pbuf, comp);
+	return 0;
 }
 
 int tc_path_join_s(slice_t path1, slice_t path2, buf_t *pbuf)
@@ -223,7 +224,7 @@ int tc_path_normalize_s(slice_t path, buf_t *pbuf)
 	}
 
 	int old_size = pbuf->size;
-	for (int i = 0; i < components.size(); ++i) {
+	for (unsigned int i = 0; i < components.size(); ++i) {
 		if (i > 0) buf_append_char(pbuf, '/');
 		buf_append_slice(pbuf, components[i].toslice());
 	}
@@ -247,18 +248,18 @@ int tc_path_rebase_s(slice_t base, slice_t path, buf_t *pbuf)
 {
 	std::vector<Slice> base_comps = tc_get_path_components(base);
 	std::vector<Slice> path_comps = tc_get_path_components(path);
-	int l = 0;
+	unsigned int l = 0;
 	while (l < base_comps.size() && l < path_comps.size() &&
 	       base_comps[l] == path_comps[l])
 		++l;
 
 	std::vector<Slice> relative_comps;
 	int result_size = 0;
-	for (int i = l; i < base_comps.size(); ++i) {
+	for (unsigned int i = l; i < base_comps.size(); ++i) {
 		relative_comps.push_back("..");
 		result_size += 2;
 	}
-	for (int j = l; j < path_comps.size(); ++j) {
+	for (unsigned int j = l; j < path_comps.size(); ++j) {
 		relative_comps.push_back(path_comps[j]);
 		result_size += path_comps[j].size();
 	}
@@ -268,7 +269,7 @@ int tc_path_rebase_s(slice_t base, slice_t path, buf_t *pbuf)
 	}
 
 	size_t size = 0;
-	for (int i = 0; i < relative_comps.size(); ++i) {
+	for (unsigned int i = 0; i < relative_comps.size(); ++i) {
 		if (i > 0) size += buf_append_char(pbuf, '/');
 		size += buf_append_slice(pbuf, relative_comps[i].toslice());
 	}

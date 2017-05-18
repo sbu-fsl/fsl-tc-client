@@ -34,8 +34,8 @@ using std::vector;
 TEST(BufTest, Basics) {
 	buf_t *pbuf = new_buf(20);
 	EXPECT_TRUE(pbuf);
-	EXPECT_EQ(sizeof(buf_t), abs((size_t)pbuf - (size_t)(pbuf->data)));
-	EXPECT_EQ(20, pbuf->capacity);
+	EXPECT_EQ(sizeof(buf_t), (size_t)abs((size_t)pbuf - (size_t)(pbuf->data)));
+	EXPECT_EQ((size_t)20, pbuf->capacity);
 	EXPECT_EQ(0, pbuf->size);
 	EXPECT_EQ(5, buf_append_str(pbuf, "abcde"));
 	EXPECT_EQ(5, pbuf->size);
@@ -71,7 +71,7 @@ TEST(SliceTest, Basics) {
 
 static void test_bitset(bitset_t *bs, const std::string& tag)
 {
-	for (int i = 0; i < bs->size; ++i) {
+	for (size_t i = 0; i < bs->size; ++i) {
 		EXPECT_FALSE(bs_get(bs, i));
 	}
 	std::uniform_int_distribution<int> dist(0, bs->size - 1);
@@ -84,7 +84,7 @@ static void test_bitset(bitset_t *bs, const std::string& tag)
 		bs_set(bs, pos);
 		expected[pos] = true;
 	}
-	for (int i = 0; i < bs->size; ++i) {
+	for (size_t i = 0; i < bs->size; ++i) {
 		EXPECT_EQ(bs_get(bs, i), expected[i])
 		    << tag << " mismatch at position " << i;
 	}
@@ -92,7 +92,7 @@ static void test_bitset(bitset_t *bs, const std::string& tag)
 	for (int i = 0; i < M; ++i) {
 		bs_reset(bs, dist(rng));
 	}
-	for (int i = 0; i < bs->size; ++i) {
+	for (size_t i = 0; i < bs->size; ++i) {
 		EXPECT_FALSE(bs_get(bs, i));
 	}
 }

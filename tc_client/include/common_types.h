@@ -88,7 +88,7 @@ static inline int bs_ffs(bitset_t *bs)
 		if (res > 0) {
 			assert(res <= 8);
 			res += ((i * 8) - 1);
-			return res < bs->size ? res : -1;
+			return ((size_t)res) < bs->size ? res : -1;
 		}
 	}
 
@@ -188,7 +188,7 @@ static inline void fillslice(slice_t *sl, const char *d, size_t s)
 
 static inline slice_t *slice_lstrip(slice_t *sl, char c)
 {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < sl->size && sl->data[i] == c; ++i)
 		;
@@ -206,7 +206,7 @@ static inline slice_t *slice_rstrip(slice_t *sl, char c)
 
 static inline ssize_t slice_lindex(slice_t sl, char c)
 {
-	ssize_t i;
+	unsigned int i;
 	for (i = 0; i < sl.size && sl.data[i] != c; ++i)
 		;
 	return i == sl.size ? -1 : i;
@@ -324,7 +324,7 @@ static inline int buf_appendf(buf_t *pbuf, const char *format, ...)
 
 static inline int cmpslice(slice_t sa, slice_t sb)
 {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < sa.size && i < sb.size; ++i) {
 		if (sa.data[i] != sb.data[i]) {

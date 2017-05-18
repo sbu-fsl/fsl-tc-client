@@ -51,7 +51,6 @@ char v4_old_dir[PATH_MAX + 1];
 static grace_t grace;
 
 static void nfs4_load_recov_clids_nolock(nfs_grace_start_t *gsp);
-static void nfs_release_nlm_state();
 static void nfs_release_v4_client(char *ip);
 
 extern struct fridgethr *state_async_fridge;

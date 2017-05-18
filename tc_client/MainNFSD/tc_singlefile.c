@@ -73,7 +73,7 @@ int tc_singlefile(char *input_path, unsigned int block_size,
 	int i = 0;
 	int j = 0;
 	int k = 0;
-	clock_t t;
+	// clock_t t;
 	float time_taken;
 	struct timeval tv1, tv2;
 
@@ -129,6 +129,7 @@ int tc_singlefile(char *input_path, unsigned int block_size,
 	gettimeofday(&tv2, NULL);
 	time_taken = ((double)(tv2.tv_usec - tv1.tv_usec) / 1000000) +
 		     (double)(tv2.tv_sec - tv1.tv_sec);
+	LogFatal(COMPONENT_FSAL, "Took %f seconds\n", time_taken);
 
 	k = 0;
 	while (k < ops_per_comp) {

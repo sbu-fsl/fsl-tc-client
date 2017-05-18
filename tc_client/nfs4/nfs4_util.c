@@ -178,7 +178,7 @@ int tc_free_fd(int fd)
 int tc_incr_fd_seqid(int fd)
 {
         struct tc_kfd *tcfd;
-        seqid4 seqid;
+        seqid4 seqid = 0;
 
         tcfd = tc_get_fd_struct(fd, true);
         if (!tcfd) {

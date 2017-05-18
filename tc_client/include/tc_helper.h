@@ -66,7 +66,6 @@ void tc_iterate_counters(bool (*tfc_reader)(struct tc_func_counter *tfc,
 							  .next = NULL,        \
 							  .registered =        \
 							      false };         \
-	static bool nm##_registered = false;                                   \
 	tc_register_counter(&nm##_tc_counter)
 
 #define TC_START_COUNTER(nm)                                                   \

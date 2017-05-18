@@ -1024,6 +1024,7 @@ void nfs4_Compound_CopyResOne(nfs_resop4 *res_dst, nfs_resop4 *res_src)
 	case NFS4_OP_RECLAIM_COMPLETE:
 
 	/* NFSv4.2 */
+	case NFS4_OP_ALLOCATE:
 	case NFS4_OP_COPY:
 	case NFS4_OP_OFFLOAD_ABORT:
 	case NFS4_OP_COPY_NOTIFY:

@@ -129,7 +129,9 @@ public:
 		tcdata = tc_init(NULL, "/tmp/tc-posix.log", 0);
 		TCTEST_WARN("Global SetUp of Posix Impl\n");
 		util::CreateOrUseDir(POSIX_TEST_DIR);
-		chdir(POSIX_TEST_DIR);
+		if (chdir(POSIX_TEST_DIR) < 0) {
+			TCTEST_ERR("chdir failed\n");
+		}
 	}
 	static void TearDownTestCase() {
 		TCTEST_WARN("Global TearDown of Posix Impl\n");
@@ -236,9 +238,6 @@ TYPED_TEST_P(TcTest, TestFileDesc)
 				"TcTest-TestFileDesc2.txt",
 				"TcTest-TestFileDesc3.txt",
 				"TcTest-TestFileDesc4.txt" };
-	char data[] = "abcd123";
-	tc_res res;
-	int i = 0;
 	tc_file *files;
 
 	Removev(PATHS, 4);
@@ -298,7 +297,7 @@ bool compare_attrs(tc_attrs *attrs1, tc_attrs *attrs2, int count)
 			return false;
 		if (a->masks.has_rdev && a->rdev != b->rdev) {
 			TCTEST_WARN("rdev does not match\n");
-			TCTEST_WARN(" %d %d\n", a->rdev, b->rdev);
+			TCTEST_WARN(" %lu %lu\n", a->rdev, b->rdev);
 			return false;
 		}
 
@@ -306,7 +305,7 @@ bool compare_attrs(tc_attrs *attrs1, tc_attrs *attrs2, int count)
 			return false;
 		if (a->masks.has_nlink && a->nlink != b->nlink) {
 			TCTEST_WARN("nlink does not match\n");
-			TCTEST_WARN(" %d %d\n", a->nlink, b->nlink);
+			TCTEST_WARN(" %lu %lu\n", a->nlink, b->nlink);
 			return false;
 		}
 
@@ -332,8 +331,6 @@ bool compare_attrs(tc_attrs *attrs1, tc_attrs *attrs2, int count)
 		    memcmp((void *)&(a->ctime), (void *)&(b->ctime),
 			   sizeof(b->ctime))) {
 			TCTEST_WARN("ctime does not match\n");
-			TCTEST_WARN(" %d %d\n", a->ctime,
-				   b->ctime);
 			return false;
 		}
 
@@ -343,7 +340,6 @@ bool compare_attrs(tc_attrs *attrs1, tc_attrs *attrs2, int count)
 		    memcmp((void *)&(a->mtime), (void *)&(b->mtime),
 			   sizeof(b->mtime))) {
 			TCTEST_WARN("mtime does not match\n");
-			TCTEST_WARN(" %d %d\n", a->mtime, b->mtime);
 			return false;
 		}
 	}
@@ -390,16 +386,6 @@ static tc_attrs *set_tc_attrs(struct tc_attrs *attrs, int count)
 	return attrs;
 }
 
-/* Set the TC attributes masks */
-static void set_attr_masks(tc_attrs *write, tc_attrs *read, int count)
-{
-	int i = 0;
-	for (i = 0; i < count; ++i) {
-		read[i].file = write[i].file;
-		read[i].masks = write[i].masks;
-	}
-}
-
 /**
  * TC-Set/Get Attributes test
  * using File Path
@@ -409,7 +395,6 @@ TYPED_TEST_P(TcTest, AttrsTestPath)
 	const char *PATH[] = { "WritevCanCreateFiles1.txt",
 			       "WritevCanCreateFiles2.txt",
 			       "WritevCanCreateFiles3.txt" };
-	tc_res res = { 0 };
 	int i;
 	const int count = 3;
 	struct tc_attrs *attrs1 = (tc_attrs *)calloc(count, sizeof(tc_attrs));
@@ -484,7 +469,6 @@ TYPED_TEST_P(TcTest, AttrsTestSymlinks)
 	const char *LPATHS[] = { "AttrsTestSymlinks-Link1.txt",
 				 "AttrsTestSymlinks-Link2.txt",
 				 "AttrsTestSymlinks-Link3.txt" };
-	tc_res res = { 0 };
 	struct tc_iovec iov;
 	int i;
 	const int count = 3;
@@ -662,7 +646,7 @@ TYPED_TEST_P(TcTest, ListDirRecursively)
 		"TcTest-ListDirRecursively/01",
 		"TcTest-ListDirRecursively/01/5.txt",
 	};
-	EXPECT_EQ(count, sizeof(expected) / sizeof(expected[0]));
+	EXPECT_EQ((size_t)count, sizeof(expected) / sizeof(expected[0]));
 	for (int i = 0; i < count; ++i) {
 		EXPECT_STREQ(expected[i], contents[i].file.path);
 	}
@@ -710,8 +694,6 @@ TYPED_TEST_P(TcTest, RemoveFileTest)
 
 TYPED_TEST_P(TcTest, MakeDirectories)
 {
-	mode_t mode[] = { S_IRWXU, S_IRUSR | S_IRGRP | S_IROTH,
-			  S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH };
 	const char *path[] = { "a", "b", "c" };
 	struct tc_attrs dirs[3];
 
@@ -735,7 +717,7 @@ TYPED_TEST_P(TcTest, MakeManyDirsDontFitInOneCompound)
 	for (int i = 0; i < NDIRS; ++i) {
 		snprintf(buf, PATH_MAX, "ManyDirs/a%d/b/c/d/e/f/g/h", i);
 		std::string p(buf);
-		int n = p.length();
+		size_t n = p.length();
 		while (n != std::string::npos) {
 			paths.emplace_back(p.data(), n);
 			n = p.find_last_of('/', n - 1);
@@ -761,7 +743,6 @@ TYPED_TEST_P(TcTest, Append)
 	const char *PATH = "TcTest-Append.txt";
 	int i = 0;
 	const int N = 4096;
-	struct stat st;
 	char *data;
 	char *data_read;
 	struct tc_iovec iov;
@@ -789,7 +770,7 @@ TYPED_TEST_P(TcTest, Append)
 	iov.data = data_read;
 	EXPECT_OK(tc_readv(&iov, 1, false));
 	EXPECT_TRUE(iov.is_eof);
-	EXPECT_EQ(3 * N, iov.length);
+	EXPECT_EQ((size_t)(3 * N), iov.length);
 	EXPECT_EQ(0, memcmp(data, data_read, 3 * N));
 
 	free(data);
@@ -975,9 +956,6 @@ TYPED_TEST_P(TcTest, CopyLargeDirectory)
 	struct tc_attrs *contents;
 	struct tc_attrs_masks masks = TC_ATTRS_MASK_NONE;
 	struct tc_extent_pair *dir_copy_pairs = NULL;
-	const char **oldpaths = NULL;
-	const char **newpaths = NULL;
-	struct tc_attrs *copied_attrs;
 	char *dst_path;
 	int file_count = 0;
 	//Cannot be larger than 9999 or will not fit in str
@@ -1006,8 +984,6 @@ TYPED_TEST_P(TcTest, CopyLargeDirectory)
 
 	dir_copy_pairs = (struct tc_extent_pair *)alloca(
 	    sizeof(struct tc_extent_pair) * count);
-	copied_attrs =
-	    (struct tc_attrs *)alloca(sizeof(struct tc_attrs) * count);
 
 	for (i = 0; i < count; i++) {
 		dst_path = (char *) malloc(sizeof(char) * PATH_MAX);
@@ -1153,7 +1129,7 @@ TYPED_TEST_P(TcTest, List2ndLevelDir)
 	EXPECT_OK(
 	    tc_listdir(DIR_PATH, TC_ATTRS_MASK_ALL, 1, false, &attrs, &count));
 	EXPECT_EQ(1, count);
-	EXPECT_EQ(0, attrs->size);
+	EXPECT_EQ((size_t)0, attrs->size);
 	tc_free_attrs(attrs, count, true);
 }
 
@@ -1240,7 +1216,7 @@ TYPED_TEST_P(TcTest, RdWrLargeThanRPCLimit)
 		EXPECT_EQ(s, iov.length);
 		EXPECT_EQ(0, memcmp(data1, data2, s));
 		if (s % 128_KB == 0)
-			fprintf(stderr, "read size: %llu\n", s);
+			fprintf(stderr, "read size: %zu\n", s);
 	}
 
 	free(data1);

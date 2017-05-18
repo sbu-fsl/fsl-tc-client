@@ -64,7 +64,7 @@ void FreePaths(vector<const char *> *paths)
 vector<tc_file> Paths2Files(const vector<const char *>& paths)
 {
 	vector<tc_file> files(paths.size());
-	for (int i = 0; i < files.size(); ++i) {
+	for (unsigned int i = 0; i < files.size(); ++i) {
 		files[i] = tc_file_from_path(paths[i]);
 	}
 	return files;
@@ -177,15 +177,16 @@ bool DummyListDirCb(const struct tc_attrs *entry, const char *dir, void *cbarg)
 	return true;
 }
 
-// There average directory width is 17:
-//
-// #find linux-4.6.3/ -type d | \
-//  while read dname; do ls -l $dname | wc -l; done  | \
-//  awk '{s += $1} END {print s/NR;}'
-// 16.8402
+/*
+There average directory width is 17:
+
+#find linux-4.6.3/ -type d | \
+while read dname; do ls -l $dname | wc -l; done  | \
+awk '{s += $1} END {print s/NR;}'
+16.8402
+*/
 void CreateDirsWithContents(vector<const char *>& dirs)
 {
-	const int kFilesPerDir = 17;
 	vector<tc_attrs> attrs(dirs.size());
 	for (size_t i = 0; i < dirs.size(); ++i) {
 		tc_set_up_creation(&attrs[i], dirs[i], 0755);

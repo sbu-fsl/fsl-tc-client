@@ -453,11 +453,6 @@ static struct bitmap4 fs_bitmap_fsinfo = {
 	.bitmap4_len = 2
 };
 
-static struct bitmap4 lease_bits = {
-	.map[0] = PXY_ATTR_BIT(FATTR4_LEASE_TIME),
-	.bitmap4_len = 1
-};
-
 static void tc_attr_masks_to_bitmap(const struct tc_attrs_masks *masks,
                                     bitmap4 *bm)
 {
@@ -1197,94 +1192,6 @@ void tc_get_clientid(clientid4 *ret)
 	pthread_mutex_unlock(&fs_clientid_mutex);
 }
 
-static int fs_setclientid(clientid4 *resultclientid, uint32_t *lease_time)
-{
-	int rc;
-	nfs_client_id4 nfsclientid;
-	cb_client4 cbkern;
-	char clientid_name[MAXNAMLEN + 1];
-	SETCLIENTID4resok *sok;
-	struct sockaddr_in sin;
-	struct netbuf nb;
-	struct netconfig *ncp;
-	socklen_t slen = sizeof(sin);
-	char addrbuf[sizeof("255.255.255.255")];
-	char *buf;
-
-	LogEvent(COMPONENT_FSAL,
-		 "Negotiating a new ClientId with the remote server");
-
-	if (getsockname(rpc_sock, &sin, &slen))
-		return -errno;
-
-	snprintf(clientid_name, MAXNAMLEN, "%s(%d) - GANESHA NFSv4 Proxy",
-		 inet_ntop(AF_INET, &sin.sin_addr, addrbuf, sizeof(addrbuf)),
-		 getpid());
-	nfsclientid.id.id_len = strlen(clientid_name);
-	nfsclientid.id.id_val = clientid_name;
-	if (sizeof(ServerBootTime.tv_sec) == NFS4_VERIFIER_SIZE)
-		memcpy(&nfsclientid.verifier, &ServerBootTime.tv_sec,
-		       sizeof(nfsclientid.verifier));
-	else
-		snprintf(nfsclientid.verifier, NFS4_VERIFIER_SIZE, "%08x",
-			 (int)ServerBootTime.tv_sec);
-
-	ncp = getnetconfigent("tcp");
-	nb.len = sizeof(struct sockaddr_in);
-	nb.maxlen = nb.len;
-	nb.buf = (char *) &sin;
-	buf = taddr2uaddr(ncp, &nb);
-	cbkern.cb_program = 0x40000000;
-	cbkern.cb_location.r_netid = "tcp";
-	cbkern.cb_location.r_addr = buf;
-	//cbkern.cb_location.r_addr = "127.0.0.1";
-
-	tc_reset_compound(false);
-	sok = &resoparray->nfs_resop4_u.opsetclientid.SETCLIENTID4res_u.resok4;
-	argoparray->argop = NFS4_OP_SETCLIENTID;
-	argoparray->nfs_argop4_u.opsetclientid.client = nfsclientid;
-	argoparray->nfs_argop4_u.opsetclientid.callback = cbkern;
-	argoparray->nfs_argop4_u.opsetclientid.callback_ident = 1;
-	++opcnt;
-
-	rc = fs_nfsv4_call(NULL, NULL);
-	if (rc != NFS4_OK)
-		return -1;
-
-	tc_reset_compound(false);
-	argoparray->argop = NFS4_OP_SETCLIENTID_CONFIRM;
-	argoparray->nfs_argop4_u.opsetclientid_confirm.clientid = sok->clientid;
-	memcpy(
-	    argoparray->nfs_argop4_u.opsetclientid_confirm.setclientid_confirm,
-	    sok->setclientid_confirm, NFS4_VERIFIER_SIZE);
-	++opcnt;
-
-	rc = fs_nfsv4_call(NULL, NULL);
-	if (rc != NFS4_OK)
-		return -1;
-
-	/* Keep the confirmed client id */
-	*resultclientid = argoparray->nfs_argop4_u.opsetclientid_confirm.clientid;
-
-	/* Get the lease time */
-/*
-	opcnt = 0;
-	COMPOUNDV4_ARG_ADD_OP_PUTROOTFH(opcnt, arg);
-	fs_fill_getattr_reply(res + opcnt, (char *)lease_time,
-			       sizeof(*lease_time));
-	COMPOUNDV4_ARG_ADD_OP_GETATTR(opcnt, arg, lease_bits);
-
-	rc = fs_compoundv4_execute(__func__, NULL, opcnt, arg, res);
-	if (rc != NFS4_OK)
-		*lease_time = 60;
-	else
-		*lease_time = ntohl(*lease_time);
-*/
-	*lease_time = 60;
-
-	return 0;
-}
-
 static fsal_status_t fs_destroy_session()
 {
         int rc;
@@ -1357,11 +1264,8 @@ static int fs_create_session()
         char server_major_id_buf[NFS4_OPAQUE_LIMIT];
         char server_scope_buf[NFS4_OPAQUE_LIMIT];
         nfs_impl_id4 server_impl_id;
-        struct netbuf nb;
-        struct netconfig *ncp;
         socklen_t slen = sizeof(sin);
         char addrbuf[sizeof("255.255.255.255")];
-        char *buf;
 
         LogEvent(COMPONENT_FSAL,
                  "Negotiating a new v4.1 session with the remote server");
@@ -1857,7 +1761,7 @@ static fsal_status_t fs_create(struct fsal_obj_handle *dir_hdl,
 				      op_ctx->fsal_export);
 		if (FSAL_IS_ERROR(st)) {
 			LogDebug(COMPONENT_FSAL,
-				"fs_open_confirm failed: status %d", st);
+				"fs_open_confirm failed: status %d, %d", st.major, st.minor);
 			return st;
 		}
 	}
@@ -1875,72 +1779,6 @@ static fsal_status_t fs_create(struct fsal_obj_handle *dir_hdl,
 		return st;
 	*attrib = (*handle)->attributes;
 	return st;
-}
-
-static fsal_status_t fs_read_state(const nfs_fh4 *fh4, const nfs_fh4 *fh4_1,
-				   uint64_t offset, size_t buffer_size,
-				   void *buffer, size_t *read_amount,
-				   bool *end_of_file, stateid4 *sid,
-				   stateid4 *sid1)
-{
-	int rc;
-	/*struct fs_obj_handle *ph;*/
-	READ4resok *rok;
-
-	LogDebug(COMPONENT_FSAL, "fs_read_state called \n");
-
-	if (!buffer_size) {
-		*read_amount = 0;
-		*end_of_file = false;
-		return fsalstat(ERR_FSAL_NO_ERROR, 0);
-	}
-	/*ph = container_of(obj_hdl, struct fs_obj_handle, obj);*/
-	#if 0
-        if ((ph->openflags & (FSAL_O_RDONLY | FSAL_O_RDWR)) == 0)
-                return fsalstat(ERR_FSAL_FILE_OPEN, EBADF);
-#endif
-
-	if (buffer_size >
-	    op_ctx->fsal_export->ops->fs_maxread(op_ctx->fsal_export))
-		buffer_size =
-		    op_ctx->fsal_export->ops->fs_maxread(op_ctx->fsal_export);
-
-        tc_reset_compound(true);
-
-	COMPOUNDV4_ARG_ADD_OP_PUTFH(opcnt, argoparray, *fh4);
-	rok = &resoparray[opcnt].nfs_resop4_u.opread.READ4res_u.resok4;
-	rok->data.data_val = buffer;
-	rok->data.data_len = buffer_size;
-	/*COMPOUNDV4_ARG_ADD_OP_READ_STATE(opcnt, argoparray, offset,
-	 * buffer_size, sid);*/
-	COMPOUNDV4_ARG_ADD_OP_READ(opcnt, argoparray, offset, buffer_size);
-	rok = &resoparray[opcnt].nfs_resop4_u.opread.READ4res_u.resok4;
-	rok->data.data_val = buffer;
-	rok->data.data_len = buffer_size;
-	COMPOUNDV4_ARG_ADD_OP_READ_STATE(
-	    opcnt, argoparray, offset + buffer_size, buffer_size, sid);
-
-	COMPOUNDV4_ARG_ADD_OP_PUTFH(opcnt, argoparray, *fh4_1);
-	rok = &resoparray[opcnt].nfs_resop4_u.opread.READ4res_u.resok4;
-	rok->data.data_val = buffer;
-	rok->data.data_len = buffer_size;
-	COMPOUNDV4_ARG_ADD_OP_READ_STATE(opcnt, argoparray, offset, buffer_size,
-					 sid1);
-	rok = &resoparray[opcnt].nfs_resop4_u.opread.READ4res_u.resok4;
-	rok->data.data_val = buffer;
-	rok->data.data_len = buffer_size;
-	/*COMPOUNDV4_ARG_ADD_OP_READ_STATE(opcnt, argoparray, offset +
-	 * buffer_size, buffer_size, sid1);*/
-	COMPOUNDV4_ARG_ADD_OP_READ(opcnt, argoparray, offset + buffer_size,
-				   buffer_size);
-
-	rc = fs_nfsv4_call(op_ctx->creds, NULL);
-	if (rc != NFS4_OK)
-		return nfsstat4_to_fsal(rc);
-
-	*end_of_file = rok->eof;
-	*read_amount = rok->data.data_len;
-	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
 static inline bool tc_prepare_putfh(const nfs_fh4 *fh)
@@ -2071,7 +1909,7 @@ static bool tc_compress_path(slice_t path, slice_t **comps, int *comps_n,
 		return false;
 
 	NFS4_DEBUG("relative path of %.*s is %.*s based on %s",
-		   abs_path->size, abs_path->data, short_path->size,
+		   (int)abs_path->size, abs_path->data, (int)short_path->size,
 		   short_path->data, tc_saved_path);
 	short_comps_n = tc_path_tokenize_s(asslice(short_path), &short_comps);
         if (short_comps_n + 1 < *comps_n) {  // compressible
@@ -2142,7 +1980,7 @@ static inline bool tc_prepare_savefh(slice_t *p)
         COMPOUNDV4_ARG_ADD_OP_SAVEFH(opcnt, argoparray);
 	if (p) {
 		NFS4_DEBUG("setting tc_saved_path: from %s to %.*s",
-			   tc_saved_path, p->size, p->data);
+			   tc_saved_path, (int)p->size, p->data);
 		tc_save_path(*p);
 	} else {
 		NFS4_DEBUG("empty tc_saved_path: %s", tc_saved_path);
@@ -2414,7 +2252,6 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
         const tc_file *saved_file;
 	char *fattr_blobs;
 	fattr_blobs = (char *)malloc(count * FATTR_BLOB_SZ);
-	GETATTR4resok *atok;
 	int attr_count = 0;
 
 	LogDebug(COMPONENT_FSAL, "ktcread() called\n");
@@ -2441,7 +2278,7 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
 		opened_file = NULL;
 	}
 	for (i = 0; i < count; i++) {
-		atok = tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
+		tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
 					&fs_bitmap_getattr);
 	}
 	tcres.index = count;
@@ -2539,7 +2376,6 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
         const tc_file *saved_file;
 	char *fattr_blobs;
         fattr_blobs = (char *)malloc(count * FATTR_BLOB_SZ);
-        GETATTR4resok *atok;
         int attr_count = 0;
 
 	LogDebug(COMPONENT_FSAL, "ktcwrite() called\n");
@@ -2570,7 +2406,7 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
 	}
 
 	for (i = 0; i < count; i++) {
-                atok = tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
+                tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
                                         &fs_bitmap_getattr);
         }
 
@@ -2637,7 +2473,7 @@ static inline CREATE4resok *tc_prepare_mkdir(slice_t name, fattr4 *fattr)
 	CREATE4resok *crok;
 
         if (!tc_has_enough_ops(1)) return NULL;
-	NFS4_DEBUG("op (%d) of compound: mkdir(\"%.*s\")", opcnt, name.size,
+	NFS4_DEBUG("op (%d) of compound: mkdir(\"%.*s\")", opcnt, (int)name.size,
 		   name.data);
 	crok = &resoparray[opcnt].nfs_resop4_u.opcreate.CREATE4res_u.resok4;
 	crok->attrset = empty_bitmap;
@@ -3705,7 +3541,7 @@ void fattr4_to_tc_attrs(const fattr4 *attr4, struct tc_attrs *tca)
                 assert(false);
         }
 
-        memset(&tca->masks, sizeof(tca->masks), 0);
+        memset(&tca->masks, 0, sizeof(tca->masks));
         if (attrlist.mask & ATTR_MODE) {
                 tca->masks.has_mode = true;
                 tca->mode = attrlist.mode;
@@ -3814,7 +3650,6 @@ static tc_res tc_nfs4_openv(struct tc_attrs *attrs, int count, int *flags,
 	fattr4 *fattrs;
 	char *fattr_blobs; /* an array of FATTR_BLOB_SZ-sized buffers */
 	char *fh_buffers;
-	nfs_fh4 fh;
 	OPEN4resok *opok;
         bool r;
         int saved_opcnt;
@@ -3883,6 +3718,8 @@ static tc_res tc_nfs4_openv(struct tc_attrs *attrs, int count, int *flags,
 			    attrs + i);
 			++i;
 			break;
+		default:
+			;
                 }
         }
 
@@ -4022,6 +3859,8 @@ static tc_res tc_nfs4_lgetattrsv(struct tc_attrs *attrs, int count)
 			fattr4_to_tc_attrs(&atok->obj_attributes, attrs + i);
 			++i;
 			break;
+		default:
+			;
 		}
 	}
 
@@ -4097,6 +3936,8 @@ static tc_res tc_nfs4_lsetattrsv(struct tc_attrs *attrs, int count)
 			fattr4_to_tc_attrs(new_fattrs, attrs + i);
                         ++i;
                         break;
+		default:
+			;
                 }
         }
 
@@ -4186,6 +4027,8 @@ static tc_res tc_nfs4_mkdirv(struct tc_attrs *dirs, int count)
 				 .nfs_resop4_u.opgetattr.GETATTR4res_u.resok4;
 			fattr4_to_tc_attrs(&atok->obj_attributes, dirs + i - 1);
                         break;
+		default:
+			;
                 }
         }
 
@@ -4436,6 +4279,8 @@ static tc_res tc_do_listdirv(struct glist_head *dir_queue, int *limit,
                                 goto exit;
                         }
 			break;
+		default:
+			;
 		}
 	}
         NFS4_INFO("finished processing %d/%d listdirv ops", j, nfsops.opcnt);

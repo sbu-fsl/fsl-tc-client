@@ -700,7 +700,7 @@ int tc_unlink(const char *path)
 
 tc_res tc_unlinkv(const char **paths, int count)
 {
-	int i = 0, r = 0;
+	int i = 0;
 	tc_file *files;
 
 	files = (tc_file *) alloca(count * sizeof(tc_file));

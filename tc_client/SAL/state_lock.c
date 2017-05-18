@@ -232,6 +232,8 @@ const char *str_blocking(state_blocking_t blocking)
 	switch (blocking) {
 	case STATE_NON_BLOCKING:
 		return "NON_BLOCKING  ";
+	case STATE_NLM_BLOCKING:
+		return "NLM_BLOCKING  ";
 	case STATE_NFSV4_BLOCKING:
 		return "NFSV4_BLOCKING";
 	case STATE_GRANTING:
@@ -254,6 +256,8 @@ const char *str_blocked(state_blocking_t blocked)
 	switch (blocked) {
 	case STATE_NON_BLOCKING:
 		return "GRANTED       ";
+	case STATE_NLM_BLOCKING:
+		return "NLM_BLOCKING  ";
 	case STATE_NFSV4_BLOCKING:
 		return "NFSV4_BLOCKING";
 	case STATE_GRANTING:

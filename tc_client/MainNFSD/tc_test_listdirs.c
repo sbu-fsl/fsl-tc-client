@@ -38,6 +38,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <errno.h>
+#include <libgen.h>		/* used for 'dirname' */
 #include "../nfs4/nfs4_util.h"
 #include "common_types.h"
 
@@ -63,14 +64,16 @@ int main(int argc, char *argv[])
 	char *path;
 	tc_res tcres;
 	int i, j;
-	int rc;
 	const char *DIR_PATHS[] = { "/vfs0/dir1", "/vfs0/dir2", "/vfs0/dir3" };
 	struct tc_attrs_masks masks = {0};
 
 	/* Locate and use the default config file in the repo.  Before running
 	 * this example, please update the config file to a correct NFS server.
 	 */
-	readlink("/proc/self/exe", exe_path, PATH_MAX);
+	if (readlink("/proc/self/exe", exe_path, PATH_MAX) < 0) {
+		perror("readlink");
+		exit(EXIT_FAILURE);
+	}
 	snprintf(tc_config_path, PATH_MAX,
 		 "%s/../../../config/tc.ganesha.conf", dirname(exe_path));
 	fprintf(stderr, "using config file: %s\n", tc_config_path);

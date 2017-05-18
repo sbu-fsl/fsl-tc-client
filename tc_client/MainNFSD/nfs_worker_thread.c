@@ -137,7 +137,6 @@ static void nfs_rpc_execute(request_data_t *req,
 	nfs_request_data_t *reqnfs = req->r_u.nfs;
 	nfs_arg_t *arg_nfs = &reqnfs->arg_nfs;
 	nfs_res_t *res_nfs;
-	int exportid = -1;
 	struct svc_req *svcreq = &reqnfs->req;
 	SVCXPRT *xprt = reqnfs->xprt;
 	struct export_perms export_perms;
@@ -543,8 +542,6 @@ static void nfs_rpc_execute(request_data_t *req,
 							res_nfs);
 	}
 
- req_error:
-
 /* NFSv4 stats are handled in nfs4_compound()
  */
 	if (svcreq->rq_prog != nfs_param.core_param.program[P_NFS]
@@ -604,7 +601,6 @@ static void nfs_rpc_execute(request_data_t *req,
 		dpq_status = nfs_dupreq_finish(svcreq, res_nfs);
 	goto freeargs;
 
- handle_err:
 	/* Reject the request for authentication reason (incompatible
 	 * file handle) */
 	if (isInfo(COMPONENT_DISPATCH) || isInfo(COMPONENT_EXPORT)) {

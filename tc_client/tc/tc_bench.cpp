@@ -522,15 +522,16 @@ static bool DummyListDirCb(const struct tc_attrs *entry, const char *dir,
 	return true;
 }
 
-// There average directory width is 17:
-//
-// #find linux-4.6.3/ -type d | \
-//  while read dname; do ls -l $dname | wc -l; done  | \
-//  awk '{s += $1} END {print s/NR;}'
-// 16.8402
+/*
+There average directory width is 17:
+
+#find linux-4.6.3/ -type d | \
+while read dname; do ls -l $dname | wc -l; done  | \
+awk '{s += $1} END {print s/NR;}'
+16.8402
+*/
 static void CreateDirsWithContents(vector<const char *>& dirs)
 {
-	const int kFilesPerDir = 17;
 	vector<tc_attrs> attrs(dirs.size());
 	for (size_t i = 0; i < dirs.size(); ++i) {
 		tc_set_up_creation(&attrs[i], dirs[i], 0755);
