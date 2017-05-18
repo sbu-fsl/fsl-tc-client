@@ -78,7 +78,10 @@ public:
         }
 	bool isCached(std::string path)
 	{
-		return (cached_blocks.find(path) != cached_blocks.end());
+		// FIXME: we need to remove blocks from "cached_blocks"
+		// accordingly when the caching library evicts blocks.
+		auto it = cached_blocks.find(path);
+		return (it != cached_blocks.end()) && !it->second.empty();
 	}
 	void put(const std::string path, size_t offset, size_t length,
 		 char *data);

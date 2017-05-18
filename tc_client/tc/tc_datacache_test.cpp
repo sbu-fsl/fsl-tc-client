@@ -28,7 +28,7 @@ TEST(TC_DataCacheTest, CacheEntryExpireAfterTimeout)
 {
 	const int expire_sec = 5;
 	const string PATH = "/foo/bar";
-	TC_DataCache cache(10, expire_sec * 1000000);
+	TC_DataCache cache(10, expire_sec * 1000);
 	char *buf = getRandomBytes(CACHE_BLOCK_SIZE);
 
 	cache.put(PATH, 0, CACHE_BLOCK_SIZE, buf);
