@@ -40,8 +40,10 @@ static const char *filepath;
 static void ReadWriteSingle(benchmark::State &state, bool is_read)
 {
 	off_t filesize = GetFileSize(filepath);
+	// printf("%s file %s whose size is %lu bytes\n",
+	// 	  (is_read ? "read" : "write"), filepath, filesize);
 	auto fn = is_read ? vec_read : vec_write;
-	struct viovec iov;
+	struct viovec iov = {0};
 	iov.file = vfile_from_path(filepath);
 	iov.data = (char *)malloc(filesize);
 	assert(iov.data);
