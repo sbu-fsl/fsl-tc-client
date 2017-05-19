@@ -41,8 +41,10 @@ TEST(TC_DataCacheTest, CacheEntryExpireAfterTimeout)
 
 	sleep(expire_sec + 1);
 
-	EXPECT_FALSE(cache.isCached(PATH));
 	EXPECT_EQ(0, cache.get(PATH, 0, CACHE_BLOCK_SIZE, read_buf));
+	// Poco's cache eviction happens passively, so we need to do
+	// PocoCache::get() first before we check the cache absence.
+	EXPECT_FALSE(cache.isCached(PATH));
 
 	free(buf);
 	free(read_buf);
