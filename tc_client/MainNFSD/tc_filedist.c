@@ -159,7 +159,7 @@ int tc_dist(char *input_path, unsigned int block_size, unsigned int num_files,
 		if (rw == 0) {
 			nfs4_readv(user_arg, ops_per_comp, FALSE, NULL);
 		} else {
-			nfs4_writev(user_arg, ops_per_comp, FALSE, NULL);
+			nfs4_writev(user_arg, ops_per_comp, FALSE, NULL, NULL);
 		}
 		j = j + ops_per_comp;
 	}

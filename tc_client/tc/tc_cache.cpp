@@ -571,6 +571,8 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
 	tc_res tcres = { .index = write_count, .err_no = 0 };
 	tc_file *saved_tcfs = NULL;
 	struct tc_attrs *attrs = NULL;
+	struct tc_attrs *old_attrs = NULL;
+	int hit_count = 0;
 
 	saved_tcfs = nfs_updateIovec_FilenameToFh(writes, write_count);
 	if (!saved_tcfs) {
@@ -578,13 +580,43 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
 	}
 	attrs = (struct tc_attrs *) malloc(write_count* 
 					sizeof(struct tc_attrs));
+	old_attrs = (struct tc_attrs *) malloc(write_count*
+			sizeof(struct tc_attrs));
+	//If present in mdcache, add to array
+	SharedPtr<DirEntry> *ptrElem = new SharedPtr<DirEntry>[write_count]();
+	if (ptrElem == NULL) {
+		free(attrs);
+		free(old_attrs);
+		return tcres;
+	}
+
+	for (int i = 0; i < write_count; i++) {
+		//Read from md cache
+		if (writes[i].file.type != TC_FILE_PATH) {
+			//old_attrs[i].file = NULL;
+			continue;
+		}
+		ptrElem[i] = mdCache->get(writes[i].file.path);
+		if (!ptrElem[i].isNull() &&
+			dataCache->isCached(writes[i].file.path)) {
+			old_attrs[hit_count].file = writes[i].file;
+			old_attrs[hit_count].masks = TC_ATTRS_MASK_ALL;
+			hit_count++;
+		}
+		else {
+			//old_attrs[i].file = NULL;
+		}
+	}
 	tcres = check_and_remove(writes, write_count);
 	if (!tc_okay(tcres))
 	{
 		free(attrs);
+		free(old_attrs);
+		delete[] ptrElem;
 		return tcres;
 	}
-	tcres = nfs4_writev(writes, write_count, is_transaction, attrs);
+	tcres = nfs4_writev(writes, write_count, is_transaction, old_attrs,
+				attrs);
 
 	if (tc_okay(tcres)) {
 		for (int i = 0; i < write_count; i++) {
@@ -628,6 +660,8 @@ tc_res nfs_writev(struct tc_iovec *writes, int write_count, bool is_transaction)
 
 	nfs_restoreIovec_FhToFilename(writes, write_count, saved_tcfs);
 	free(attrs);
+	free(old_attrs);
+	delete[] ptrElem;
 
 	return tcres;
 }

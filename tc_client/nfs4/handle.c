@@ -2264,7 +2264,8 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
 		r = tc_open_file_if_necessary(&iovs[i].file, O_RDONLY,
 					      new_auto_buf(64), NULL,
 					      &opened_file) &&
-		    tc_prepare_rdwr(&iovs[i], false);
+		    tc_prepare_rdwr(&iovs[i], false) &&
+		    tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ, &fs_bitmap_getattr);
 		if (!r || !tc_has_enough_ops(1)) { // reserve for CLOSE
 			opcnt = saved_opcnt;
 			opened_file = saved_file;
@@ -2276,10 +2277,6 @@ static tc_res tc_nfs4_readv(struct tc_iovec *iovs, int count,
 	if (opened_file) {
 		COMPOUNDV4_ARG_ADD_OP_CLOSE_NOSTATE(opcnt, argoparray);
 		opened_file = NULL;
-	}
-	for (i = 0; i < count; i++) {
-		tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
-					&fs_bitmap_getattr);
 	}
 	tcres.index = count;
 	rc = fs_nfsv4_call(op_ctx->creds, &tcres.err_no);
@@ -2361,7 +2358,8 @@ static inline bool tc_prepare_rdwr(struct tc_iovec *iov, bool write)
  * Caller has to make sure iovs and fields inside are allocated and freed.
  */
 static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
-			     struct tc_attrs *attrs)
+			     struct tc_attrs *old_attrs,
+			     struct tc_attrs *new_attrs)
 {
 	tc_res tcres = { 0 };
 	int rc;
@@ -2376,6 +2374,8 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
         const tc_file *saved_file;
 	char *fattr_blobs;
         fattr_blobs = (char *)malloc(count * FATTR_BLOB_SZ);
+	char *old_fattr_blobs;
+	old_fattr_blobs = (char *)malloc(count * FATTR_BLOB_SZ);
         int attr_count = 0;
 
 	LogDebug(COMPONENT_FSAL, "ktcwrite() called\n");
@@ -2391,7 +2391,9 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
 			&iovs[i].file,
 			O_WRONLY | (iovs[i].is_creation ? O_CREAT : 0),
 			new_auto_buf(64), &input_attr[i], &opened_file) &&
-		    tc_prepare_rdwr(&iovs[i], true);
+			tc_prepare_getattr(old_fattr_blobs + i * FATTR_BLOB_SZ, &fs_bitmap_getattr) &&
+			tc_prepare_rdwr(&iovs[i], true) &&
+			tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ, &fs_bitmap_getattr);
 		if (!r || !tc_has_enough_ops(1)) { // reserve for CLOSE
 			opcnt = saved_opcnt;
 			opened_file = saved_file;
@@ -2404,11 +2406,6 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
 		COMPOUNDV4_ARG_ADD_OP_CLOSE(opcnt, argoparray, (&CURSID));
                 opened_file = NULL;
 	}
-
-	for (i = 0; i < count; i++) {
-                tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
-                                        &fs_bitmap_getattr);
-        }
 
         tcres.index = count;
 	rc = fs_nfsv4_call(op_ctx->creds, &tcres.err_no);
@@ -2440,11 +2437,20 @@ static tc_res tc_nfs4_writev(struct tc_iovec *iovs, int count,
 			i++;
                 }
 		else if (resoparray[j].resop == NFS4_OP_GETATTR) {
-			fattr4_to_tc_attrs(
-                            &resoparray[j]
-                                 .nfs_resop4_u.opgetattr.GETATTR4res_u.resok4
-                                 .obj_attributes,
-                            attrs + attr_count);
+			if (attr_count % 2 == 1) {
+				fattr4_to_tc_attrs(
+					&resoparray[j]
+					.nfs_resop4_u.opgetattr.GETATTR4res_u.resok4
+					.obj_attributes,
+					new_attrs + attr_count/2);
+			}
+			else {
+				fattr4_to_tc_attrs(
+                                        &resoparray[j]
+                                        .nfs_resop4_u.opgetattr.GETATTR4res_u.resok4
+                                        .obj_attributes,
+                                        old_attrs + attr_count/2);
+			}
                         ++attr_count;
 		}
         }

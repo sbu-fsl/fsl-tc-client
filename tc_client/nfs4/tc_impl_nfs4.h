@@ -63,7 +63,8 @@ tc_res nfs4_readv(struct tc_iovec *reads, int read_count, bool is_transaction,
  *              (Or number of reads)
  */
 tc_res nfs4_writev(struct tc_iovec *writes, int write_count,
-		   bool is_transaction, struct tc_attrs *attrs);
+		   bool is_transaction, struct tc_attrs *old_attrs,
+		   struct tc_attrs *new_attrs);
 
 /**
  * Open a list of files specified by paths
