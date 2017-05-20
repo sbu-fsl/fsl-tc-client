@@ -30,18 +30,19 @@ TEST(TC_DataCacheTest, CacheEntryExpireAfterTimeout)
 	const string PATH = "/foo/bar";
 	TC_DataCache cache(10, expire_sec * 1000);
 	char *buf = getRandomBytes(CACHE_BLOCK_SIZE);
+	bool revalidate = false;
 
 	cache.put(PATH, 0, CACHE_BLOCK_SIZE, buf);
 
 	EXPECT_TRUE(cache.isCached(PATH));
 	char *read_buf = (char *)malloc(CACHE_BLOCK_SIZE);
 	EXPECT_EQ(CACHE_BLOCK_SIZE,
-		  cache.get(PATH, 0, CACHE_BLOCK_SIZE, read_buf));
+		  cache.get(PATH, 0, CACHE_BLOCK_SIZE, read_buf, &revalidate));
 	EXPECT_EQ(0, memcmp(buf, read_buf, CACHE_BLOCK_SIZE));
 
 	sleep(expire_sec + 1);
 
-	EXPECT_EQ(0, cache.get(PATH, 0, CACHE_BLOCK_SIZE, read_buf));
+	EXPECT_EQ(0, cache.get(PATH, 0, CACHE_BLOCK_SIZE, read_buf, &revalidate));
 	// Poco's cache eviction happens passively, so we need to do
 	// PocoCache::get() first before we check the cache absence.
 	EXPECT_FALSE(cache.isCached(PATH));

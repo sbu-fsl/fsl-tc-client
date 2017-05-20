@@ -255,6 +255,7 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 	size_t *hits = NULL;
 	int hit_count = 0;
 	int i = 0;
+	bool revalidate = false;
 
 	struct tc_attrs *attrs = (tc_attrs *)malloc(count*sizeof(tc_attrs));
 	if (attrs == NULL)
@@ -290,7 +291,7 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 		}
 		int hit =
 		    dataCache->get(cur_siovec->file.path, cur_siovec->offset,
-				   cur_siovec->length, cur_siovec->data);
+				   cur_siovec->length, cur_siovec->data, &revalidate);
 		if (hit == 0) {
 			hits[i] = 0;
 			continue;

@@ -28,6 +28,8 @@ using namespace Poco;
 
 #define CACHE_EXPIRE_SECONDS (60 * 1000000)
 
+#define DATA_REFRESH_TIME_SECONDS 5
+
 /*template <
         class string,
         class DataBlock,
@@ -88,7 +90,7 @@ public:
 	void remove(std::string path);
 	void remove(std::string path, size_t offset, size_t length);
 	int get(const std::string path, size_t offset, size_t length,
-		char *buf);
+		char *buf, bool *revalidate);
 
 private:
         TC_DataCache(const TC_DataCache& aCache);
@@ -103,12 +105,11 @@ public:
 	std::string path;
 	size_t block_no;
 	TC_DataCache *data_cache;
-	//pthread_rwlock_t dataLock;
+	time_t timestamp;
 
 	DataBlock(char *d, size_t size, int start, std::string p, size_t b,
 		  TC_DataCache *dc)
 	{
-		//pthread_rwlock_init(&attrLock, NULL);
 		data = (char *) malloc(CACHE_BLOCK_SIZE);
 		len = size;
 		start_idx = start;
@@ -116,6 +117,7 @@ public:
 		path = p;
 		block_no = b;
 		data_cache = dc;
+		timestamp = time(NULL);
 	}
 
 	~DataBlock() {
@@ -157,7 +159,7 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 				ptrElem->start_idx = delta_offset;
 				ptrElem->len = CACHE_BLOCK_SIZE - delta_offset;
 			}
-
+			ptrElem->timestamp = time(NULL);
 			DataCacheBase::add(key, ptrElem);
 			AddBlockToMap(path, offset / CACHE_BLOCK_SIZE);
 #ifdef _DEBUG
@@ -193,6 +195,7 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 				}
 					//What if within a block CCCCCXCCCCCC
 */
+				ptrElem->timestamp = time(NULL);
 				DataCacheBase::add(key, ptrElem);
 				AddBlockToMap(path,
 					      (offset + i) / CACHE_BLOCK_SIZE);
@@ -272,11 +275,12 @@ void TC_DataCache::remove(std::string path, size_t offset, size_t length)
 }
 
 int TC_DataCache::get(const std::string path, size_t offset, size_t length,
-		      char *buf)
+		      char *buf, bool *revalidate)
 {
 	size_t i = 0;
 	size_t read_len = 0;
 	size_t delta_offset = offset % CACHE_BLOCK_SIZE;
+	*revalidate = false;
 
 	if (length < CACHE_BLOCK_SIZE) {
 		return 0;
@@ -291,6 +295,8 @@ int TC_DataCache::get(const std::string path, size_t offset, size_t length,
 			cout << "Found " << key << "Bytes " << read_len
 			     << std::endl;
 #endif
+			if (time(NULL) - ptrElem->timestamp >= DATA_REFRESH_TIME_SECONDS)
+				*revalidate = true;
 			return read_len;
 		}
 		if (ptrElem->len - delta_offset < length - read_len) {
@@ -302,6 +308,8 @@ int TC_DataCache::get(const std::string path, size_t offset, size_t length,
 			       length - read_len);
 			read_len = length;
 		}
+		if (time(NULL) - ptrElem->timestamp >= DATA_REFRESH_TIME_SECONDS)
+			*revalidate = true;
 		// Handle case when less len needs to be copied
 		delta_offset = 0;
 		if (length <= read_len) {
