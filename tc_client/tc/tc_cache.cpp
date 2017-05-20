@@ -253,7 +253,7 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 	struct tc_iovec *cur_siovec = NULL;
 	struct tc_iovec *cur_fiovec = NULL;
 	size_t *hits = NULL;
-	int hit_count = 0;
+	int revalidate_count = 0;
 	int i = 0;
 	bool revalidate = false;
 
@@ -272,12 +272,19 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 		free(final_iovec);
 		return NULL;
 	}
-
+	bool *reval = (bool *) malloc(sizeof(bool) * count);
+	if (reval == NULL) {
+		free(attrs);
+		free(final_iovec);
+		free(hits);
+		return NULL;
+	}
 	for(i = 0; i < count; i++) {
 		cur_siovec = siovec + i;
 		if (cur_siovec->file.type != TC_FILE_PATH &&
 			cur_siovec->file.type != TC_FILE_DESCRIPTOR) {
 			hits[i] = 0;
+			reval[i] = false;
 			continue;
 		}
 		if (cur_siovec->file.type == TC_FILE_DESCRIPTOR) {
@@ -286,40 +293,55 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 			if (it != fd_to_path_map->end()) {
 				cur_siovec->file.path = it->second.c_str();
 			}
-			else
+			else {
+				hits[i] = 0;
+				reval[i] = false;
 				continue;
+			}
 		}
 		int hit =
 		    dataCache->get(cur_siovec->file.path, cur_siovec->offset,
 				   cur_siovec->length, cur_siovec->data, &revalidate);
 		if (hit == 0) {
 			hits[i] = 0;
+			reval[i] = false;
 			continue;
 		}
 		SharedPtr<DirEntry> ptrElem = mdCache->get(cur_siovec->file.path);
-		if (!ptrElem.isNull()) {
+		if (revalidate == false && !ptrElem.isNull() &&
+				(time(NULL) - ptrElem->timestamp <= MD_REFRESH_TIME)) {
+			hits[i] = hit;
+			reval[i] = false;
+			if ((size_t)ptrElem->attrs.st_size <=
+					cur_siovec->offset + cur_siovec->length){
+				cur_siovec->is_eof = true;
+			}
+		}
+		else if (!ptrElem.isNull()) {
 			printf("Data Cache hit. MDCache hit.\n");
 			//Add to getattrs
 			hits[i] = hit;
-			attrs[hit_count].file = cur_siovec->file;
-			attrs[hit_count].masks = TC_ATTRS_MASK_ALL; 
-			hit_count++;
+			reval[i] = true;
+			attrs[revalidate_count].file = cur_siovec->file;
+			attrs[revalidate_count].masks = TC_ATTRS_MASK_ALL; 
+			revalidate_count++;
 		}
 		else {
 			printf("Data Cache hit. MDCache miss.\n");
 			hits[i] = 0;
+			reval[i] = false;
 			//Remove from data cache?
 		}
 	}
 	//Do getattrs
-	if (hit_count != 0) {
-		tc_res tcres = { .index = hit_count, .err_no = 0 };
-		tcres = nfs4_lgetattrsv(attrs, hit_count, false);
+	if (revalidate_count != 0) {
+		tc_res tcres = { .index = revalidate_count, .err_no = 0 };
+		tcres = nfs4_lgetattrsv(attrs, revalidate_count, false);
 		int l = 0;
 		if (tc_okay(tcres)) {
 			//Compare attrs in loop. If ctime is different, set hits[i] to 0.
 			for (int k = 0; k < count; k++) {
-				if (hits[k] == 0)
+				if (!reval[k])
 					continue;
 				cur_siovec = siovec + k;
 				SharedPtr<DirEntry> ptrElem = 
@@ -382,6 +404,7 @@ struct tc_iovec *check_dataCache(struct tc_iovec *siovec, int count,
 exit:
 	free(attrs);
 	free(hits);
+	free(reval);
 
 	return final_iovec;
 }
