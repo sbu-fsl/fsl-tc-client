@@ -83,7 +83,7 @@ static void BM2_OpenClose(int start, int csize)
 static void ReadWrite4K(int start, int csize, int flags, bool read)
 {
 	vector<const char *> paths =
-	    NewPaths("Bench-Files/files-4K/%04d", csize, start);
+	    NewPaths("files-4K/%04d", csize, start);
 	vfile *files =
 	    vec_open_simple(paths.data(), csize, flags, 0644);
 	assert(files);
@@ -314,7 +314,6 @@ static BM_func GetBenchmarkFunction()
 void Run()
 {
 	void *data = SetUp(FLAGS_tc);
-	sca_chdir("/vfs0");
 	int iters = FLAGS_nfiles / FLAGS_compound_size;
 	BM_func bmfunc = GetBenchmarkFunction();
 	for (int i = 0; i < iters; ++i) {

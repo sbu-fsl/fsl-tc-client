@@ -77,7 +77,7 @@ vector<viovec> NewIovecs(vfile *files, int n, size_t offset)
 		iovs[i].file = files[i];
 		iovs[i].offset = offset;
 		iovs[i].length = BUFSIZE;
-		iovs[i].data = (char *)malloc(BUFSIZE);
+		iovs[i].data = (char *)malloc(PATH_MAX);
 		iovs[i].is_write_stable = true;
 	}
 	return iovs;
