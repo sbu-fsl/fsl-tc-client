@@ -295,8 +295,6 @@ int TC_DataCache::get(const std::string path, size_t offset, size_t length,
 			cout << "Found " << key << "Bytes " << read_len
 			     << std::endl;
 #endif
-			if (time(NULL) - ptrElem->timestamp >= DATA_REFRESH_TIME_SECONDS)
-				*revalidate = true;
 			return read_len;
 		}
 		if (ptrElem->len - delta_offset < length - read_len) {
