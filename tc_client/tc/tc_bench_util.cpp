@@ -70,7 +70,7 @@ vector<vfile> Paths2Files(const vector<const char *>& paths)
 	return files;
 }
 
-vector<viovec> NewIovecs(vfile *files, int n, size_t offset)
+vector<viovec> NewIovecs(vfile *files, int n, size_t offset, int flags)
 {
 	vector<viovec> iovs(n);
 	for (int i = 0; i < n; ++i) {
@@ -78,7 +78,11 @@ vector<viovec> NewIovecs(vfile *files, int n, size_t offset)
 		iovs[i].offset = offset;
 		iovs[i].length = BUFSIZE;
 		iovs[i].data = (char *)malloc(BUFSIZE);
-		iovs[i].is_write_stable = true;
+		iovs[i].is_creation = (flags & O_CREAT);
+		iovs[i].is_write_stable = (flags & O_SYNC);
+		iovs[i].is_direct_io = (flags & O_DIRECT);
+		iovs[i].is_failure = false;
+		iovs[i].is_eof = false;
 	}
 	return iovs;
 }

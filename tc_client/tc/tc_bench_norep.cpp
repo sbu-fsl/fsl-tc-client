@@ -84,17 +84,14 @@ static void ReadWrite4K(int start, int csize, int flags, bool read)
 {
 	vector<const char *> paths =
 	    NewPaths("files-4K/%04d", csize, start);
-	vfile *files =
-	    vec_open_simple(paths.data(), csize, flags, 0644);
-	assert(files);
-	auto iovs = NewIovecs(files, csize, 0);
+	vector<vfile> files = Paths2Files(paths);
+	auto iovs = NewIovecs(files.data(), csize, 0, flags);
 
 	auto iofunc = read ? vec_read : vec_write;
 
 	vres tcres = iofunc(iovs.data(), csize, false);
 	assert(vokay(tcres));
 
-	vec_close(files, csize);
 	FreePaths(&paths);
 	FreeIovecs(&iovs);
 

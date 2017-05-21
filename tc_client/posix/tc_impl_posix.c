@@ -156,7 +156,10 @@ vres posix_readv(struct viovec *arg, int read_count, bool is_transaction)
 		 * go ahead with the file descriptor specified by the user
 		 */
 		if (iov->file.type == VFILE_PATH) {
-			fd = open(iov->file.path, O_RDONLY);
+			fd = open(iov->file.path,
+				  (iov->is_direct_io
+				   ?  (O_RDONLY | O_DIRECT)
+				   : O_RDONLY));
 		} else if (iov->file.type == VFILE_DESCRIPTOR) {
 			fd = iov->file.fd;
 		} else {

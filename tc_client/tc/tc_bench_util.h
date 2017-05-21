@@ -34,7 +34,8 @@ std::vector<const char *> NewPaths(const char *format, int n, int start = 0);
 
 void FreePaths(std::vector<const char *> *paths);
 
-std::vector<viovec> NewIovecs(vfile *files, int n, size_t offset = 0);
+std::vector<viovec> NewIovecs(vfile *files, int n, size_t offset = 0,
+			      int flags = 0);
 
 std::vector<vfile> Paths2Files(const std::vector<const char *>& paths);
 
