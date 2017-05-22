@@ -196,9 +196,8 @@ vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 	struct vattrs *attrs;
 	vres tcres = { .index = count, .err_no = 0 };
 	vfile *file;
-	attrs = (struct vattrs *) malloc(count * sizeof(struct vattrs));
 
-	file = nfs4_openv(paths, count, flags, modes, attrs);
+	file = nfs4_openv(paths, count, flags, modes, &attrs);
 
 	for (int i = 0; i < tcres.index; i++) {
 		SharedPtr<DirEntry> ptrElem = mdCache->get(paths[i]);
@@ -221,7 +220,7 @@ vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 		}
 		(*fd_to_path_map)[file[i].fd] = paths[i];
 	}
-	free(attrs);
+
 	return file;
 }
 
@@ -1163,7 +1162,7 @@ vres nfs_mkdirv(struct vattrs *dirs, int count, bool is_transaction)
 	return tcres;
 }
 
-vres nfs_lcopyv(struct vextent_pair *pairs, int count, bool is_transaction)
+vres nfs_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction)
 {
 	return nfs4_lcopyv(pairs, count, is_transaction);
 }

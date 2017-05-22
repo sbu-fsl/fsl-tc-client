@@ -53,9 +53,10 @@ static char tc_config_path[PATH_MAX];
 int main(int argc, char *argv[])
 {
 	void *context = NULL;
-	struct tc_extent_pair pairs[2];
-	struct tc_iovec iov[4];
-	tc_res res;
+	struct vextent_pair pairs[2];
+	struct viovec iov[4];
+	vres res;
+	const char *data = "hello world";
 	const char *srcdir = "/vfs0/srcdir";
 	const char *dstdir = "/vfs0/dstdir";
 	const char *fname1 = "file-1.txt";
@@ -74,7 +75,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -82,15 +83,15 @@ int main(int argc, char *argv[])
 		return EIO;
 	}
 
-	res = tc_ensure_dir(srcdir, 0755, NULL);
-	if (!tc_okay(res)) {
+	res = sca_ensure_dir(srcdir, 0755, NULL);
+	if (!vokay(res)) {
 		NFS4_ERR("failed to ensure source directory %s: %s",
 			 srcdir, strerror(res.err_no));
 		return res.err_no;
 	}
 
-	res = tc_ensure_dir(dstdir, 0755, NULL);
-	if (!tc_okay(res)) {
+	res = sca_ensure_dir(dstdir, 0755, NULL);
+	if (!vokay(res)) {
 		NFS4_ERR("failed to ensure source directory %s: %s",
 			 dstdir, strerror(res.err_no));
 		return res.err_no;
@@ -99,7 +100,7 @@ int main(int argc, char *argv[])
 	/* Setup I/O request */
 	pbuf = new_auto_buf(PATH_MAX);
 	tc_path_join_s(toslice(srcdir), toslice(fname1), pbuf);
-	iov[0].file = tc_file_from_path(asstr(pbuf));
+	iov[0].file = vfile_from_path(asstr(pbuf));
 	iov[0].is_creation = true;
 	iov[0].offset = 0;
 	iov[0].data = (char *)"This is file-1.txt.";
@@ -107,7 +108,7 @@ int main(int argc, char *argv[])
 
 	pbuf = new_auto_buf(PATH_MAX);
 	tc_path_join_s(toslice(srcdir), toslice(fname2), pbuf);
-	iov[1].file = tc_file_from_path(asstr(pbuf));
+	iov[1].file = vfile_from_path(asstr(pbuf));
 	iov[1].is_creation = true;
 	iov[1].offset = 0;
 	iov[1].data = (char *)"This is file-2.txt.";
@@ -115,7 +116,7 @@ int main(int argc, char *argv[])
 
 	pbuf = new_auto_buf(PATH_MAX);
 	tc_path_join_s(toslice(dstdir), toslice(fname1), pbuf);
-	iov[2].file = tc_file_from_path(asstr(pbuf));
+	iov[2].file = vfile_from_path(asstr(pbuf));
 	iov[2].is_creation = true;
 	iov[2].offset = 0;
 	iov[2].data = NULL;
@@ -123,7 +124,7 @@ int main(int argc, char *argv[])
 
 	pbuf = new_auto_buf(PATH_MAX);
 	tc_path_join_s(toslice(dstdir), toslice(fname2), pbuf);
-	iov[3].file = tc_file_from_path(asstr(pbuf));
+	iov[3].file = vfile_from_path(asstr(pbuf));
 	iov[3].is_creation = true;
 	iov[3].offset = 0;
 	iov[3].data = NULL;
@@ -131,10 +132,10 @@ int main(int argc, char *argv[])
 
 	/* Write the file using NFS compounds; nfs4_writev() will open the file
 	 * with CREATION flag, write to it, and then close it. */
-	res = tc_writev(iov, 4, false);
+	res = vec_write(iov, 4, false);
 
 	/* Check results. */
-	if (tc_okay(res)) {
+	if (vokay(res)) {
 		fprintf(stderr,
 			"Successfully write files: %zu bytes in %s; %zu bytes "
 			"in %s via NFS.\n",
@@ -162,16 +163,16 @@ int main(int argc, char *argv[])
 	pairs[1].dst_offset = 0;
 	pairs[1].length = iov[1].length;
 
-	res = tc_copyv(pairs, 2, false);
+	res = vec_copy(pairs, 2, false);
 
-	if (!tc_okay(res)) {
+	if (!vokay(res)) {
 		fprintf(stderr,
 			"Failed to copy files at the %d-th operation: %s",
 			res.index, strerror(res.err_no));
 	}
 
 exit:
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

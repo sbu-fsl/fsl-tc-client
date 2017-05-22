@@ -86,27 +86,27 @@ void tc_iterate_counters(bool (*tfc_reader)(struct tc_func_counter *tfc,
 	} while (false)
 
 /**
- * Free an array of tc_iovec.
+ * Free an array of viovec.
  */
-void free_iovec(struct tc_iovec *iovec, int count);
+void free_iovec(struct viovec *iovec, int count);
 
 char *get_tc_config_file(char *buf, int buf_size);
 
 /**
- * Compare the data contents of two arrays of tc_iovec.
+ * Compare the data contents of two arrays of viovec.
  *
  * Return whether the two arrays have the same contents.
  */
-bool compare_content(struct tc_iovec *iovec1, struct tc_iovec *iovec2,
+bool compare_content(struct viovec *iovec1, struct viovec *iovec2,
 		     int count);
 
 struct file_handle *new_file_handle(size_t fh_len, char *fh_val);
 
 void del_file_handle(struct file_handle *fh);
 
-void tc_copy_attrs(const struct tc_attrs *src, struct tc_attrs *dst);
+void tc_copy_attrs(const struct vattrs *src, struct vattrs *dst);
 
-bool tc_cmp_file(const tc_file *tcf1, const tc_file *tcf2);
+bool tc_cmp_file(const vfile *tcf1, const vfile *tcf2);
 
 #ifdef __cplusplus
 }

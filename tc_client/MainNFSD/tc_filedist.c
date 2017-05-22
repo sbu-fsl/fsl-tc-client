@@ -69,8 +69,8 @@ int tc_dist(char *input_path, unsigned int block_size, unsigned int num_files,
 	struct fsal_module *new_module = NULL;
 	struct gsh_export *export = NULL;
 	struct req_op_context req_ctx;
-	struct tc_iovec *user_arg = NULL;
-	struct tc_iovec *cur_arg = NULL;
+	struct viovec *user_arg = NULL;
+	struct viovec *cur_arg = NULL;
 	char *temp_path[MAX_READ_COUNT];
 	unsigned int *op_array = NULL;
         unsigned int *temp_array = NULL;
@@ -118,7 +118,7 @@ int tc_dist(char *input_path, unsigned int block_size, unsigned int num_files,
 		k++;
 	}
 
-	user_arg = malloc(ops_per_comp * (sizeof(struct tc_iovec)));
+	user_arg = malloc(ops_per_comp * (sizeof(struct viovec)));
 	k = 0;
 	while (k < ops_per_comp) {
 		cur_arg = user_arg + k;
@@ -150,7 +150,7 @@ int tc_dist(char *input_path, unsigned int block_size, unsigned int num_files,
 			temp_array = op_array + j + k;
 			snprintf(temp_path[k], input_len + 8, "%s%d",
 				 input_path, *temp_array);
-			cur_arg->file = tc_file_from_path(temp_path[k]);
+			cur_arg->file = vfile_from_path(temp_path[k]);
 			cur_arg->offset = 0;
 			cur_arg->length = block_size;
 			cur_arg->is_creation |= 1;

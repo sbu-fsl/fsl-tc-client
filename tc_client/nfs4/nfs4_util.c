@@ -37,7 +37,7 @@ static struct tc_kfd fd_list[MAX_FD];
 static int free_fds[MAX_FD];
 static int free_fds_top;
 
-int tc_init_fds()
+int vinit_fds()
 {
         int r = 0;
 	int i = 0;
@@ -89,7 +89,7 @@ int tc_alloc_fd(stateid4 *stateid, nfs_fh4 *object)
 
 	assert(fd_list[cur_fd].fd < 0);
 
-	fd_list[cur_fd].fd = cur_fd + TC_FD_OFFSET;
+	fd_list[cur_fd].fd = cur_fd + VFD_OFFSET;
 	memcpy(&fd_list[cur_fd].stateid, stateid, sizeof(stateid4));
 
 	fd_list[cur_fd].fh.nfs_fh4_val = malloc(object->nfs_fh4_len);
@@ -103,14 +103,14 @@ int tc_alloc_fd(stateid4 *stateid, nfs_fh4 *object)
 
         pthread_mutex_unlock(&fd_list_lock);
 
-	return cur_fd + TC_FD_OFFSET;
+	return cur_fd + VFD_OFFSET;
 }
 
 struct tc_kfd *tc_get_fd_struct(int fd, bool lock_for_write)
 {
         struct tc_kfd *tcfd;
 
-	fd -= TC_FD_OFFSET;
+	fd -= VFD_OFFSET;
 	if (fd < 0 || fd >= MAX_FD) {
 		return NULL;
 	}
@@ -118,7 +118,7 @@ struct tc_kfd *tc_get_fd_struct(int fd, bool lock_for_write)
         tcfd = fd_list + fd;
 
         pthread_rwlock_rdlock(&tcfd->fd_lock);
-	if (tcfd->fd < 0 || tcfd->fd != fd + TC_FD_OFFSET) {
+	if (tcfd->fd < 0 || tcfd->fd != fd + VFD_OFFSET) {
                 /* not in use OR not valid */
 	        pthread_rwlock_unlock(&tcfd->fd_lock);
                 return NULL;
@@ -163,7 +163,7 @@ int tc_free_fd(int fd)
         tc_put_fd_struct(&tcfd);
 
         pthread_mutex_lock(&fd_list_lock);
-	free_fds[free_fds_top++] = fd - TC_FD_OFFSET;
+	free_fds[free_fds_top++] = fd - VFD_OFFSET;
         pthread_mutex_unlock(&fd_list_lock);
 
 	return 0;

@@ -26,41 +26,41 @@ void init_data_cache(uint64_t size, uint64_t time);
 
 void deinit_data_cache();
 
-tc_file *nfs_openv(const char **paths, int count, int *flags, mode_t *modes);
+vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes);
 
-tc_res nfs_closev(tc_file *tcfs, int count);
+vres nfs_closev(vfile *tcfs, int count);
 
-off_t nfs_fseek(tc_file *tcf, off_t offset, int whence);
+off_t nfs_fseek(vfile *tcf, off_t offset, int whence);
 
-tc_res nfs_writev(struct tc_iovec *writes, int write_count,
+vres nfs_writev(struct viovec *writes, int write_count,
 		   bool is_transaction);
 
-tc_res nfs_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+vres nfs_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction);
 
-tc_res nfs_renamev(tc_file_pair *pairs, int count, bool is_transaction);
+vres nfs_renamev(vfile_pair *pairs, int count, bool is_transaction);
 
-tc_res nfs_removev(tc_file *tc_files, int count, bool is_transaction);
+vres nfs_removev(vfile *vfiles, int count, bool is_transaction);
 
-tc_res nfs_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction);
+vres nfs_mkdirv(struct vattrs *dirs, int count, bool is_transaction);
 
-tc_res nfs_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
-                     int max_entries, bool recursive, tc_listdirv_cb cb,
+vres nfs_listdirv(const char **dirs, int count, struct vattrs_masks masks,
+                     int max_entries, bool recursive, vec_listdir_cb cb,
                      void *cbarg, bool is_transaction);
 
-tc_res nfs_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction);
+vres nfs_lcopyv(struct vextent_pair *pairs, int count, bool is_transaction);
 
-tc_res nfs_hardlinkv(const char **oldpaths, const char **newpaths, int count,
+vres nfs_hardlinkv(const char **oldpaths, const char **newpaths, int count,
                       bool istxn);
 
-tc_res nfs_symlinkv(const char **oldpaths, const char **newpaths, int count,
+vres nfs_symlinkv(const char **oldpaths, const char **newpaths, int count,
                      bool istxn);
 
-tc_res nfs_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
+vres nfs_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
                       int count, bool istxn);
 
-tc_res nfs_readv(struct tc_iovec *iovs, int count, bool istxn);
+vres nfs_readv(struct viovec *iovs, int count, bool istxn);
 
-tc_res nfs_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+vres nfs_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction);
 
 int nfs_chdir(const char *path);
 

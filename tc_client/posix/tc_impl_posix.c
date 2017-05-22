@@ -48,16 +48,16 @@ void* posix_init(const char* config_file, const char* log_file) {
 	return (void*) log_file;
 }
 
-tc_file *posix_openv(const char **paths, int count, int *flags, mode_t *modes)
+vfile *posix_openv(const char **paths, int count, int *flags, mode_t *modes)
 {
-	tc_file *tcfs;
+	vfile *tcfs;
 	int fd;
 	int i;
 
 	tcfs = calloc(count, sizeof(*tcfs));
 	if (tcfs) {
 		for (i = 0; i < count; ++i) {
-			tcfs[i].type = TC_FILE_DESCRIPTOR;
+			tcfs[i].type = VFILE_DESCRIPTOR;
 			if (modes) {
 				fd = open(paths[i], flags[i], modes[i]);
 			} else {
@@ -70,28 +70,28 @@ tc_file *posix_openv(const char **paths, int count, int *flags, mode_t *modes)
 	return tcfs;
 }
 
-tc_file *posix_open(const char *path, int flags, mode_t mode)
+vfile *posix_open(const char *path, int flags, mode_t mode)
 {
 	return posix_openv(&path, 1, &flags, &mode);
 }
 
-tc_res posix_closev(tc_file *tcfs, int count)
+vres posix_closev(vfile *tcfs, int count)
 {
 	int i;
-	tc_res tcres = { .err_no = 0 };
+	vres tcres = { .err_no = 0 };
 
 	for (i = 0; i < count; ++i) {
-		assert(tcfs[i].type == TC_FILE_DESCRIPTOR);
+		assert(tcfs[i].type == VFILE_DESCRIPTOR);
 		/* return error no in case of failure */
 		if (close(tcfs[i].fd) < 0) {
-			tcres = tc_failure(i, errno);
+			tcres = vfailure(i, errno);
 			break;
 		} else {
 			tcfs[i].fd = INT_MIN;
 		}
 	}
 
-	if (tc_okay(tcres)) {
+	if (vokay(tcres)) {
 		free(tcfs);
 	}
 
@@ -100,14 +100,14 @@ tc_res posix_closev(tc_file *tcfs, int count)
 
 /*
  * close routine for POSIX files
- * file - tc_file structure with file
+ * file - vfile structure with file
  * descriptor value.
  */
-int posix_close(tc_file *tcf)
+int posix_close(vfile *tcf)
 {
-	tc_res tcres;
+	vres tcres;
 	tcres = posix_closev(tcf, 1);
-	if (tc_okay(tcres)) {
+	if (vokay(tcres)) {
 		free(tcf);
 		return 0;
 	} else {
@@ -115,10 +115,23 @@ int posix_close(tc_file *tcf)
 	}
 }
 
-off_t posix_fseek(tc_file *tcf, off_t offset, int whence)
+off_t posix_fseek(vfile *tcf, off_t offset, int whence)
 {
-	assert(tcf->type == TC_FILE_DESCRIPTOR);
+	assert(tcf->type == VFILE_DESCRIPTOR);
 	return lseek(tcf->fd, offset, whence);
+}
+
+static int posix_stat(const vfile *tcf, struct stat *st)
+{
+	int rc;
+	if (tcf->type == VFILE_PATH) {
+		rc = stat(tcf->path, st);
+	} else if (tcf->type == VFILE_DESCRIPTOR) {
+		rc = fstat(tcf->fd, st);
+	} else {
+		rc = -1;
+	}
+	return rc;
 }
 
 /*
@@ -127,12 +140,13 @@ off_t posix_fseek(tc_file *tcf, off_t offset, int whence)
  * read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res posix_readv(struct tc_iovec *arg, int read_count, bool is_transaction)
+vres posix_readv(struct viovec *arg, int read_count, bool is_transaction)
 {
 	int fd, i = 0;
 	ssize_t amount_read;
-	struct tc_iovec *iov = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	vfile file = { 0 };
+	struct viovec *iov = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 	struct stat st;
 
 	for (i = 0; i < read_count; ++i) {
@@ -142,16 +156,19 @@ tc_res posix_readv(struct tc_iovec *arg, int read_count, bool is_transaction)
 		 * then call open to obtain the file descriptor else
 		 * go ahead with the file descriptor specified by the user
 		 */
-		if (iov->file.type == TC_FILE_PATH) {
-			fd = open(iov->file.path, O_RDONLY);
-		} else if (iov->file.type == TC_FILE_DESCRIPTOR) {
+		if (iov->file.type == VFILE_PATH) {
+			fd = open(iov->file.path,
+				  (iov->is_direct_io
+				   ?  (O_RDONLY | O_DIRECT)
+				   : O_RDONLY));
+		} else if (iov->file.type == VFILE_DESCRIPTOR) {
 			fd = iov->file.fd;
 		} else {
 			POSIX_ERR("unsupported type: %d", iov->file.type);
 		}
 
 		if (fd < 0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			POSIX_ERR("failed in readv: %s\n", strerror(errno));
 			break;
 		}
@@ -164,10 +181,10 @@ tc_res posix_readv(struct tc_iovec *arg, int read_count, bool is_transaction)
 			    pread(fd, iov->data, iov->length, iov->offset);
 		}
 		if (amount_read < 0) {
-			if (iov->file.type == TC_FILE_PATH) {
+			if (iov->file.type == VFILE_PATH) {
 				close(fd);
 			}
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			break;
 		}
 
@@ -176,7 +193,7 @@ tc_res posix_readv(struct tc_iovec *arg, int read_count, bool is_transaction)
 
 		if (fstat(fd, &st) != 0) {
 			POSIX_ERR("failed to stat file");
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			break;
 		}
 
@@ -186,8 +203,8 @@ tc_res posix_readv(struct tc_iovec *arg, int read_count, bool is_transaction)
 			iov->is_eof = (iov->offset + iov->length) == st.st_size;
 		}
 
-		if (iov->file.type == TC_FILE_PATH && close(fd) < 0) {
-			result = tc_failure(i, errno);
+		if (iov->file.type == VFILE_PATH && close(fd) < 0) {
+			result = vfailure(i, errno);
 			break;
 		}
 	}
@@ -201,12 +218,12 @@ tc_res posix_readv(struct tc_iovec *arg, int read_count, bool is_transaction)
  * read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res posix_writev(struct tc_iovec *arg, int write_count, bool is_transaction)
+vres posix_writev(struct viovec *arg, int write_count, bool is_transaction)
 {
 	int fd, i = 0;
 	ssize_t written = 0;
-	struct tc_iovec *iov = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	struct viovec *iov = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 	int flags;
 	off_t offset;
 
@@ -225,16 +242,16 @@ tc_res posix_writev(struct tc_iovec *arg, int write_count, bool is_transaction)
 			flags |= O_SYNC;
 		}
 
-		if (iov->file.type == TC_FILE_PATH) {
+		if (iov->file.type == VFILE_PATH) {
 			fd = open(iov->file.path, flags);
-		} else if (iov->file.type == TC_FILE_DESCRIPTOR) {
+		} else if (iov->file.type == VFILE_DESCRIPTOR) {
 			fd = iov->file.fd;
 		} else {
 			POSIX_ERR("unsupported type: %d", iov->file.type);
 		}
 
 		if (fd < 0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			break;
 		}
 
@@ -242,7 +259,7 @@ tc_res posix_writev(struct tc_iovec *arg, int write_count, bool is_transaction)
 		/* When appending to file we did not open, we need to use lseek
 		 * to set the offset to file size. */
 		if (offset == TC_OFFSET_END) {
-			if (iov->file.type == TC_FILE_PATH) {
+			if (iov->file.type == VFILE_PATH) {
 				/* Will be ignored because the file was opened
 				 * with O_APPEND, but it cannot be
 				 * TC_OFFSET_END which is negative when
@@ -263,18 +280,18 @@ tc_res posix_writev(struct tc_iovec *arg, int write_count, bool is_transaction)
 			}
 
 			if (written < 0) {
-				if (iov->file.type == TC_FILE_PATH) {
+				if (iov->file.type == VFILE_PATH) {
 					close(fd);
 				}
-				result = tc_failure(i, errno);
+				result = vfailure(i, errno);
 				break;
 			}
 		}
 
 		/* set the length to number of bytes successfully written */
 		iov->length = written;
-		if (iov->file.type == TC_FILE_PATH && close(fd) < 0) {
-			result = tc_failure(i, errno);
+		if (iov->file.type == VFILE_PATH && close(fd) < 0) {
+			result = vfailure(i, errno);
 			break;
 		}
 	}
@@ -286,35 +303,35 @@ tc_res posix_writev(struct tc_iovec *arg, int write_count, bool is_transaction)
  * Get attributes of files
  *
  * @attrs: array of attributes to get
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
 
-tc_res posix_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
+vres posix_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 {
-	int i = 0, res = 0;
-	struct tc_attrs *cur_attr = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	int fd = -1, i = 0, res = 0;
+	struct vattrs *cur_attr = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 	struct stat st;
 
 	while (i < count) {
 		cur_attr = attrs + i;
 
 		/* get attributes */
-		if (cur_attr->file.type == TC_FILE_PATH)
+		if (cur_attr->file.type == VFILE_PATH)
 			res = lstat(cur_attr->file.path, &st);
 		else
 			res = fstat(cur_attr->file.fd, &st);
 
 		if (res < 0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			POSIX_DEBUG("posix_lgetattrsv() failed at index : %d\n",
 				    result.index);
 			break;
 		}
 
 		/* copy stat output */
-		tc_stat2attrs(&st, cur_attr);
+		vstat2attrs(&st, cur_attr);
 
 		i++;
 	}
@@ -322,7 +339,7 @@ tc_res posix_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 	return result;
 }
 
-static int helper_set_attrs(struct tc_attrs *attrs)
+static int helper_set_attrs(struct vattrs *attrs)
 {
 	int res = 0;
 	struct stat s;
@@ -348,7 +365,7 @@ static int helper_set_attrs(struct tc_attrs *attrs)
 			POSIX_WARN("set_attrs() failed : cannot chmod symlink\n");
 			return -1;
 		}
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = chmod(attrs->file.path, attrs->mode);
 		else
 			res = fchmod(attrs->file.fd, attrs->mode);
@@ -359,7 +376,7 @@ static int helper_set_attrs(struct tc_attrs *attrs)
 
 	/* set the file size */
 	if (attrs->masks.has_size) {
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = truncate(attrs->file.path, attrs->size);
 		else
 			res = ftruncate(attrs->file.fd, attrs->size);
@@ -370,7 +387,7 @@ static int helper_set_attrs(struct tc_attrs *attrs)
 
 	/* set the UID and GID */
 	if (attrs->masks.has_uid || attrs->masks.has_gid) {
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = lchown(attrs->file.path, attrs->uid, attrs->gid);
 		else
 			res = fchown(attrs->file.fd, attrs->uid, attrs->gid);
@@ -382,7 +399,7 @@ static int helper_set_attrs(struct tc_attrs *attrs)
 	/* set the atime and mtime */
 	if (attrs->masks.has_atime || attrs->masks.has_mtime) {
 
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			lstat(attrs->file.path, &s);
 		else
 			fstat(attrs->file.fd, &s);
@@ -396,7 +413,7 @@ static int helper_set_attrs(struct tc_attrs *attrs)
 		if (attrs->masks.has_mtime)
 			TIMEVAL_TO_TIMESPEC(&times[1], &attrs->mtime);
 
-		if (attrs->file.type == TC_FILE_PATH)
+		if (attrs->file.type == VFILE_PATH)
 			res = lutimes(attrs->file.path, times);
 		else
 			res = futimes(attrs->file.fd, times);
@@ -413,14 +430,14 @@ exit:
  * Set attributes of files.
  *
  * @attrs: array of attributes to set
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res posix_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
+vres posix_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 {
-	int i = 0;
-	struct tc_attrs *cur_attr = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	int fd = -1, i = 0;
+	struct vattrs *cur_attr = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 
 	while (i < count) {
 		cur_attr = attrs + i;
@@ -429,7 +446,7 @@ tc_res posix_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 		 * Set the attributes if corrseponding mask bit is set
 		 */
 		if (helper_set_attrs(cur_attr) < 0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			POSIX_WARN(
 			    "posix_lsetattrsv() failed at index : %d (%s)\n",
 			    result.index, strerror(errno));
@@ -445,29 +462,29 @@ tc_res posix_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction)
 /*
  * Rename File(s)
  *
- * @pairs[IN] - tc_file_pair structure containing the
+ * @pairs[IN] - vfile_pair structure containing the
  * old and new path of the file
- * @count[IN]: the count of tc_file_pair in the preceding array
+ * @count[IN]: the count of vfile_pair in the preceding array
  * @is_transaction[IN]: whether to execute the compound as a transaction
  */
 
-tc_res posix_renamev(struct tc_file_pair *pairs, int count, bool is_transaction)
+vres posix_renamev(struct vfile_pair *pairs, int count, bool is_transaction)
 {
 	int i = 0;
-	tc_file_pair *cur_pair = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	vfile_pair *cur_pair = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 
 	while (i < count) {
 		cur_pair = pairs + i;
 
-		assert(cur_pair->src_file.type == TC_FILE_PATH &&
-		       cur_pair->dst_file.type == TC_FILE_PATH &&
+		assert(cur_pair->src_file.type == VFILE_PATH &&
+		       cur_pair->dst_file.type == VFILE_PATH &&
 		       cur_pair->src_file.path != NULL &&
 		       cur_pair->src_file.path != NULL);
 
 		if (rename(cur_pair->src_file.path, cur_pair->dst_file.path) <
 		    0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			POSIX_WARN("posix_renamev() failed at index %d: %s\n",
 				   i, strerror(errno));
 			break;
@@ -482,17 +499,17 @@ tc_res posix_renamev(struct tc_file_pair *pairs, int count, bool is_transaction)
 /*
  * Remove File(s)
  *
- * @files[IN] - tc_file structure containing the
+ * @files[IN] - vfile structure containing the
  * path of the directory to be removed
  * @count[IN]: the count of tc_target_file in the preceding array
  * @is_transaction[IN]: whether to execute the compound as a transaction
  */
 
-tc_res posix_removev(tc_file *files, int count, bool is_transaction)
+vres posix_removev(vfile *files, int count, bool is_transaction)
 {
 	int i = 0;
-	tc_file *cur_file = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	vfile *cur_file = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 
 	while (i < count) {
 		cur_file = files + i;
@@ -500,7 +517,7 @@ tc_res posix_removev(tc_file *files, int count, bool is_transaction)
 		assert(cur_file->path != NULL);
 
 		if (remove(cur_file->path) < 0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			POSIX_WARN("posix_removev() failed at index %d for "
 				   "path %s: %s\n",
 				   result.index, cur_file->path,
@@ -517,17 +534,17 @@ tc_res posix_removev(tc_file *files, int count, bool is_transaction)
 /*
  * Remove Directory
  *
- * @dir[IN] - tc_file structure containing the
+ * @dir[IN] - vfile structure containing the
  * path of the directory to be removed
  * @count: the count of tc_target_file in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
 
-tc_res posix_remove_dirv(tc_file *dir, int count, bool is_transaction)
+vres posix_remove_dirv(vfile *dir, int count, bool is_transaction)
 {
 	int i = 0;
-	tc_file *cur_dir = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	vfile *cur_dir = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 
 	while (i < count) {
 		cur_dir = dir + i;
@@ -535,7 +552,7 @@ tc_res posix_remove_dirv(tc_file *dir, int count, bool is_transaction)
 		assert(cur_dir->path != NULL);
 
 		if (rmdir(cur_dir->path) < 0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			POSIX_WARN("posix_remove_dirv() failed at index : %d\n",
 				   result.index);
 
@@ -551,17 +568,17 @@ tc_res posix_remove_dirv(tc_file *dir, int count, bool is_transaction)
 /*
  * Create Directory
  *
- * @dir[IN] - tc_file structure containing the
+ * @dir[IN] - vfile structure containing the
  * path of the directory to be created
  * @count: the count of tc_target_file in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
 
-tc_res posix_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction)
+vres posix_mkdirv(struct vattrs *dirs, int count, bool is_transaction)
 {
 	int i = 0;
-	tc_file *cur_dir = NULL;
-	tc_res result = { .index = -1, .err_no = 0 };
+	vfile *cur_dir = NULL;
+	vres result = { .index = -1, .err_no = 0 };
 
 	while (i < count) {
 		cur_dir = &dirs[i].file;
@@ -569,7 +586,7 @@ tc_res posix_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction)
 		assert(cur_dir->path != NULL);
 
 		if (mkdir(cur_dir->path, dirs[i].mode) < 0) {
-			result = tc_failure(i, errno);
+			result = vfailure(i, errno);
 			POSIX_WARN("posix_mkdirv() failed at index : %d (%s)\n",
 				   result.index, strerror(errno));
 			return result;
@@ -607,11 +624,11 @@ enqueue_dir_to_list(struct glist_head *dir_queue, const char *path,
 }
 
 static int posix_listdir(struct glist_head *dir_queue, const char *dir,
-			 struct tc_attrs_masks masks, int index, int *limit,
-			 bool recursive, tc_listdirv_cb cb, void *cbarg)
+			 struct vattrs_masks masks, int index, int *limit,
+			 bool recursive, vec_listdir_cb cb, void *cbarg)
 {
 	DIR *dir_fd;
-	struct tc_attrs cur_attr;
+	struct vattrs cur_attr;
 	struct dirent *dp;
 	int path_len;
 	struct stat st;
@@ -635,7 +652,7 @@ static int posix_listdir(struct glist_head *dir_queue, const char *dir,
 		char *path = (char *)malloc(path_len);
 		tc_path_join(dir, dp->d_name, path, path_len);
 
-		cur_attr.file = tc_file_from_path(path);
+		cur_attr.file = vfile_from_path(path);
 		cur_attr.masks = masks;
 
 		if (lstat(path, &st) < 0) {
@@ -646,7 +663,7 @@ static int posix_listdir(struct glist_head *dir_queue, const char *dir,
 		}
 
 		/* copy the attributes */
-		tc_stat2attrs(&st, &cur_attr);
+		vstat2attrs(&st, &cur_attr);
 		if (!cb(&cur_attr, path, cbarg)) {
 			ret = 0;
 			goto exit;
@@ -673,11 +690,11 @@ exit:
 	return ret;
 }
 
-tc_res posix_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
-		      int max_entries, bool recursive, tc_listdirv_cb cb,
+vres posix_listdirv(const char **dirs, int count, struct vattrs_masks masks,
+		      int max_entries, bool recursive, vec_listdir_cb cb,
 		      void *cbarg, bool istxn)
 {
-	tc_res tcres = { .err_no = 0 };
+	vres tcres = { .err_no = 0 };
 	GLIST_HEAD(dir_queue);
 	struct tc_posix_dir_to_list *dle;
 	int i;
@@ -699,7 +716,7 @@ tc_res posix_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 					    dle->origin_index, &max_entries,
 					    recursive, cb, cbarg);
 			if (ret < 0) {
-				tcres = tc_failure(dle->origin_index, ret);
+				tcres = vfailure(dle->origin_index, ret);
 			}
 		}
 		if (dle->need_free_path) {
@@ -712,18 +729,18 @@ tc_res posix_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
 	return tcres;
 }
 
-tc_res posix_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction)
+vres posix_lcopyv(struct vextent_pair *pairs, int count, bool is_transaction)
 {
 	int i;
 	ssize_t ret;
-	tc_res tcres = { .err_no = 0 };
+	vres tcres = { .err_no = 0 };
 
 	for (i = 0; i < count; ++i) {
 		ret = splice_copy(pairs[i].src_path, pairs[i].src_offset,
 				  pairs[i].dst_path, pairs[i].dst_offset,
 				  pairs[i].length);
 		if (ret < 0) {
-			tcres = tc_failure(i, -ret);
+			tcres = vfailure(i, -ret);
 			return tcres;
 		}
 		pairs[i].length = ret;
@@ -732,15 +749,15 @@ tc_res posix_lcopyv(struct tc_extent_pair *pairs, int count, bool is_transaction
 	return tcres;
 }
 
-tc_res posix_hardlinkv(const char **oldpaths, const char **newpaths, int count,
+vres posix_hardlinkv(const char **oldpaths, const char **newpaths, int count,
 		       bool istxn)
 {
 	int i;
-	tc_res tcres = { .err_no = 0 };
+	vres tcres = { .err_no = 0 };
 
 	for (i = 0; i < count; ++i) {
 		if (link(oldpaths[i], newpaths[i]) < 0) {
-			tcres = tc_failure(i, errno);
+			tcres = vfailure(i, errno);
 			POSIX_ERR("posix_hardlinkv-%d hardlink %s to %s: %s", i,
 				  oldpaths[i], newpaths[i], strerror(errno));
 			break;
@@ -750,15 +767,15 @@ tc_res posix_hardlinkv(const char **oldpaths, const char **newpaths, int count,
 	return tcres;
 }
 
-tc_res posix_symlinkv(const char **oldpaths, const char **newpaths, int count,
+vres posix_symlinkv(const char **oldpaths, const char **newpaths, int count,
 		      bool istxn)
 {
 	int i;
-	tc_res tcres = { .err_no = 0 };
+	vres tcres = { .err_no = 0 };
 
 	for (i = 0; i < count; ++i) {
 		if (symlink(oldpaths[i], newpaths[i]) < 0) {
-			tcres = tc_failure(i, errno);
+			tcres = vfailure(i, errno);
 			POSIX_ERR("posix_symlinkv-%d symlink %s to %s: %s", i,
 				  oldpaths[i], newpaths[i], strerror(errno));
 			break;
@@ -768,16 +785,16 @@ tc_res posix_symlinkv(const char **oldpaths, const char **newpaths, int count,
 	return tcres;
 }
 
-tc_res posix_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
+vres posix_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
 		       int count, bool istxn)
 {
 	int i;
 	ssize_t sz;
-	tc_res tcres = { .err_no = 0 };
+	vres tcres = { .err_no = 0 };
 
 	for (i = 0; i < count; ++i) {
 		if ((sz = readlink(paths[i], bufs[i], bufsizes[i])) < 0) {
-			tcres = tc_failure(i, errno);
+			tcres = vfailure(i, errno);
 			POSIX_ERR("posix_readlinkv-%d readlink at %s: %s",
 				  i, paths[i], strerror(errno));
 			break;

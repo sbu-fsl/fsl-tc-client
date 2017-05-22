@@ -22,7 +22,7 @@
  * RPCs using the TC API (see tc_client/include/tc_api.h).
  *
  * It has the same effect as bash command "mkdir -p /vfs0/a/b/c/d/e". The TC
- * API has a helper function that has the same effects: tc_ensure_dir().
+ * API has a helper function that has the same effects: sca_ensure_dir().
  *
  * @file tc_test_mkdir.c
  * @brief Test creating a deep directoriy and all its ancestory directories.
@@ -53,8 +53,9 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	const int N = 6;
-	struct tc_attrs dirs[N];
-	tc_res res;
+	struct vattrs dirs[N];
+	slice_t *comps;
+	vres res;
 	int i;
 	int n;
 	const char *DIR_LEAF = "/vfs0/a/b/c/d/e";
@@ -73,7 +74,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -82,14 +83,14 @@ int main(int argc, char *argv[])
 	}
 
 	/* Setup getattrs */
-	dirs[0].file = tc_file_from_path(DIR_PATHS[0]);
+	dirs[0].file = vfile_from_path(DIR_PATHS[0]);
 	for (i = 1; i < N; ++i) {
-		dirs[i].file = tc_file_from_cfh(DIR_PATHS[i]);
+		dirs[i].file = vfile_from_cfh(DIR_PATHS[i]);
 		memset(&dirs[i].masks, 0, sizeof(dirs[i].masks));
 	}
 
-	res = tc_getattrsv(dirs, N, false);
-	if (tc_okay(res)) {
+	res = vec_getattrs(dirs, N, false);
+	if (vokay(res)) {
 		fprintf(stderr, "directory %s already exists\n", DIR_LEAF);
 		goto exit;
 	} else {
@@ -106,20 +107,20 @@ int main(int argc, char *argv[])
 			continue;
 		} else if (i == res.index) {
 			tc_path_join(prefix, DIR_PATHS[i], prefix, PATH_MAX);
-			tc_set_up_creation(&dirs[n], prefix, 0755);
+			vset_up_creation(&dirs[n], prefix, 0755);
 		} else {
-			tc_set_up_creation(&dirs[n], DIR_PATHS[i], 0755);
-			dirs[n].file.type = TC_FILE_CURRENT;
+			vset_up_creation(&dirs[n], DIR_PATHS[i], 0755);
+			dirs[n].file.type = VFILE_CURRENT;
 		}
 		fprintf(stderr, "prepare mkdir %s\n", dirs[n].file.path);
 		++n;
 	}
 	assert(n == N - res.index);
 
-	res = tc_mkdirv(dirs, n, false);
+	res = vec_mkdir(dirs, n, false);
 
 	/* Check results. */
-	if (tc_okay(res)) {
+	if (vokay(res)) {
 		fprintf(stderr, "directory %s successfully created via NFS.\n",
 			DIR_LEAF);
 	} else {
@@ -127,7 +128,7 @@ int main(int argc, char *argv[])
 	}
 
 exit:
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

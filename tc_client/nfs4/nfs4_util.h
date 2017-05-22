@@ -39,7 +39,7 @@ extern "C" {
  */
 struct tcwrite_kargs
 {
-	struct tc_iovec *user_arg;
+	struct viovec *user_arg;
 	char *path;
 	stateid4 *sid;
 	nfs_fh4 *fh;
@@ -66,7 +66,7 @@ struct nfs4_fd_data {
 #define MAX_DIR_DEPTH       10
 #define MAX_FILENAME_LENGTH 256
 #define MAX_FD              1024
-#define TC_FD_OFFSET	    (1 << 30)
+#define VFD_OFFSET	    (1 << 30)
 
 struct tc_kfd
 {
@@ -84,7 +84,7 @@ struct tc_kfd
 	size_t filesize;
 };
 
-int tc_init_fds();
+int vinit_fds();
 
 /* Helper function to get free count, to be called before sending open to server
  */

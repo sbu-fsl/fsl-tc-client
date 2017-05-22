@@ -33,7 +33,7 @@ constexpr size_t operator"" _GB(unsigned long long a) { return a << 30; }
 #define TCTEST_DEBUG(fmt, args...) LogDebug(COMPONENT_TC_TEST, fmt, ##args)
 
 #define EXPECT_OK(x)                                                           \
-	EXPECT_TRUE(tc_okay(x)) << "Failed at " << x.index << ": "             \
+	EXPECT_TRUE(vokay(x)) << "Failed at " << x.index << ": "             \
 				<< strerror(x.err_no)
 #define EXPECT_NOTNULL(x) EXPECT_TRUE(x != NULL) << #x << " is NULL"
 

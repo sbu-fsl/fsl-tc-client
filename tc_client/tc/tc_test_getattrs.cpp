@@ -77,10 +77,10 @@ static vector<const char *> NewPaths(const char *format, int n, int l)
 	return paths;
 }
 
-static vector<tc_attrs> NewTcAttrs(size_t nfiles, int nloop, tc_attrs *values = nullptr)
+static vector<vattrs> NewTcAttrs(size_t nfiles, int nloop, vattrs *values = nullptr)
 {
 	vector<const char *> paths = NewPaths("tc_cache/file-%d", nfiles, nloop);
-	vector<tc_attrs> attrs(nfiles);
+	vector<vattrs> attrs(nfiles);
 
 #if DEBUG
 	vector<const char *>::iterator it;
@@ -93,15 +93,15 @@ static vector<tc_attrs> NewTcAttrs(size_t nfiles, int nloop, tc_attrs *values = 
 		if (values) {
 			attrs[i] = *values;
 		} else {
-			attrs[i].masks = TC_ATTRS_MASK_ALL;
+			attrs[i].masks = VATTRS_MASK_ALL;
 		}
-		attrs[i].file = tc_file_from_path(paths[i]);
+		attrs[i].file = vfile_from_path(paths[i]);
 	}
 
 	return attrs;
 }
 
-static void FreeTcAttrs(vector<tc_attrs> *attrs)
+static void FreeTcAttrs(vector<vattrs> *attrs)
 {
 	for (const auto& at : *attrs) {
 		free((char *)at.file.path);
@@ -121,7 +121,7 @@ static void* SetUp()
 {
 	void *context;
 	char buf[PATH_MAX];
-	context = tc_init(get_tc_config_file(buf, PATH_MAX),
+	context = vinit(get_tc_config_file(buf, PATH_MAX),
 				  "/tmp/tc-test-getattrs.log", 77);
 #if DEBUG
 	fprintf(stderr, "Using config file at %s\n", buf);
@@ -131,7 +131,7 @@ static void* SetUp()
 
 static void TearDown(void *context)
 {
-	tc_deinit(context);
+	vdeinit(context);
 }
 
 double test_getattrs(size_t n, int l) {
@@ -142,15 +142,15 @@ double test_getattrs(size_t n, int l) {
 	timeval start, end;
 
 	for (i = 0; i < l; ++i) {
-		/* generate a vector of n tc_attrs, having random file paths
+		/* generate a vector of n vattrs, having random file paths
 		 * ranges from 0 to n * l, using gamma distribution
 		 */
-		vector<tc_attrs> attrs = NewTcAttrs(n, l);
+		vector<vattrs> attrs = NewTcAttrs(n, l);
 
 		gettimeofday(&start, 0);
 
-		tc_res tcres = tc_getattrsv(attrs.data(), n, false);
-		assert(tc_okay(tcres));
+		vres tcres = vec_getattrs(attrs.data(), n, false);
+		assert(vokay(tcres));
 
 		gettimeofday(&end, 0);
 
@@ -201,7 +201,7 @@ int main(int argc, char **argv)
 {
 	extern char *optarg;
 	int c;
-	size_t nfiles = 1;	// no of ops in the vector of tc_attrs
+	size_t nfiles = 1;	// no of ops in the vector of vattrs
 	int repetitions = 1;	// no of repetitions for the experiment
 	int nloops = 1;		// no of loops per repetition
 	void *context = SetUp();

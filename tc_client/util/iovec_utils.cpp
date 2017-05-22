@@ -69,7 +69,7 @@ static const size_t CPDSIZE = 192 + 256 + COMPOUND4SZ;
 static const size_t RDWRSIZE = 48;
 
 // Return the RPC overhead byte excluding the data size.
-static inline size_t tc_get_iov_overhead(const struct tc_iovec *iov)
+static inline size_t tc_get_iov_overhead(const struct viovec *iov)
 {
 	int n = 0;
 	size_t putfh_bytes = 0;
@@ -78,10 +78,10 @@ static inline size_t tc_get_iov_overhead(const struct tc_iovec *iov)
 	size_t rdwr_bytes = OPSIZE + RDWRSIZE;
 
 	switch (iov->file.type) {
-	case TC_FILE_DESCRIPTOR:
+	case VFILE_DESCRIPTOR:
 		putfh_bytes = OPSIZE + NFS4_FHSIZE;
 		break;
-	case TC_FILE_PATH:
+	case VFILE_PATH:
 		assert(iov->file.path);
 		if (iov->file.path[0] == '/') {
 			// PUTROOTFH does not have args
@@ -97,12 +97,12 @@ static inline size_t tc_get_iov_overhead(const struct tc_iovec *iov)
 		// OPEN, CLOSE, and GETFH
 		open_close_bytes = OPEN4SZ + CLOSE4SZ + OPSIZE * 3;
 		break;
-	case TC_FILE_HANDLE:
+	case VFILE_HANDLE:
 		assert(iov->file.handle);
 		putfh_bytes = PUTFH4SZ + NFS4_FHSIZE;
 		open_close_bytes = OPEN4SZ + CLOSE4SZ + OPSIZE * 2;
 		break;
-	case TC_FILE_CURRENT:
+	case VFILE_CURRENT:
 		if (iov->file.path) {
 			assert(iov->file.path[0] != '/');
 			n = tc_path_tokenize(iov->file.path, NULL);
@@ -111,7 +111,7 @@ static inline size_t tc_get_iov_overhead(const struct tc_iovec *iov)
 			open_close_bytes = OPEN4SZ + CLOSE4SZ + OPSIZE * 3;
 		}
 		break;
-	case TC_FILE_SAVED:
+	case VFILE_SAVED:
 		putfh_bytes = OPSIZE;  // for RESTOREFH4
 		break;
 	default:
@@ -121,31 +121,31 @@ static inline size_t tc_get_iov_overhead(const struct tc_iovec *iov)
 	return putfh_bytes + lookup_bytes + open_close_bytes + rdwr_bytes;
 }
 
-struct tc_iov_array *tc_split_iov_array(const struct tc_iov_array *iova,
-					size_t size_limit, int *nparts)
+struct viov_array *tc_split_iov_array(const struct viov_array *iova,
+					int size_limit, int *nparts)
 {
-	std::vector<struct tc_iov_array> parts;
-	std::vector<struct tc_iovec> cur_cpd; // iovec of current compound
+	std::vector<struct viov_array> parts;
+	std::vector<struct viovec> cur_cpd; // iovec of current compound
 	size_t cpd_size = CPDSIZE;
 
 	auto add_part = [&parts, &cur_cpd, &cpd_size]() {
-		struct tc_iov_array iova;
+		struct viov_array iova;
 		iova.size = cur_cpd.size();
-		size_t iovs_memsize = sizeof(struct tc_iovec) * iova.size;
-		iova.iovs = (struct tc_iovec *)malloc(iovs_memsize);
+		size_t iovs_memsize = sizeof(struct viovec) * iova.size;
+		iova.iovs = (struct viovec *)malloc(iovs_memsize);
 		memmove(iova.iovs, cur_cpd.data(), iovs_memsize);
 		parts.push_back(iova);
 		cur_cpd.clear();
 		cpd_size = CPDSIZE;
 	};
 
-	struct tc_iovec *i_iov = iova->iovs; // current iovec to split
+	struct viovec *i_iov = iova->iovs; // current iovec to split
 	int i = 0;			     // index of current iovec
 	size_t i_off = 0; // offset of iovs[i].data to be split
 
 	auto add_iov_to_cpd = [&i_iov, &i_off, &cur_cpd, &cpd_size](
 	    size_t len) {
-		struct tc_iovec iov = *i_iov;
+		struct viovec iov = *i_iov;
 		iov.offset += i_off;
 		iov.data += i_off;
 		iov.length = len;
@@ -184,18 +184,18 @@ struct tc_iov_array *tc_split_iov_array(const struct tc_iov_array *iova,
 	}
 
 	*nparts = parts.size();
-	struct tc_iov_array *iovas =
-	    (struct tc_iov_array *)malloc(sizeof(*iovas) * parts.size());
+	struct viov_array *iovas =
+	    (struct viov_array *)malloc(sizeof(*iovas) * parts.size());
 	memmove(iovas, parts.data(), sizeof(*iovas) * parts.size());
 	return iovas;
 }
 
-bool tc_restore_iov_array(struct tc_iov_array *iova,
-			  struct tc_iov_array **parts, int nparts)
+bool vrestore_iov_array(struct viov_array *iova,
+			  struct viov_array **parts, int nparts)
 {
 	int i = 0;
-	size_t i_off = 0;
-	struct tc_iovec *i_iov = iova->iovs;
+	int i_off = 0;
+	struct viovec *i_iov = iova->iovs;
 	bool res = true;
 
 	auto advance = [&iova, &i, &i_off, &i_iov](bool eof) {
@@ -206,15 +206,15 @@ bool tc_restore_iov_array(struct tc_iov_array *iova,
 		i_iov = iova->iovs + i;
 	};
 
-	auto match = [&i_iov, &i_off](const struct tc_iovec *iov) {
+	auto match = [&i_iov, &i_off](const struct viovec *iov) {
 		return tc_cmp_file(&iov->file, &i_iov->file) &&
 		       iov->offset == (i_iov->offset + i_off);
 	};
 
 	for (int n = 0; n < nparts && res; ++n) {
-		struct tc_iov_array *part = *parts + n;
+		struct viov_array *part = *parts + n;
 		for (int j = 0; j < part->size; ++j) {
-			struct tc_iovec *iov = part->iovs + j;
+			struct viovec *iov = part->iovs + j;
 			if (!match(iov)) {
 				advance(false);
 			}
@@ -244,7 +244,7 @@ bool tc_restore_iov_array(struct tc_iov_array *iova,
 	return res;
 }
 
-bool tc_merge_iov_array(struct tc_iov_array *iova)
+bool tc_merge_iov_array(struct viov_array *iova)
 {
 	return false;
 }

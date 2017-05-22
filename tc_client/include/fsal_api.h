@@ -1310,23 +1310,23 @@ struct fsal_obj_ops {
 				 struct fsal_obj_handle **new_obj);
 
 /* Multiple open..read..close in a single compound */
-	tc_res (*tc_readv)(struct tc_iovec *iovs, int count,
-				struct tc_attrs *attrs);
+	vres (*vec_read)(struct viovec *iovs, int count,
+				struct vattrs *attrs);
 
 /* Multiple open..write..close in a single compound */
-	tc_res (*tc_writev)(struct tc_iovec *iovs, int count,
-				struct tc_attrs *old_attrs,
-				struct tc_attrs *new_attrs);
+	vres (*vec_write)(struct viovec *iovs, int count,
+				struct vattrs *old_attrs,
+				struct vattrs *new_attrs);
 
-	tc_res (*tc_openv)(struct tc_attrs *attrs, int count, int *flags,
+	vres (*vec_open)(struct vattrs *attrs, int count, int *flags,
 			   stateid4 *sids);
 
-	tc_res (*tc_closev)(const nfs_fh4 *fh4s, int count, stateid4 *sids,
+	vres (*vec_close)(const nfs_fh4 *fh4s, int count, stateid4 *sids,
 			    seqid4 *seqs);
 
-	tc_res (*tc_lgetattrsv)(struct tc_attrs *attrs, int count);
+	vres (*vec_lgetattrs)(struct vattrs *attrs, int count);
 
-	tc_res (*tc_lsetattrsv)(struct tc_attrs *attrs, int count);
+	vres (*vec_lsetattrs)(struct vattrs *attrs, int count);
 
 	fsal_status_t (*tc_destroysession)();
 /**
@@ -1336,25 +1336,25 @@ struct fsal_obj_ops {
  * will be set in "dirs".  Note that the caller is responsible for freeing the
  * file handles in the returned "dirs".
  */
-	tc_res (*tc_mkdirv)(struct tc_attrs *dirs, int count);
+	vres (*vec_mkdir)(struct vattrs *dirs, int count);
 
-	tc_res (*tc_listdirv)(const char **dirs, int count,
-			      struct tc_attrs_masks masks, int max_entries,
-			      bool recursive, tc_listdirv_cb cb, void *cbarg);
+	vres (*vec_listdir)(const char **dirs, int count,
+			      struct vattrs_masks masks, int max_entries,
+			      bool recursive, vec_listdir_cb cb, void *cbarg);
 
-	tc_res (*tc_renamev)(tc_file_pair *pairs, int count);
+	vres (*vec_rename)(vfile_pair *pairs, int count);
 
-	tc_res (*tc_removev)(tc_file *files, int count);
+	vres (*vec_remove)(vfile *files, int count);
 
-	tc_res (*tc_lcopyv)(struct tc_extent_pair *pairs, int count);
+	vres (*vec_lcopy)(struct vextent_pair *pairs, int count);
 
-	tc_res (*tc_hardlinkv)(const char **oldpaths, const char **newpaths,
+	vres (*vec_hardlink)(const char **oldpaths, const char **newpaths,
 			       int count);
 
-	tc_res (*tc_symlinkv)(const char **oldpaths, const char **newpaths,
+	vres (*vec_symlink)(const char **oldpaths, const char **newpaths,
 			      int count);
 
-	tc_res (*tc_readlinkv)(const char **paths, char **bufs,
+	vres (*vec_readlink)(const char **paths, char **bufs,
 			       size_t *bufsizes, int count);
 
 	fsal_status_t (*root_lookup)(struct fsal_obj_handle **handle);
@@ -1362,8 +1362,8 @@ struct fsal_obj_ops {
 	fsal_status_t (*lookup_plus)(const char *path,
 				     struct fsal_obj_handle **handle);
 
-	int (*tc_chdir)(const char *path);
-	char *(*tc_getcwd)();
+	int (*sca_chdir)(const char *path);
+	char *(*sca_getcwd)();
 
 /**
  * @brief Create a directory

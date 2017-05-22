@@ -52,8 +52,8 @@ static char tc_config_path[PATH_MAX];
 int main(int argc, char *argv[])
 {
 	void *context = NULL;
-	struct tc_iovec write_iovec;
-	tc_res res;
+	struct viovec write_iovec;
+	vres res;
 	char data[32];
 	int i;
 
@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "using config file: %s\n", tc_config_path);
 
 	/* Initialize TC services and daemons */
-	context = tc_init(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
 	for (i = 1; i <= 3; ++i) {
 		snprintf(data, 32, "hello line %d\n", i);
 		/* Setup I/O request */
-		write_iovec.file = tc_file_from_path(TC_TEST_NFS_FILE);
+		write_iovec.file = vfile_from_path(TC_TEST_NFS_FILE);
 		write_iovec.is_creation = i == 1;
 		write_iovec.offset = i == 1 ? 0 : TC_OFFSET_END;
 		write_iovec.length = strlen(data);
@@ -89,10 +89,10 @@ int main(int argc, char *argv[])
 		/* Write the file using NFS compounds; nfs4_writev() will open
 		 * the file with CREATION flag, write to it, and then close it.
 		 * */
-		res = tc_writev(&write_iovec, 1, false);
+		res = vec_write(&write_iovec, 1, false);
 
 		/* Check results. */
-		if (tc_okay(res)) {
+		if (vokay(res)) {
 			fprintf(stderr,
 				"Successfully write the first %zu bytes of file \"%s\" "
 				"via NFS.\n",
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	tc_deinit(context);
+	vdeinit(context);
 
 	return res.err_no;
 }

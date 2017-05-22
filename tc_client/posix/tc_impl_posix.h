@@ -37,15 +37,15 @@ extern "C" {
 
 void* posix_init(const char* config_file, const char* log_file);
 
-tc_file* posix_open(const char *path, int flags, mode_t mode);
+vfile* posix_open(const char *path, int flags, mode_t mode);
 
-int posix_close(tc_file *file);
+int posix_close(vfile *file);
 
-tc_file *posix_openv(const char **paths, int count, int *flags, mode_t *modes);
+vfile *posix_openv(const char **paths, int count, int *flags, mode_t *modes);
 
-tc_res posix_closev(tc_file *files, int count);
+vres posix_closev(vfile *files, int count);
 
-off_t posix_fseek(tc_file *tcf, off_t offset, int whence);
+off_t posix_fseek(vfile *tcf, off_t offset, int whence);
 
 /**
  * @reads - Array of reads for one or more files
@@ -53,7 +53,7 @@ off_t posix_fseek(tc_file *tcf, off_t offset, int whence);
  * @read_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res posix_readv(struct tc_iovec *reads, int read_count, bool is_transaction);
+vres posix_readv(struct viovec *reads, int read_count, bool is_transaction);
 
 /**
  * @writes - Array of writes for one or more files
@@ -61,26 +61,26 @@ tc_res posix_readv(struct tc_iovec *reads, int read_count, bool is_transaction);
  * r@ead_count - Length of the above array
  *              (Or number of reads)
  */
-tc_res posix_writev(struct tc_iovec *writes, int write_count,
+vres posix_writev(struct viovec *writes, int write_count,
 		    bool is_transaction);
 
 /**
  * Get attributes of files
  *
  * @attrs: array of attributes to get
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res posix_lgetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+vres posix_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction);
 
 /**
  * Set attributes of files.
  *
  * @attrs: array of attributes to set
- * @count: the count of tc_attrs in the preceding array
+ * @count: the count of vattrs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res posix_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
+vres posix_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction);
 
 /**
  * Rename specfied files.
@@ -89,7 +89,7 @@ tc_res posix_lsetattrsv(struct tc_attrs *attrs, int count, bool is_transaction);
  * @count: the count of tc_pairs in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res posix_renamev(tc_file_pair *pairs, int count, bool is_transaction);
+vres posix_renamev(vfile_pair *pairs, int count, bool is_transaction);
 
 /**
  * Remove specfied files.
@@ -98,24 +98,24 @@ tc_res posix_renamev(tc_file_pair *pairs, int count, bool is_transaction);
  * @count: the count of tc_ in the preceding array
  * @is_transaction: whether to execute the compound as a transaction
  */
-tc_res posix_removev(tc_file *tc_files, int count, bool is_transaction);
+vres posix_removev(vfile *tc_files, int count, bool is_transaction);
 
-tc_res posix_listdirv(const char **dirs, int count, struct tc_attrs_masks masks,
-		      int max_entries, bool recursive, tc_listdirv_cb cb,
+vres posix_listdirv(const char **dirs, int count, struct vattrs_masks masks,
+		      int max_entries, bool recursive, vec_listdir_cb cb,
 		      void *cbarg, bool istxn);
 
-tc_res posix_mkdirv(struct tc_attrs *dirs, int count, bool is_transaction);
+vres posix_mkdirv(struct vattrs *dirs, int count, bool is_transaction);
 
-tc_res posix_lcopyv(struct tc_extent_pair *pairs, int count,
+vres posix_lcopyv(struct vextent_pair *pairs, int count,
 		   bool is_transaction);
 
-tc_res posix_hardlinkv(const char **oldpaths, const char **newpaths, int count,
+vres posix_hardlinkv(const char **oldpaths, const char **newpaths, int count,
 		       bool istxn);
 
-tc_res posix_symlinkv(const char **oldpaths, const char **newpaths, int count,
+vres posix_symlinkv(const char **oldpaths, const char **newpaths, int count,
 		      bool istxn);
 
-tc_res posix_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
+vres posix_readlinkv(const char **paths, char **bufs, size_t *bufsizes,
 		       int count, bool istxn);
 
 int posix_chdir(const char *path);
