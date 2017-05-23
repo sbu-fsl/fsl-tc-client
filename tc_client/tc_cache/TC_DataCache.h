@@ -10,6 +10,7 @@
 #define TC_DataCache_INCLUDED
 
 #include <string>
+#include <mutex>
 #include <map>
 #include <unordered_map>
 #include <sys/types.h>
@@ -45,6 +46,7 @@ typedef AbstractCache<std::string, DataBlock,
 
 class TC_DataCache : public DataCacheBase
 {
+	std::mutex mu_;
 	std::unordered_map<std::string, std::unordered_set<size_t>> cached_blocks;
 public:
   TC_DataCache(long cacheSize = 1024,
@@ -69,11 +71,13 @@ public:
 
         inline void AddBlockToMap(std::string path, size_t block_no)
         {
-                cached_blocks[path].insert(block_no);
+		std::lock_guard<std::mutex> lock(mu_);
+		cached_blocks[path].insert(block_no);
         }
 
         inline void RemoveBlockFromMap(std::string path, size_t block_no)
         {
+		std::lock_guard<std::mutex> lock(mu_);
 		auto it = cached_blocks.find(path);
                 if (it != cached_blocks.end())
                         it->second.erase(block_no);
@@ -82,6 +86,7 @@ public:
 	{
 		// FIXME: we need to remove blocks from "cached_blocks"
 		// accordingly when the caching library evicts blocks.
+		std::lock_guard<std::mutex> lock(mu_);
 		auto it = cached_blocks.find(path);
 		return (it != cached_blocks.end()) && !it->second.empty();
 	}
@@ -234,19 +239,24 @@ void TC_DataCache::remove(std::string path)
 {
 	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
 	std::string key;
+	std::unordered_set<size_t> blocks;
 
-	it = cached_blocks.find(path);
-	if (it != cached_blocks.end()) {
-		for (const auto &block_no : it->second) {
-			key = path + std::to_string(block_no);
-			DataCacheBase::remove(key);
-#ifdef _DEBUG
-			cout << "Removed " << key << std::endl;
-#endif
-		}
-		cached_blocks.erase(path);
+	{
+		std::lock_guard<std::mutex> lock(mu_);
+		it = cached_blocks.find(path);
+		if (it == cached_blocks.end())
+			return;
+		blocks.swap(it->second);
+		cached_blocks.erase(it);
 	}
-	return;
+
+	for (const auto &block_no : blocks) {
+		key = path + std::to_string(block_no);
+		DataCacheBase::remove(key);
+#ifdef _DEBUG
+		cout << "Removed " << key << std::endl;
+#endif
+	}
 }
 
 void TC_DataCache::remove(std::string path, size_t offset, size_t length)
@@ -254,24 +264,30 @@ void TC_DataCache::remove(std::string path, size_t offset, size_t length)
 	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
 	std::string key;
 
-	it = cached_blocks.find(path);
-	if (it != cached_blocks.end()) {
-		for (const auto &block_no : it->second) {
-			if (block_no < offset / CACHE_BLOCK_SIZE ||
-			    block_no >= (length + offset) / CACHE_BLOCK_SIZE)
-				continue;
-			key = path + std::to_string(block_no);
-			DataCacheBase::remove(key);
-			RemoveBlockFromMap(path, block_no);
-#ifdef _DEBUG
-			cout << "Removed " << key << std::endl;
-#endif
-		}
-		if (it->second.empty()) {
-			cached_blocks.erase(path);
-		}
+	{
+		std::lock_guard<std::mutex> lock(mu_);
+		it = cached_blocks.find(path);
+		if (it == cached_blocks.end())
+			return;
 	}
-	return;
+
+	for (const auto &block_no : it->second) {
+		if (block_no < offset / CACHE_BLOCK_SIZE ||
+		    block_no >= (length + offset) / CACHE_BLOCK_SIZE)
+			continue;
+		key = path + std::to_string(block_no);
+		DataCacheBase::remove(key);
+		RemoveBlockFromMap(path, block_no);
+#ifdef _DEBUG
+		cout << "Removed " << key << std::endl;
+#endif
+	}
+
+
+	if (it->second.empty()) {
+		std::lock_guard<std::mutex> lock(mu_);
+		cached_blocks.erase(path);
+	}
 }
 
 int TC_DataCache::get(const std::string path, size_t offset, size_t length,
