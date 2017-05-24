@@ -25,9 +25,9 @@
 //remove this
 using namespace Poco;
 
-#define CACHE_BLOCK_SIZE 512
+#define CACHE_BLOCK_SIZE (256 * 1024)
 
-#define CACHE_EXPIRE_SECONDS (60 * 1000000)
+#define CACHE_EXPIRE_SECONDS (60 * 1000)
 
 #define DATA_REFRESH_TIME_SECONDS 5
 
@@ -49,7 +49,7 @@ class TC_DataCache : public DataCacheBase
 	std::mutex mu_;
 	std::unordered_map<std::string, std::unordered_set<size_t>> cached_blocks;
 public:
-  TC_DataCache(long cacheSize = 1024,
+  TC_DataCache(long cacheSize = 102400,
 	       Timestamp::TimeDiff expire = CACHE_EXPIRE_SECONDS)
       : DataCacheBase(StrategyCollection<std::string, DataBlock>())
 	{

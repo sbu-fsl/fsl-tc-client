@@ -103,9 +103,8 @@ void *vinit(const char *config_path, const char *log_path, uint16_t export_id)
 
 	init_page_cache(((struct cache_context*)context)->cache_size,
 			((struct cache_context*)context)->cache_expiration);
-	/*init_data_cache(((struct cache_context*)context)->data_cache_size,
-			((struct cache_context*)context)->data_cache_expiration);*/
-	init_data_cache(100,60000);
+	init_data_cache(((struct cache_context*)context)->data_cache_size,
+			((struct cache_context*)context)->data_cache_expiration);
 
 	return context;
 }
