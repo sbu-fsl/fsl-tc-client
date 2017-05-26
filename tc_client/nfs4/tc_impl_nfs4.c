@@ -176,17 +176,17 @@ void *nfs4_init(const char *config_path, const char *log_path,
 
 	vinit_fds();
 
-	ctx = calloc(1, sizeof(struct cache_context *));
+	ctx = calloc(1, sizeof(struct cache_context));
 	if (ctx == NULL) {
 		LogDebug(COMPONENT_FSAL, "No memory for ctx\n");
 		return NULL;
 	}
 
 	ctx->context = (void*)new_module;
-	ctx->cache_size = op_ctx->export->cache_size;
-	ctx->data_cache_size = op_ctx->export->data_cache_size;
-	ctx->cache_expiration = op_ctx->export->cache_expiration;
-	ctx->data_cache_expiration = op_ctx->export->data_cache_expiration;
+	ctx->cache_size = exp->cache_size;
+	ctx->data_cache_size = exp->data_cache_size;
+	ctx->cache_expiration = exp->cache_expiration;
+	ctx->data_cache_expiration = exp->data_cache_expiration;
 	return (void*)ctx;
 }
 

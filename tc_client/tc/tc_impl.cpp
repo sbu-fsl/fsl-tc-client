@@ -101,10 +101,13 @@ void *vinit(const char *config_path, const char *log_path, uint16_t export_id)
 		return NULL;
 	}
 
-	init_page_cache(((struct cache_context*)context)->cache_size,
-			((struct cache_context*)context)->cache_expiration);
-	init_data_cache(((struct cache_context*)context)->data_cache_size,
-			((struct cache_context*)context)->data_cache_expiration);
+	if (TC_IMPL_IS_NFS4) {
+		struct cache_context *cc = (struct cache_context*)context;
+		init_page_cache(cc->cache_size,
+				cc->cache_expiration);
+		init_data_cache(cc->data_cache_size,
+				cc->data_cache_expiration);
+	}
 
 	return context;
 }
