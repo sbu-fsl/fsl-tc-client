@@ -67,29 +67,29 @@ public:
 #endif
         }
 
-        inline void AddBlockToMap(std::string path, size_t block_no)
+        inline void AddBlockToMap(const std::string& path, size_t block_no)
         {
                 cached_blocks[path].insert(block_no);
         }
 
-        inline void RemoveBlockFromMap(std::string path, size_t block_no)
-        {
+	inline void RemoveBlockFromMap(const std::string &path, size_t block_no)
+	{
 		auto it = cached_blocks.find(path);
                 if (it != cached_blocks.end())
                         it->second.erase(block_no);
         }
-	bool isCached(std::string path)
+	bool isCached(const std::string& path)
 	{
 		// FIXME: we need to remove blocks from "cached_blocks"
 		// accordingly when the caching library evicts blocks.
 		auto it = cached_blocks.find(path);
 		return (it != cached_blocks.end()) && !it->second.empty();
 	}
-	void put(const std::string path, size_t offset, size_t length,
+	void put(const std::string& path, size_t offset, size_t length,
 		 char *data);
-	void remove(std::string path);
-	void remove(std::string path, size_t offset, size_t length);
-	int get(const std::string path, size_t offset, size_t length,
+	void remove(const std::string& path);
+	void remove(const std::string& path, size_t offset, size_t length);
+	int get(const std::string& path, size_t offset, size_t length,
 		char *buf, bool *revalidate);
 
 private:
@@ -135,7 +135,7 @@ public:
 	}
 };
 
-void TC_DataCache::put(const std::string path, size_t offset, size_t length,
+void TC_DataCache::put(const std::string& path, size_t offset, size_t length,
 		       char *data)
 {
 	size_t i = 0;
@@ -230,14 +230,14 @@ void TC_DataCache::put(const std::string path, size_t offset, size_t length,
 	}
 }
 
-void TC_DataCache::remove(std::string path)
+void TC_DataCache::remove(const std::string& path)
 {
 	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
 	std::string key;
 
 	it = cached_blocks.find(path);
 	if (it != cached_blocks.end()) {
-		for (const auto &block_no : it->second) {
+		for (size_t block_no : it->second) {
 			key = path + std::to_string(block_no);
 			DataCacheBase::remove(key);
 #ifdef _DEBUG
@@ -249,7 +249,7 @@ void TC_DataCache::remove(std::string path)
 	return;
 }
 
-void TC_DataCache::remove(std::string path, size_t offset, size_t length)
+void TC_DataCache::remove(const std::string& path, size_t offset, size_t length)
 {
 	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
 	std::string key;
@@ -274,7 +274,7 @@ void TC_DataCache::remove(std::string path, size_t offset, size_t length)
 	return;
 }
 
-int TC_DataCache::get(const std::string path, size_t offset, size_t length,
+int TC_DataCache::get(const std::string& path, size_t offset, size_t length,
 		      char *buf, bool *revalidate)
 {
 	size_t i = 0;
