@@ -68,7 +68,7 @@ void Run(const char *dir)
 	char *data = (char *)malloc(kSizeLimit);
 	size_t bytes = 0;
 
-	while (files_finished < FLAGS_nfiles) {
+	while (files_finished < (size_t)FLAGS_nfiles) {
 		vector<viovec> iovs;
 
 		for (size_t i = files_finished; i < (size_t)FLAGS_nfiles; ) {

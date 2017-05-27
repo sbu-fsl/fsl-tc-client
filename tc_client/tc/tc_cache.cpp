@@ -560,7 +560,6 @@ vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 	vfile *saved_tcfs = NULL;
 	struct vattrs *attrs = NULL;
 	struct vattrs *old_attrs = NULL;
-	int hit_count = 0;
 
 	saved_tcfs = nfs_updateIovec_FilenameToFh(writes, write_count);
 	if (!saved_tcfs) {

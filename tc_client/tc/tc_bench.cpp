@@ -532,7 +532,6 @@ awk '{s += $1} END {print s/NR;}'
 */
 static void CreateDirsWithContents(vector<const char *>& dirs)
 {
-	const int kFilesPerDir = 17;
 	vector<vattrs> attrs(dirs.size());
 	for (size_t i = 0; i < dirs.size(); ++i) {
 		vset_up_creation(&attrs[i], dirs[i], 0755);

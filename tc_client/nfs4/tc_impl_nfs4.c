@@ -260,14 +260,13 @@ vres nfs4_do_readv(struct viovec *iovs, int read_count, bool istxn,
 	return tcres;
 }
 
-static void nfs4_decompress_paths(struct viovec *iovs, int count,
-				  vfile *saved_tcfs);
 /**
  * Use relative paths to shorten path lookups.
  *
  * Returns the saved vfiles if the iovs has been changed, or NULL if we
  * cannot compress the paths.
  */
+/*
 static vfile *nfs4_compress_paths(struct viovec *iovs, int count)
 {
 	vfile *saved_tcfs = NULL;
@@ -337,6 +336,7 @@ static void nfs4_decompress_paths(struct viovec *iovs, int count,
 	}
 	free(saved_tcfs);
 }
+*/
 
 static int nfs4_fill_fd_data(vfile *tcf)
 {

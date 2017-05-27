@@ -454,10 +454,12 @@ static struct bitmap4 fs_bitmap_fsinfo = {
 	.bitmap4_len = 2
 };
 
+/*
 static struct bitmap4 lease_bits = {
 	.map[0] = PXY_ATTR_BIT(FATTR4_LEASE_TIME),
 	.bitmap4_len = 1
 };
+*/
 
 static void tc_attr_masks_to_bitmap(const struct vattrs_masks *masks,
                                     bitmap4 *bm)
@@ -1206,6 +1208,7 @@ void tc_get_clientid(clientid4 *ret)
 	pthread_mutex_unlock(&fs_clientid_mutex);
 }
 
+#if 0
 static int fs_setclientid(clientid4 *resultclientid, uint32_t *lease_time)
 {
 	int rc;
@@ -1293,6 +1296,7 @@ static int fs_setclientid(clientid4 *resultclientid, uint32_t *lease_time)
 
 	return 0;
 }
+#endif
 
 static fsal_status_t fs_destroy_session()
 {
@@ -1894,6 +1898,7 @@ static fsal_status_t fs_create(struct fsal_obj_handle *dir_hdl,
 	return st;
 }
 
+#if 0
 static fsal_status_t fs_read_state(const nfs_fh4 *fh4, const nfs_fh4 *fh4_1,
 				   uint64_t offset, size_t buffer_size,
 				   void *buffer, size_t *read_amount,
@@ -1959,6 +1964,7 @@ static fsal_status_t fs_read_state(const nfs_fh4 *fh4, const nfs_fh4 *fh4_1,
 	*read_amount = rok->data.data_len;
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
+#endif
 
 static inline bool tc_prepare_putfh(const nfs_fh4 *fh)
 {

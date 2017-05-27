@@ -64,7 +64,7 @@ void FreePaths(vector<const char *> *paths)
 vector<vfile> Paths2Files(const vector<const char *>& paths)
 {
 	vector<vfile> files(paths.size());
-	for (int i = 0; i < files.size(); ++i) {
+	for (unsigned int i = 0; i < files.size(); ++i) {
 		files[i] = vfile_from_path(paths[i]);
 	}
 	return files;
@@ -191,7 +191,6 @@ awk '{s += $1} END {print s/NR;}'
 */
 void CreateDirsWithContents(vector<const char *>& dirs)
 {
-	const int kFilesPerDir = 17;
 	vector<vattrs> attrs(dirs.size());
 	for (size_t i = 0; i < dirs.size(); ++i) {
 		vset_up_creation(&attrs[i], dirs[i], 0755);

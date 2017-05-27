@@ -61,7 +61,7 @@ vfile *posix_openv(const char **paths, int count, int *flags, mode_t *modes)
 			if (modes) {
 				fd = open(paths[i], flags[i], modes[i]);
 			} else {
-				fd = open(paths[i], flags[i]);
+				fd = open(paths[i], flags[i], 0644);
 			}
 			tcfs[i].fd = fd >= 0 ? fd : -errno;
 		}
@@ -121,6 +121,7 @@ off_t posix_fseek(vfile *tcf, off_t offset, int whence)
 	return lseek(tcf->fd, offset, whence);
 }
 
+/*
 static int posix_stat(const vfile *tcf, struct stat *st)
 {
 	int rc;
@@ -133,6 +134,7 @@ static int posix_stat(const vfile *tcf, struct stat *st)
 	}
 	return rc;
 }
+*/
 
 /*
  * arg - Array of reads for one or more files
@@ -144,7 +146,6 @@ vres posix_readv(struct viovec *arg, int read_count, bool is_transaction)
 {
 	int fd, i = 0;
 	ssize_t amount_read;
-	vfile file = { 0 };
 	struct viovec *iov = NULL;
 	vres result = { .index = -1, .err_no = 0 };
 	struct stat st;
@@ -243,7 +244,7 @@ vres posix_writev(struct viovec *arg, int write_count, bool is_transaction)
 		}
 
 		if (iov->file.type == VFILE_PATH) {
-			fd = open(iov->file.path, flags);
+			fd = open(iov->file.path, flags, 0644);
 		} else if (iov->file.type == VFILE_DESCRIPTOR) {
 			fd = iov->file.fd;
 		} else {
@@ -309,7 +310,7 @@ vres posix_writev(struct viovec *arg, int write_count, bool is_transaction)
 
 vres posix_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 {
-	int fd = -1, i = 0, res = 0;
+	int i = 0, res = 0;
 	struct vattrs *cur_attr = NULL;
 	vres result = { .index = -1, .err_no = 0 };
 	struct stat st;
@@ -435,7 +436,7 @@ exit:
  */
 vres posix_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 {
-	int fd = -1, i = 0;
+	int i = 0;
 	struct vattrs *cur_attr = NULL;
 	vres result = { .index = -1, .err_no = 0 };
 

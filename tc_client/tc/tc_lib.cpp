@@ -264,7 +264,7 @@ static vres tc_cp_setattrs(const vector<struct vattrs> &srcs,
 			     const char *src_dir, const char *dst_dir)
 {
 	vector<struct vattrs> dsts(srcs);
-	for (int i = 0; i < srcs.size(); i++) {
+	for (unsigned int i = 0; i < srcs.size(); i++) {
 		// Workaround -- was getting invalid argument error from
 		// lsetattrsv().  The issue was that vec_listdir() was not
 		// honoring the mask I gave it, meaning the vattrs in the
@@ -298,7 +298,7 @@ vres tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 				    bufsizes.data(), count, false);
 	if (!vokay(tcres)) {
 		fprintf(stderr, "vec_readlink failed: %s at %d (%s)\n",
-			tcres.index, strerror(tcres.err_no),
+			strerror(tcres.err_no), tcres.index,
 			links[tcres.index]);
 		free(linkbufs);
 		return tcres;
@@ -312,7 +312,7 @@ vres tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 			    false);
 	if (!vokay(tcres)) {
 		fprintf(stderr, "vec_readlink failed: %s at %d (%s)\n",
-			tcres.index, strerror(tcres.err_no),
+			strerror(tcres.err_no), tcres.index,
 			links[tcres.index]);
 	}
 
@@ -414,7 +414,7 @@ vres vec_unlink_recursive(const char **objs, int count)
 			attrs[i].masks.has_mode = true;
 		}
 
-		for (int i = 0; i < attrs.size(); ) {
+		for (int i = 0; (size_t)i < attrs.size(); ) {
 			vres tcres = vec_getattrs(attrs.data() + i,
 						    attrs.size() - i, false);
 			if (vokay(tcres)) {

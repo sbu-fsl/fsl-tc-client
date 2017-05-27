@@ -42,8 +42,8 @@
 #include <signal.h>		/* for sigaction */
 #include <errno.h>
 #include "../nfs4/nfs4_util.h"
+#include "tc_helper.h"
 
-static char exe_path[PATH_MAX];
 static char tc_config_path[PATH_MAX];
 
 #define DEFAULT_LOG_FILE "/tmp/tc_test_copy.log"
@@ -56,26 +56,15 @@ int main(int argc, char *argv[])
 	struct vextent_pair pairs[2];
 	struct viovec iov[4];
 	vres res;
-	const char *data = "hello world";
 	const char *srcdir = "/vfs0/srcdir";
 	const char *dstdir = "/vfs0/dstdir";
 	const char *fname1 = "file-1.txt";
 	const char *fname2 = "file-2.txt";
 	buf_t *pbuf;
 
-	/* Locate and use the default config file in the repo.  Before running
-	 * this example, please update the config file to a correct NFS server.
-	 */
-	if (readlink("/proc/self/exe", exe_path, PATH_MAX) < 0) {
-		perror("readlink");
-		exit(EXIT_FAILURE);
-	}
-	snprintf(tc_config_path, PATH_MAX,
-		 "%s/../../../config/tc.ganesha.conf", dirname(exe_path));
-	fprintf(stderr, "using config file: %s\n", tc_config_path);
-
 	/* Initialize TC services and daemons */
-	context = vinit(tc_config_path, DEFAULT_LOG_FILE, 77);
+	context = vinit(get_tc_config_file(tc_config_path, PATH_MAX),
+			DEFAULT_LOG_FILE, 77);
 	if (context == NULL) {
 		NFS4_ERR("Error while initializing tc_client using config "
 			 "file: %s; see log at %s",

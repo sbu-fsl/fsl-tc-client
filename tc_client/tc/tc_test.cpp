@@ -384,6 +384,7 @@ static vattrs *set_vattrs(struct vattrs *attrs, int count)
 }
 
 /* Set the TC attributes masks */
+/*
 static void set_attr_masks(vattrs *write, vattrs *read, int count)
 {
 	int i = 0;
@@ -392,6 +393,7 @@ static void set_attr_masks(vattrs *write, vattrs *read, int count)
 		read[i].masks = write[i].masks;
 	}
 }
+*/
 
 /**
  * TC-Set/Get Attributes test

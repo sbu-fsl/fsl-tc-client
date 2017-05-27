@@ -122,7 +122,7 @@ static inline size_t tc_get_iov_overhead(const struct viovec *iov)
 }
 
 struct viov_array *tc_split_iov_array(const struct viov_array *iova,
-					int size_limit, int *nparts)
+					size_t size_limit, int *nparts)
 {
 	std::vector<struct viov_array> parts;
 	std::vector<struct viovec> cur_cpd; // iovec of current compound
@@ -194,7 +194,7 @@ bool vrestore_iov_array(struct viov_array *iova,
 			  struct viov_array **parts, int nparts)
 {
 	int i = 0;
-	int i_off = 0;
+	size_t i_off = 0;
 	struct viovec *i_iov = iova->iovs;
 	bool res = true;
 

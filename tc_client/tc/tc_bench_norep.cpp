@@ -235,7 +235,7 @@ static void BM2_Mkdir(int start, int csize)
 	vector<const char *> paths = NewPaths("Bench-Dirs/dir-%d", csize, start);
 	vector<vattrs> dirs(csize);
 
-	for (size_t i = 0; i < csize; ++i) {
+	for (size_t i = 0; i < (size_t)csize; ++i) {
 		vset_up_creation(&dirs[i], paths[i], 0755);
 	}
 	vres tcres = vec_mkdir(dirs.data(), csize, false);
@@ -250,7 +250,7 @@ static void BM2_Rename(int start, int csize)
 	vector<const char *> dsts = NewPaths("Bench-Files/newfile-%d", csize, start);
 	vector<vfile_pair> pairs(csize);
 
-	for (size_t i = 0; i < csize; ++i) {
+	for (size_t i = 0; i < (size_t)csize; ++i) {
 		pairs[i].src_file = vfile_from_path(srcs[i]);
 		pairs[i].dst_file = vfile_from_path(dsts[i]);
 	}

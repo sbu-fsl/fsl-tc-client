@@ -717,7 +717,7 @@ int sca_unlink(const char *path)
 
 vres vec_unlink(const char **paths, int count)
 {
-	int i = 0, r = 0;
+	int i = 0;
 	vfile *files;
 	vres tcres;
 
