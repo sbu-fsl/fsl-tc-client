@@ -274,6 +274,10 @@ static inline struct viovec *viov2file(struct viovec *iov,
 	iov->length = len;
 	iov->data = buf;
 	iov->is_creation = false;
+	iov->is_direct_io = false;
+	iov->is_failure = false;
+	iov->is_eof = false;
+	iov->is_write_stable = false;
 	return iov;
 }
 
@@ -284,26 +288,33 @@ static inline struct viovec *viov2current(struct viovec *iov, size_t off,
 	return viov2file(iov, &tcf, off, len, buf);
 }
 
-static inline struct viovec *viov2path(struct viovec *iov,
-					   const char *path, size_t off,
-					   size_t len, char *buf)
+static inline struct viovec *viov2path(struct viovec *iov, const char *path,
+				       size_t off, size_t len, char *buf)
 {
 	iov->file = vfile_from_path(path);
 	iov->offset = off;
 	iov->length = len;
 	iov->data = buf;
 	iov->is_creation = false;
+	iov->is_direct_io = false;
+	iov->is_failure = false;
+	iov->is_eof = false;
+	iov->is_write_stable = false;
 	return iov;
 }
 
-static inline struct viovec *viov2fd(struct viovec *iov, int fd,
-					 size_t off, size_t len, char *buf)
+static inline struct viovec *viov2fd(struct viovec *iov, int fd, size_t off,
+				     size_t len, char *buf)
 {
 	iov->file = vfile_from_fd(fd);
 	iov->offset = off;
 	iov->length = len;
 	iov->data = buf;
 	iov->is_creation = false;
+	iov->is_direct_io = false;
+	iov->is_failure = false;
+	iov->is_eof = false;
+	iov->is_write_stable = false;
 	return iov;
 }
 
@@ -315,6 +326,10 @@ viov4creation(struct viovec *iov, const char *path, size_t len, char *buf)
 	iov->length = len;
 	iov->data = buf;
 	iov->is_creation = true;
+	iov->is_direct_io = false;
+	iov->is_failure = false;
+	iov->is_eof = false;
+	iov->is_write_stable = false;
 	return iov;
 }
 

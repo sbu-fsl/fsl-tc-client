@@ -945,7 +945,7 @@ static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)
 	const int N = 4096;
 	std::vector<struct vextent_pair> pairs(nfiles, {0});
 	std::vector<struct viovec> iovs(nfiles, {0});
-	std::vector<struct viovec> read_iovs(nfiles);
+	std::vector<struct viovec> read_iovs(nfiles, {0});
 	std::vector<std::string> src_paths(nfiles);
 	std::vector<std::string> dst_paths(nfiles);
 	char buf[PATH_MAX];
@@ -959,7 +959,7 @@ static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)
 		dst_paths[i].assign(
 		    buf, snprintf(buf, PATH_MAX, "%s/dst-%d.txt", dir, i));
 		vfill_extent_pair(&pairs[i], src_paths[i].c_str(), 0,
-				    dst_paths[i].c_str(), 0, N);
+				  dst_paths[i].c_str(), 0, N);
 
 		viov4creation(&iovs[i], pairs[i].src_path, N,
 				getRandomBytes(N));
