@@ -923,7 +923,7 @@ TYPED_TEST_P(TcTest, SuccessiveWrites)
 TYPED_TEST_P(TcTest, SessionTimeout)
 {
 	const char *path = "SessionTimeout.dat";
-	struct viovec iov;
+	struct viovec iov = {0};
 	int size = 4096;
 	char *data1 = getRandomBytes(size);
 
@@ -943,8 +943,8 @@ TYPED_TEST_P(TcTest, SessionTimeout)
 static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)
 {
 	const int N = 4096;
-	std::vector<struct vextent_pair> pairs(nfiles);
-	std::vector<struct viovec> iovs(nfiles);
+	std::vector<struct vextent_pair> pairs(nfiles, {0});
+	std::vector<struct viovec> iovs(nfiles, {0});
 	std::vector<struct viovec> read_iovs(nfiles);
 	std::vector<std::string> src_paths(nfiles);
 	std::vector<std::string> dst_paths(nfiles);
@@ -1195,7 +1195,7 @@ TYPED_TEST_P(TcTest, ShuffledRdWr)
 {
 	const char *PATH = "TcTest-ShuffledRdWr.dat";
 	const int N = 8;  /* size of iovs */
-	struct viovec iovs[N];
+	struct viovec iovs[N] = {0};
 	const int S = 4096;
 	tc_touch(PATH, N * S);
 
@@ -1258,7 +1258,7 @@ TYPED_TEST_P(TcTest, ParallelRdWrAFile)
 
 TYPED_TEST_P(TcTest, RdWrLargeThanRPCLimit)
 {
-	struct viovec iov;
+	struct viovec iov = {0};
 	char* data1 = getRandomBytes(2_MB);
 	viov4creation(&iov, "TcTest-WriteLargeThanRPCLimit.dat", 2_MB, data1);
 
@@ -1599,7 +1599,7 @@ TYPED_TEST_P(TcTest, UnalignedCacheRead)
 
         Removev(PATHS, count);
 
-        viovec *writev = (viovec *)malloc(sizeof(viovec) * count);
+        viovec *writev = (viovec *)calloc(count, sizeof(viovec));
         for (int i = 0; i < count; ++i) {
                 viov4creation(&writev[i], PATHS[i], 4096,
                                 getRandomBytes(4096));
@@ -1607,7 +1607,7 @@ TYPED_TEST_P(TcTest, UnalignedCacheRead)
 
         EXPECT_OK(vec_write(writev, count, false));
 
-        viovec *readv = (viovec *)malloc(sizeof(viovec) * count);
+        viovec *readv = (viovec *)calloc(count, sizeof(viovec));
         for (int i = 0; i < count; ++i) {
                 viov2path(&readv[i], PATHS[i], 50, 2000,
                             (char *)malloc(2000));
@@ -1632,7 +1632,7 @@ TYPED_TEST_P(TcTest, UnalignedCacheWrite)
 
         Removev(PATHS, count);
 
-        viovec *writev = (viovec *)malloc(sizeof(viovec) * count);
+        viovec *writev = (viovec *)calloc(count, sizeof(viovec));
         for (int i = 0; i < count; ++i) {
                 viov4creation(&writev[i], PATHS[i], 4096,
                                 getRandomBytes(4096));
@@ -1640,7 +1640,7 @@ TYPED_TEST_P(TcTest, UnalignedCacheWrite)
 
         EXPECT_OK(vec_write(writev, count, false));
 
-	viovec *writev2 = (viovec *)malloc(sizeof(viovec) * count);
+	viovec *writev2 = (viovec *)calloc(count, sizeof(viovec));
 	for (int i = 0; i < count; ++i) {
 		viov2path(&writev2[i], PATHS[i], 50, 2000,
 			getRandomBytes(2000));
@@ -1648,7 +1648,7 @@ TYPED_TEST_P(TcTest, UnalignedCacheWrite)
 
 	EXPECT_OK(vec_write(writev2, count, false));
 
-        viovec *readv = (viovec *)malloc(sizeof(viovec) * count);
+        viovec *readv = (viovec *)calloc(count, sizeof(viovec));
         for (int i = 0; i < count; ++i) {
                 viov2path(&readv[i], PATHS[i], 50, 2000,
                             (char *)malloc(2000));
