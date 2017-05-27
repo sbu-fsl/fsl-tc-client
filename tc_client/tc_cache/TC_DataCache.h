@@ -9,9 +9,11 @@
 #ifndef TC_DataCache_INCLUDED
 #define TC_DataCache_INCLUDED
 
+#include <algorithm>
 #include <string>
 #include <mutex>
 #include <map>
+#include <iostream>
 #include <unordered_map>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -39,22 +41,62 @@ using namespace Poco;
 >*/
 class DataBlock;
 
+static inline uint32_t Decode(const char* data, size_t l) {
+	uint32_t h = 0;
+	switch (l) {
+	case 4:
+		h += static_cast<unsigned char>(data[3]) << 24;
+	case 3:
+		h += static_cast<unsigned char>(data[2]) << 16;
+	case 2:
+		h += static_cast<unsigned char>(data[1]) << 8;
+	case 1:
+		h += static_cast<unsigned char>(data[0]);
+		break;
+	}
+	return h;
+}
+
+static inline uint32_t Hash(const std::string& str, uint32_t seed=8887) {
+	const uint32_t m = 0xc6a4a793;
+	const char* data = str.data();
+	size_t n = str.length();
+	uint32_t h = seed ^ (n * m);
+
+	while (n > 0) {
+		size_t l = std::min<uint32_t>(n, 4);
+		uint32_t w = Decode(data, l);
+		data += l;
+		n -= l;
+		h += w;
+		h *= m;
+		h ^= (h >> 16);
+	}
+
+	return h;
+}
+
+static inline std::string GetBlockKey(const std::string &path, size_t block_no)
+{
+  return  path + std::to_string(block_no);
+}
+
 // FIXME: use FastMutex or not?
 typedef AbstractCache<std::string, DataBlock,
 			 StrategyCollection<std::string, DataBlock>, FastMutex,
 			 FastMutex> DataCacheBase;
 
-class TC_DataCache : public DataCacheBase
+class DataCacheShard : public DataCacheBase
 {
 	std::mutex mu_;
 	std::unordered_map<std::string, std::unordered_set<size_t>> cached_blocks;
 public:
-  TC_DataCache(long cacheSize = 102400,
+  DataCacheShard(long cacheSize = 102400,
 	       Timestamp::TimeDiff expire = CACHE_EXPIRE_SECONDS)
       : DataCacheBase(StrategyCollection<std::string, DataBlock>())
 	{
 #ifdef _DEBUG
-                std::cout << "TC_DataCache - Constructor" << std::endl;
+                std::cout << "DataCacheShard - Constructor" << std::endl;
 #endif
 		_strategy.pushBack(
 		    new LRUStrategy<std::string, DataBlock>(cacheSize));
@@ -62,10 +104,10 @@ public:
 		    new ExpireStrategy<std::string, DataBlock>(expire));
 	}
 
-        ~TC_DataCache()
+        ~DataCacheShard()
         {
 #ifdef _DEBUG
-                std::cout << "TC_DataCache - Destructor" << std::endl;
+                std::cout << "DataCacheShard - Destructor" << std::endl;
 #endif
         }
 
@@ -98,8 +140,8 @@ public:
 		char *buf, bool *revalidate);
 
 private:
-        TC_DataCache(const TC_DataCache& aCache);
-	TC_DataCache &operator=(const TC_DataCache &aCache);
+        DataCacheShard(const DataCacheShard& aCache);
+	DataCacheShard &operator=(const DataCacheShard &aCache);
 };
 
 class DataBlock {
@@ -109,11 +151,11 @@ public:
 	int start_idx;	
 	std::string path;
 	size_t block_no;
-	TC_DataCache *data_cache;
+	DataCacheShard *data_cache;
 	time_t timestamp;
 
 	DataBlock(char *d, size_t size, int start, std::string p, size_t b,
-		  TC_DataCache *dc)
+		  DataCacheShard *dc)
 	{
 		data = (char *) malloc(CACHE_BLOCK_SIZE);
 		len = size;
@@ -140,7 +182,7 @@ public:
 	}
 };
 
-void TC_DataCache::put(const std::string& path, size_t offset, size_t length,
+void DataCacheShard::put(const std::string& path, size_t offset, size_t length,
 		       char *data)
 {
 	size_t i = 0;
@@ -154,7 +196,7 @@ void TC_DataCache::put(const std::string& path, size_t offset, size_t length,
 		printf("Not alligned with cache block");
 #endif
 		offset = offset - delta_offset;
-		std::string key = path + std::to_string(offset / CACHE_BLOCK_SIZE);
+		std::string key = GetBlockKey(path, offset / CACHE_BLOCK_SIZE);
 		SharedPtr<DataBlock> ptrElem = DataCacheBase::get(key);
 		if (!ptrElem.isNull()) {
 			memcpy(ptrElem->data + delta_offset, data,
@@ -184,7 +226,7 @@ void TC_DataCache::put(const std::string& path, size_t offset, size_t length,
 		i += CACHE_BLOCK_SIZE;
 	}
 	while (write_len < length) {
-		std::string key = path + std::to_string((offset + i) / CACHE_BLOCK_SIZE);
+		std::string key = GetBlockKey(path, (offset + i) / CACHE_BLOCK_SIZE);
 		if (length - write_len < CACHE_BLOCK_SIZE) {
 			SharedPtr<DataBlock> ptrElem = DataCacheBase::get(key);
 			if (!ptrElem.isNull()) {
@@ -235,10 +277,9 @@ void TC_DataCache::put(const std::string& path, size_t offset, size_t length,
 	}
 }
 
-void TC_DataCache::remove(const std::string& path)
+void DataCacheShard::remove(const std::string& path)
 {
 	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
-	std::string key;
 	std::unordered_set<size_t> blocks;
 
 	{
@@ -251,7 +292,7 @@ void TC_DataCache::remove(const std::string& path)
 	}
 
 	for (size_t block_no : blocks) {
-		key = path + std::to_string(block_no);
+		std::string key = GetBlockKey(path, block_no);
 		DataCacheBase::remove(key);
 #ifdef _DEBUG
 		cout << "Removed " << key << std::endl;
@@ -259,10 +300,9 @@ void TC_DataCache::remove(const std::string& path)
 	}
 }
 
-void TC_DataCache::remove(const std::string& path, size_t offset, size_t length)
+void DataCacheShard::remove(const std::string& path, size_t offset, size_t length)
 {
 	std::unordered_map<std::string, std::unordered_set<size_t> >::iterator it;
-	std::string key;
 
 	{
 		std::lock_guard<std::mutex> lock(mu_);
@@ -275,7 +315,7 @@ void TC_DataCache::remove(const std::string& path, size_t offset, size_t length)
 		if (block_no < offset / CACHE_BLOCK_SIZE ||
 		    block_no >= (length + offset) / CACHE_BLOCK_SIZE)
 			continue;
-		key = path + std::to_string(block_no);
+		std::string key = GetBlockKey(path, block_no);
 		DataCacheBase::remove(key);
 		RemoveBlockFromMap(path, block_no);
 #ifdef _DEBUG
@@ -290,8 +330,8 @@ void TC_DataCache::remove(const std::string& path, size_t offset, size_t length)
 	}
 }
 
-int TC_DataCache::get(const std::string& path, size_t offset, size_t length,
-		      char *buf, bool *revalidate)
+int DataCacheShard::get(const std::string &path, size_t offset, size_t length,
+			char *buf, bool *revalidate)
 {
 	size_t i = 0;
 	size_t read_len = 0;
@@ -304,7 +344,7 @@ int TC_DataCache::get(const std::string& path, size_t offset, size_t length,
 	while (true) {
 		if (offset % CACHE_BLOCK_SIZE != 0)
 			offset = offset - delta_offset;
-		std::string key = path + std::to_string((offset + i) / CACHE_BLOCK_SIZE);
+		std::string key = GetBlockKey(path, (offset + i) / CACHE_BLOCK_SIZE);
 		SharedPtr<DataBlock> ptrElem = DataCacheBase::get(key);
 		if (ptrElem.isNull() || ptrElem->start_idx != 0) {
 #ifdef _DEBUG
@@ -336,5 +376,60 @@ int TC_DataCache::get(const std::string& path, size_t offset, size_t length,
 		i += CACHE_BLOCK_SIZE;
 	}
 }
+
+const int kNumCacheShards = 16;
+
+class TC_DataCache
+{
+public:
+	TC_DataCache(long cacheSize = 102400,
+			Timestamp::TimeDiff expire = CACHE_EXPIRE_SECONDS) {
+		long sizePerShard = cacheSize / kNumCacheShards;
+		for (int i = 0; i < kNumCacheShards; ++i) {
+			shards_[i] = new DataCacheShard(sizePerShard, expire);
+		}
+	}
+	~TC_DataCache() {
+		for (int i = 0; i < kNumCacheShards; ++i) {
+			delete shards_[i];
+		}
+	}
+	void AddBlockToMap(const std::string &path, size_t block_no) {
+		shard(path)->AddBlockToMap(path, block_no);
+	}
+	void RemoveBlockFromMap(const std::string &path, size_t block_no) {
+		shard(path)->RemoveBlockFromMap(path, block_no);
+	}
+	bool isCached(const std::string &path) {
+		return shard(path)->isCached(path);
+	}
+	void put(const std::string &path, size_t offset, size_t length,
+		 char *data) {
+		shard(path)->put(path, offset, length, data);
+	}
+	void remove(const std::string &path) {
+		shard(path)->remove(path);
+	}
+	void remove(const std::string &path, size_t offset, size_t length) {
+		shard(path)->remove(path, offset, length);
+	}
+	int get(const std::string &path, size_t offset, size_t length,
+		char *buf, bool *revalidate) {
+		return shard(path)->get(path, offset, length, buf, revalidate);
+	}
+	void clear() {
+	  std::cout << "cleared" << std::endl;
+		for (int i = 0; i < kNumCacheShards; ++i) {
+			shards_[i]->clear();
+		}
+	}
+
+private:
+	DataCacheShard* shard(const std::string& path) {
+		return shards_[Hash(path) % kNumCacheShards];
+	}
+
+	DataCacheShard* shards_[kNumCacheShards];
+};
 
 #endif // TC_DataCache_INCLUDED
