@@ -200,7 +200,7 @@ vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 
 	file = nfs4_openv(paths, count, flags, modes, attrs);
 
-	for (int i = 0; i < tcres.index; i++) {
+	for (int i = 0; file && i < tcres.index; i++) {
 		SharedPtr<DirEntry> ptrElem = mdCache->get(paths[i]);
 		if (!ptrElem.isNull()) {
 			pthread_rwlock_wrlock(&((ptrElem)->attrLock));

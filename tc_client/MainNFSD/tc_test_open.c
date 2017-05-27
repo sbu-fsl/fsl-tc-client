@@ -30,7 +30,6 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	int rc = -1;
-	vres res;
 	vfile *tcf;
 
 	/* Initialize TC services and daemons */
@@ -45,26 +44,29 @@ int main(int argc, char *argv[])
 
 	/* Read the file; nfs4_readv() will open it first if needed. */
 	tcf = sca_open(TC_TEST_NFS_FILE0, O_RDWR, 0);
-	if (tcf->fd < 0) {
-		NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE0);
-	}
+	if (tcf) {
+		if (tcf->fd < 0) {
+			NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE0);
+		}
 
-	rc = sca_close(tcf);
-	if (rc < 0) {
-		NFS4_DEBUG("Cannot close %d", tcf->fd);
+		rc = sca_close(tcf);
+		if (rc < 0) {
+			NFS4_DEBUG("Cannot close %d", tcf->fd);
+		}
 	}
-
 	tcf = sca_open(TC_TEST_NFS_FILE1, O_WRONLY | O_CREAT, 0);
-	if (tcf->fd < 0) {
-		NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE1);
-	}
+	if (tcf) {
+		if (tcf->fd < 0) {
+			NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE1);
+		}
 
-	rc = sca_close(tcf);
-	if (rc < 0) {
-		NFS4_DEBUG("Cannot close %d", tcf->fd);
+		rc = sca_close(tcf);
+		if (rc < 0) {
+			NFS4_DEBUG("Cannot close %d", tcf->fd);
+		}
 	}
 
 	vdeinit(context);
 
-	return res.err_no;
+	return tcf ? 0 : 1;
 }

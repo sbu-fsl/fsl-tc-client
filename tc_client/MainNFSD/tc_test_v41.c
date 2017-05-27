@@ -29,7 +29,7 @@ static char tc_config_path[PATH_MAX];
 int main(int argc, char *argv[])
 {
 	void *context = NULL;
-	vres res;
+	vres res = {0};
 
 	/* Initialize TC services and daemons */
 	context = vinit(get_tc_config_file(tc_config_path, PATH_MAX),

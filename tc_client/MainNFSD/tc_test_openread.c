@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 {
 	void *context = NULL;
 	int rc = -1;
-	struct viovec read_iovec[4];
+	struct viovec read_iovec[4] = {0};
 	vres res;
 	vfile *file1;
 
@@ -61,49 +61,51 @@ int main(int argc, char *argv[])
 	}
 
 	file1 = sca_open(TC_TEST_NFS_FILE1, O_RDWR, 0);
-	if (file1->fd < 0) {
-		NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE1);
-	}
+	if (file1) {
+		if (file1->fd < 0) {
+			NFS4_DEBUG("Cannot open %s", TC_TEST_NFS_FILE1);
+		}
 
-	NFS4_DEBUG("Opened %s, %d\n", TC_TEST_NFS_FILE1, file1->fd);
+		NFS4_DEBUG("Opened %s, %d\n", TC_TEST_NFS_FILE1, file1->fd);
 
-	/* Setup I/O request */
-	viov2file(&read_iovec[0], file1, 0, 16384, malloc(16384));
-        assert(read_iovec[0].data);
-	viov2current(&read_iovec[1], 16384, 16384, malloc(16384));
-	assert(read_iovec[1].data);
+		/* Setup I/O request */
+		viov2file(&read_iovec[0], file1, 0, 16384, malloc(16384));
+		assert(read_iovec[0].data);
+		viov2current(&read_iovec[1], 16384, 16384, malloc(16384));
+		assert(read_iovec[1].data);
 
-	viov2path(&read_iovec[2], TC_TEST_NFS_FILE0, 0, 16384, malloc(16384));
-	assert(read_iovec[2].data);
-	viov2current(&read_iovec[3], 16384, 16384, malloc(16384));
-	assert(read_iovec[3].data);
+		viov2path(&read_iovec[2], TC_TEST_NFS_FILE0, 0, 16384, malloc(16384));
+		assert(read_iovec[2].data);
+		viov2current(&read_iovec[3], 16384, 16384, malloc(16384));
+		assert(read_iovec[3].data);
 
-        res = vec_write(read_iovec, 4, false);
+		res = vec_write(read_iovec, 4, false);
 
-        /* Read the file; nfs4_readv() will open it first if needed. */
-        res = vec_read(read_iovec, 4, false);
+		/* Read the file; nfs4_readv() will open it first if needed. */
+		res = vec_read(read_iovec, 4, false);
 
 
-        /* Check results. */
-	if (vokay(res)) {
-		fprintf(stderr,
-			"Successfully read the first %zu bytes of file \"%s\" "
-			"via NFS.\n",
-			read_iovec[0].length, TC_TEST_NFS_FILE0);
-	} else {
-		fprintf(stderr,
-			"Failed to read file \"%s\" at the %d-th operation "
-			"with error code %d (%s). See log file for details: "
-			"%s\n",
-			TC_TEST_NFS_FILE0, res.index, res.err_no,
-			strerror(res.err_no), DEFAULT_LOG_FILE);
-	}
+		/* Check results. */
+		if (vokay(res)) {
+			fprintf(stderr,
+					"Successfully read the first %zu bytes of file \"%s\" "
+					"via NFS.\n",
+					read_iovec[0].length, TC_TEST_NFS_FILE0);
+		} else {
+			fprintf(stderr,
+					"Failed to read file \"%s\" at the %d-th operation "
+					"with error code %d (%s). See log file for details: "
+					"%s\n",
+					TC_TEST_NFS_FILE0, res.index, res.err_no,
+					strerror(res.err_no), DEFAULT_LOG_FILE);
+		}
 
-	rc = sca_close(file1);
-	if (rc < 0) {
-		NFS4_DEBUG("Cannot close %d", file1->fd);
+		rc = sca_close(file1);
+		if (rc < 0) {
+			NFS4_DEBUG("Cannot close %d", file1->fd);
+		}
 	}
 	vdeinit(context);
 
-	return res.err_no;
+	return file1 ? res.err_no : 1;
 }
