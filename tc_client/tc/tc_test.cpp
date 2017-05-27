@@ -205,7 +205,7 @@ TYPED_TEST_P(TcTest, WritevCanCreateFiles)
 
 	Removev(PATHS, count);
 
-	viovec *writev = (viovec *)malloc(sizeof(viovec) * count);
+	viovec *writev = (viovec *)calloc(count, sizeof(viovec));
 	for (int i = 0; i < count; ++i) {
 		viov4creation(&writev[i], PATHS[i], 4096,
 				getRandomBytes(4096));
@@ -213,7 +213,7 @@ TYPED_TEST_P(TcTest, WritevCanCreateFiles)
 
 	EXPECT_OK(vec_write(writev, count, false));
 
-	viovec *readv = (viovec *)malloc(sizeof(viovec) * count);
+	viovec *readv = (viovec *)calloc(count, sizeof(viovec));
 	for (int i = 0; i < count; ++i) {
 		viov2path(&readv[i], PATHS[i], 0, 4096,
 			    (char *)malloc(4096));
@@ -1231,7 +1231,7 @@ TYPED_TEST_P(TcTest, ParallelRdWrAFile)
 	const int S = 4096;
 	tc_touch(PATH, T * S);
 
-	struct viovec iovs[T];
+	struct viovec iovs[T] = {0};
 	char *data1 = getRandomBytes(T * S);
 	char *data2 = (char *)malloc(T * S);
 	for (int i = 0; i < 1; ++i) { // repeat for 10 times
@@ -1242,8 +1242,9 @@ TYPED_TEST_P(TcTest, ParallelRdWrAFile)
 			EXPECT_OK(vec_write(&iovs[i], 1, false));
 		});
 
+		memset(iovs, 0, sizeof(iovs));
 		for (int t = 0; t < T; ++t) {
-			iovs[t].data = data2 + t * S;
+			viov2path(&iovs[t], PATH, t * S, S, data2 + t * S);
 		}
 		DoParallel(T, [&iovs](int i) {
 			EXPECT_OK(vec_read(&iovs[i], 1, false));
