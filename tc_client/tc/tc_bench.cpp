@@ -66,7 +66,7 @@ static vector<viovec> NewIovecs(vfile *files, int n, size_t offset = 0)
 		iovs[i].file = files[i];
 		iovs[i].offset = offset;
 		iovs[i].length = BUFSIZE;
-		iovs[i].data = (char *)malloc(PATH_MAX);
+		iovs[i].data = (char *)malloc(BUFSIZE);
 		iovs[i].is_write_stable = true;
 	}
 	return iovs;
@@ -103,7 +103,7 @@ BENCHMARK(BM_CreateEmpty)->RangeMultiplier(2)->Range(1, 256);
 static void BM_OpenClose(benchmark::State &state)
 {
 	size_t nfiles = state.range(0);
-	vector<const char *> paths = NewPaths("file-%d", nfiles);
+	vector<const char *> paths = NewPaths("/vfs0/file-%d", nfiles);
 
 	while (state.KeepRunning()) {
 		vfile *files =
@@ -120,7 +120,7 @@ BENCHMARK(BM_OpenClose)->RangeMultiplier(2)->Range(1, 256);
 static void ReadWrite(benchmark::State &state, int flags, bool read)
 {
 	size_t nfiles = state.range(0);
-	vector<const char *> paths = NewPaths("file-%d", nfiles);
+	vector<const char *> paths = NewPaths("/vfs0/file-%d", nfiles);
 	auto iofunc = read ? vec_read : vec_write;
 	size_t offset = (flags & O_APPEND) ? TC_OFFSET_END : 0;
 
@@ -147,7 +147,7 @@ BENCHMARK(BM_Write4K)->RangeMultiplier(2)->Range(1, 256);
 
 static void BM_Write4KSync(benchmark::State &state)
 {
-	ReadWrite(state, O_WRONLY | O_CREAT | O_SYNC, false);
+	ReadWrite(state, O_WRONLY | O_CREAT | O_SYNC | O_DIRECT, false);
 }
 BENCHMARK(BM_Write4KSync)->RangeMultiplier(2)->Range(1, 256);
 
@@ -592,6 +592,7 @@ int main(int argc, char **argv)
 	benchmark::Initialize(&argc, argv);
 	bool istc = argc > 1 && !strcmp("tc", argv[1]);
 	void *context = SetUp(istc);
+	sca_chdir("/vfs0");
 	benchmark::RunSpecifiedBenchmarks();
 	TearDown(context);
 
