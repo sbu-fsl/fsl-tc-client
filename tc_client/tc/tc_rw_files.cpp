@@ -85,12 +85,9 @@ void Run(const char *dir)
 			    file_size - (bytes_finished[i] + bytes_reading[i]));
 			iosize = std::min(iosize, kSizeLimit - bytes);
 
-			iov.file = vfile_from_path(GetFilePath(dir, i));
-			iov.offset = bytes_finished[i] + bytes_reading[i];
-			iov.length = iosize;
-			iov.data = data + bytes;
-			iov.is_creation = false;
-			iov.is_eof = false;
+			viov2path(&iov, GetFilePath(dir, i),
+				  bytes_finished[i] + bytes_reading[i], iosize,
+				  data + bytes);
 			iovs.push_back(std::move(iov));
 
 			bytes += iosize;
