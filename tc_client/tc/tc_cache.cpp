@@ -73,9 +73,6 @@ static void clear_fd_to_path(int fd)
 	fd_to_path_map->erase(fd);
 }
 
-void nfs_restore_FhToFilename(struct vattrs *attrs, int count,
-			      vfile *saved_tcfs);
-
 /*
  * Update fileHandle for single vfile object
  */
@@ -95,19 +92,12 @@ void update_file(vfile *tcf)
  * Translate filename to file handle and save the original vfile.
  * For vattrs
  */
-vfile *nfs_updateAttr_FilenameToFh(struct vattrs *attrs, int count)
+vector<vfile> nfs_updateAttr_FilenameToFh(struct vattrs *attrs, int count)
 {
-	int i;
-	vfile *saved_tcfs;
-	vfile *tcf;
+	vector<vfile> saved_tcfs(count);
 
-	saved_tcfs = (vfile *)malloc(sizeof(vfile) * count);
-	if (!saved_tcfs) {
-		return NULL;
-	}
-
-	for (i = 0; i < count; ++i) {
-		tcf = &attrs[i].file;
+	for (int i = 0; i < count; ++i) {
+		vfile *tcf = &attrs[i].file;
 		saved_tcfs[i] = *tcf;
 		if (tcf->type == VFILE_PATH) {
 			update_file(tcf);
@@ -122,12 +112,9 @@ vfile *nfs_updateAttr_FilenameToFh(struct vattrs *attrs, int count)
  * For vattrs
  */
 void nfs_restoreAttr_FhToFilename(struct vattrs *attrs, int count,
-				  vfile *saved_tcfs)
+				  const vector<vfile> &saved_tcfs)
 {
-	int i;
-
-	for (i = 0; i < count; ++i) {
-
+	for (int i = 0; i < count; ++i) {
 		if (saved_tcfs[i].type == VFILE_PATH &&
 		    attrs[i].file.type == VFILE_HANDLE) {
 			del_file_handle(
@@ -135,26 +122,18 @@ void nfs_restoreAttr_FhToFilename(struct vattrs *attrs, int count,
 		}
 		attrs[i].file = saved_tcfs[i];
 	}
-
-	free(saved_tcfs);
 }
 
 /**
  * Translate filename to file handle and save the original vfile.
  * For viovec
  */
-vfile *nfs_updateIovec_FilenameToFh(struct viovec *iovs, int count)
+vector<vfile> nfs_updateIovec_FilenameToFh(struct viovec *iovs, int count)
 {
-	int i;
-	vfile *saved_tcfs;
+	vector<vfile> saved_tcfs(count);
 	vfile *tcf;
 
-	saved_tcfs = (vfile *)malloc(sizeof(vfile) * count);
-	if (!saved_tcfs) {
-		return NULL;
-	}
-
-	for (i = 0; i < count; ++i) {
+	for (int i = 0; i < count; ++i) {
 		tcf = &iovs[i].file;
 		saved_tcfs[i] = *tcf;
 		if (tcf->type == VFILE_PATH) {
@@ -170,11 +149,9 @@ vfile *nfs_updateIovec_FilenameToFh(struct viovec *iovs, int count)
  * For viovec
  */
 void nfs_restoreIovec_FhToFilename(struct viovec *iovs, int count,
-				  vfile *saved_tcfs)
+				   const vector<vfile> &saved_tcfs)
 {
-	int i;
-
-	for (i = 0; i < count; ++i) {
+	for (int i = 0; i < count; ++i) {
 		if (saved_tcfs[i].type == VFILE_PATH &&
 		    iovs[i].file.type == VFILE_HANDLE) {
 			del_file_handle(
@@ -182,8 +159,6 @@ void nfs_restoreIovec_FhToFilename(struct viovec *iovs, int count,
 		}
 		iovs[i].file = saved_tcfs[i];
 	}
-
-	free(saved_tcfs);
 }
 
 vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
@@ -422,28 +397,26 @@ static void update_dataCache(struct viovec *siovec, struct viovec *final_iovec,
 vres nfs_readv(struct viovec *iovs, int count, bool istxn)
 {
 	vres tcres = { .index = count, .err_no = 0 };
-	vfile *saved_tcfs = NULL;
 	std::vector<bool> hitArray(count, false);
 	int miss_count = 0;
 	viovec *final_iovec = NULL;
 	std::vector<struct vattrs> attrs(count);
 
 	// XXX
-	saved_tcfs = nfs_updateIovec_FilenameToFh(iovs, count);
-	if (!saved_tcfs) {
-		return vfailure(0, ENOMEM);
-	}
+	vector<vfile> saved_tcfs = nfs_updateIovec_FilenameToFh(iovs, count);
 
 	final_iovec =
 	    check_dataCache(iovs, count, &miss_count, hitArray);
-	if (final_iovec == NULL)
-		goto mem_failure2;
+	if (final_iovec == NULL) {
+		return vfailure(0, ENOMEM);
+	}
 
 	g_miss_count += miss_count;
 	if (miss_count == 0) {
 		/* Full cache hit */
 		goto exit;
 	}
+
 	tcres = nfs4_readv(final_iovec, miss_count, istxn, attrs.data());
 	if (vokay(tcres)) {
 
@@ -465,9 +438,6 @@ exit:
 	// TODO fix new_path memory leak
 	free(final_iovec);
 	return tcres;
-
-mem_failure2:
-	return vfailure(0, ENOMEM);;
 }
 
 vres check_and_remove(struct viovec *writes, int write_count,
@@ -497,14 +467,11 @@ vres check_and_remove(struct viovec *writes, int write_count,
 vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 {
 	vres tcres = { .index = write_count, .err_no = 0 };
-	vfile *saved_tcfs = NULL;
 	vector<struct vattrs> attrs(write_count);     // attrs after writes
 	vector<struct vattrs> old_attrs(write_count); // attrs before writes
 
-	saved_tcfs = nfs_updateIovec_FilenameToFh(writes, write_count);
-	if (!saved_tcfs) {
-		return vfailure(0, ENOMEM);
-	}
+	vector<vfile> saved_tcfs =
+	    nfs_updateIovec_FilenameToFh(writes, write_count);
 
 	tcres = nfs4_writev(writes, write_count, is_transaction,
 			    old_attrs.data(), attrs.data());
@@ -709,15 +676,9 @@ static void setattr_update_pagecache(struct vattrs *sAttrs, int count)
 
 vres nfs_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 {
-	vres tcres = { .index = count, .err_no = 0 };
-	vfile *saved_tcfs;
+	vector<vfile> saved_tcfs = nfs_updateAttr_FilenameToFh(attrs, count);
 
-	saved_tcfs = nfs_updateAttr_FilenameToFh(attrs, count);
-	if (!saved_tcfs) {
-		return vfailure(0, ENOMEM);
-	}
-
-	tcres = nfs4_lsetattrsv(attrs, count, is_transaction);
+	vres tcres = nfs4_lsetattrsv(attrs, count, is_transaction);
 	nfs_restoreAttr_FhToFilename(attrs, count, saved_tcfs);
 	if (vokay(tcres)) {
 		setattr_update_pagecache(attrs, count);
@@ -868,19 +829,13 @@ failure:
  * Translate filename to file handle and save the original vfile.
  * For vfile_pair
  */
-vfile *nfs_updatePair_FilenameToFh(vfile_pair *pairs, int count)
+vector<vfile> nfs_updatePair_FilenameToFh(vfile_pair *pairs, int count)
 {
 	int i, j;
-	vfile *saved_tcfs;
-	vfile *tcf;
-
-	saved_tcfs = (vfile *)malloc(sizeof(vfile) * count * 2);
-	if (!saved_tcfs) {
-		return NULL;
-	}
+	vector<vfile> saved_tcfs(count * 2);
 
 	for (i = 0, j=0; i < count; ++i) {
-		tcf = &pairs[i].src_file;
+		vfile *tcf = &pairs[i].src_file;
 		saved_tcfs[j] = *tcf;
 		if (tcf->type == VFILE_PATH) {
 			update_file(tcf);
@@ -905,7 +860,7 @@ vfile *nfs_updatePair_FilenameToFh(vfile_pair *pairs, int count)
  * For vfile_pair
  */
 void nfs_restorePair_FhToFilename(vfile_pair *pairs, int count,
-				  vfile *saved_tcfs)
+				  const vector<vfile> &saved_tcfs)
 {
 	int i, j;
 
@@ -926,21 +881,13 @@ void nfs_restorePair_FhToFilename(vfile_pair *pairs, int count,
 		pairs[i].dst_file = saved_tcfs[j];
 		j++;
 	}
-
-	free(saved_tcfs);
 }
 
 vres nfs_renamev(vfile_pair *pairs, int count, bool is_transaction)
 {
-	vres tcres = { .index = count, .err_no = 0 };
-	vfile *saved_tcfs;
+	vector<vfile> saved_tcfs = nfs_updatePair_FilenameToFh(pairs, count);
 
-	saved_tcfs = nfs_updatePair_FilenameToFh(pairs, count);
-	if (!saved_tcfs) {
-		return vfailure(0, ENOMEM);
-	}
-
-	tcres = nfs4_renamev(pairs, count, is_transaction);
+	vres tcres = nfs4_renamev(pairs, count, is_transaction);
 
 	nfs_restorePair_FhToFilename(pairs, count, saved_tcfs);
 
@@ -951,19 +898,12 @@ vres nfs_renamev(vfile_pair *pairs, int count, bool is_transaction)
  * Translate filename to file handle and save the original vfile.
  * For vfile
  */
-vfile *nfs_updateFile_FilenameToFh(vfile *vfiles, int count)
+vector<vfile> nfs_updateFile_FilenameToFh(vfile *vfiles, int count)
 {
-	int i;
-	vfile *saved_tcfs;
-	vfile *tcf;
+	vector<vfile> saved_tcfs(count * 2);
 
-	saved_tcfs = (vfile *)malloc(sizeof(vfile) * count * 2);
-	if (!saved_tcfs) {
-		return NULL;
-	}
-
-	for (i = 0; i < count; ++i) {
-		tcf = &vfiles[i];
+	for (int i = 0; i < count; ++i) {
+		vfile *tcf = &vfiles[i];
 		saved_tcfs[i] = *tcf;
 		if (tcf->type == VFILE_PATH) {
 			update_file(tcf);
@@ -978,11 +918,9 @@ vfile *nfs_updateFile_FilenameToFh(vfile *vfiles, int count)
  * For vfile
  */
 void nfs_restoreFile_FhToFilename(vfile *vfiles, int count,
-				  vfile *saved_tcfs)
+				  const vector<vfile> &saved_tcfs)
 {
-	int i;
-
-	for (i = 0; i < count; ++i) {
+	for (int i = 0; i < count; ++i) {
 		if (saved_tcfs[i].type == VFILE_PATH &&
 		    vfiles[i].type == VFILE_HANDLE) {
 			del_file_handle(
@@ -990,21 +928,13 @@ void nfs_restoreFile_FhToFilename(vfile *vfiles, int count,
 		}
 		vfiles[i] = saved_tcfs[i];
 	}
-
-	free(saved_tcfs);
 }
 
 vres nfs_removev(vfile *vfiles, int count, bool is_transaction)
 {
-	vres tcres = { .index = count, .err_no = 0 };
-	vfile *saved_tcfs;
+	vector<vfile> saved_tcfs = nfs_updateFile_FilenameToFh(vfiles, count);
 
-	saved_tcfs = nfs_updateFile_FilenameToFh(vfiles, count);
-	if (!saved_tcfs) {
-		return vfailure(0, ENOMEM);
-	}
-
-	tcres = nfs4_removev(vfiles, count, is_transaction);
+	vres tcres = nfs4_removev(vfiles, count, is_transaction);
 
 	nfs_restoreFile_FhToFilename(vfiles, count, saved_tcfs);
 
@@ -1021,15 +951,9 @@ vres nfs_removev(vfile *vfiles, int count, bool is_transaction)
 
 vres nfs_mkdirv(struct vattrs *dirs, int count, bool is_transaction)
 {
-	vres tcres = { .index = count, .err_no = 0 };
-	vfile *saved_tcfs;
+	vector<vfile> saved_tcfs = nfs_updateAttr_FilenameToFh(dirs, count);
 
-	saved_tcfs = nfs_updateAttr_FilenameToFh(dirs, count);
-	if (!saved_tcfs) {
-		return vfailure(0, ENOMEM);
-	}
-
-	tcres = nfs4_mkdirv(dirs, count, is_transaction);
+	vres tcres = nfs4_mkdirv(dirs, count, is_transaction);
 
 	nfs_restoreAttr_FhToFilename(dirs, count, saved_tcfs);
 
