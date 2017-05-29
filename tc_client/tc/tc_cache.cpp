@@ -188,12 +188,11 @@ void nfs_restoreIovec_FhToFilename(struct viovec *iovs, int count,
 
 vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 {
-	struct vattrs *attrs;
+	vector<struct vattrs> attrs(count);
 	vres tcres = { .index = count, .err_no = 0 };
 	vfile *file;
-	attrs = (struct vattrs *) malloc(count * sizeof(struct vattrs));
 
-	file = nfs4_openv(paths, count, flags, modes, attrs);
+	file = nfs4_openv(paths, count, flags, modes, attrs.data());
 
 	for (int i = 0; file && i < tcres.index; i++) {
 		SharedPtr<DirEntry> ptrElem = mdCache->get(paths[i]);
@@ -209,7 +208,6 @@ vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 		}
 		add_fd_to_path(file[i].fd, paths[i]);
 	}
-	free(attrs);
 	return file;
 }
 
@@ -267,33 +265,18 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 	struct viovec *final_iovec = NULL;
 	struct viovec *cur_siovec = NULL;
 	struct viovec *cur_fiovec = NULL;
-	size_t *hits = NULL;
+	vector<size_t> hits(count, 0);
 	int revalidate_count = 0;
 	int i = 0;
 	bool revalidate = false;
+	vector<bool> reval(count, false);
+	vector<struct vattrs> attrs(count);
 
-	struct vattrs *attrs = (vattrs *)malloc(count*sizeof(vattrs));
-	if (attrs == NULL)
-		return NULL;
-	final_iovec =
-		(struct viovec *)malloc(sizeof(struct viovec) * count);
+	final_iovec = (struct viovec *)malloc(sizeof(struct viovec) * count);
 	if (final_iovec == NULL) {
-		free(attrs);
 		return NULL;
 	}
-	hits = (size_t *) malloc(sizeof(size_t)*count);
-	if (hits == NULL) {
-		free(attrs);
-		free(final_iovec);
-		return NULL;
-	}
-	bool *reval = (bool *) malloc(sizeof(bool) * count);
-	if (reval == NULL) {
-		free(attrs);
-		free(final_iovec);
-		free(hits);
-		return NULL;
-	}
+
 	for(i = 0; i < count; i++) {
 		cur_siovec = siovec + i;
 		if (cur_siovec->file.type != VFILE_PATH &&
@@ -339,7 +322,7 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 	//Do getattrs
 	if (revalidate_count != 0) {
 		vres tcres = { .index = revalidate_count, .err_no = 0 };
-		tcres = nfs4_lgetattrsv(attrs, revalidate_count, false);
+		tcres = nfs4_lgetattrsv(attrs.data(), revalidate_count, false);
 		int l = 0;
 		if (vokay(tcres)) {
 			// Compare attrs in loop. If ctime is different, set
@@ -402,9 +385,6 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 		}
 	}
 exit:
-	free(attrs);
-	free(hits);
-	free(reval);
 
 	return final_iovec;
 }
@@ -518,26 +498,21 @@ vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 {
 	vres tcres = { .index = write_count, .err_no = 0 };
 	vfile *saved_tcfs = NULL;
-	struct vattrs *attrs = NULL;     // attrs after writes
-	struct vattrs *old_attrs = NULL; // attrs before writes
+	vector<struct vattrs> attrs(write_count);     // attrs after writes
+	vector<struct vattrs> old_attrs(write_count); // attrs before writes
 
 	saved_tcfs = nfs_updateIovec_FilenameToFh(writes, write_count);
 	if (!saved_tcfs) {
 		return vfailure(0, ENOMEM);
 	}
-	attrs = (struct vattrs *) malloc(write_count*
-					sizeof(struct vattrs));
-	old_attrs = (struct vattrs *) malloc(write_count*
-			sizeof(struct vattrs));
-	tcres = nfs4_writev(writes, write_count, is_transaction, old_attrs,
-				attrs);
+
+	tcres = nfs4_writev(writes, write_count, is_transaction,
+			    old_attrs.data(), attrs.data());
 
 	if (vokay(tcres)) {
-		tcres = check_and_remove(writes, write_count, old_attrs);
+		tcres = check_and_remove(writes, write_count, old_attrs.data());
 		if (!vokay(tcres))
 		{
-			free(attrs);
-			free(old_attrs);
 			return tcres;
 		}
 		for (int i = 0; i < write_count; i++) {
@@ -565,8 +540,6 @@ vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 	}
 
 	nfs_restoreIovec_FhToFilename(writes, write_count, saved_tcfs);
-	free(attrs);
-	free(old_attrs);
 
 	return tcres;
 }
