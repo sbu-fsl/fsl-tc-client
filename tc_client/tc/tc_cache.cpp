@@ -571,8 +571,9 @@ void fill_newAttr(struct vattrs *fAttrs, struct vattrs *sAttrs)
 	memcpy((void *)&fAttrs->file, (void *)&sAttrs->file, sizeof(vfile));
 }
 
-struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
-					 int *miss_count, bool *hitArray)
+static struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
+					      int *miss_count,
+					      vector<bool> &hitArray)
 {
 	struct vattrs *final_attrs = NULL;
 	struct vattrs *cur_sAttr = NULL;
@@ -632,7 +633,7 @@ struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
 
 void getattr_update_pagecache(struct vattrs *sAttrs,
 			      struct vattrs *final_attrs, int count,
-			      bool *hitArray)
+			      vector<bool> &hitArray)
 {
 	int i = 0;
 	int j = 0;
@@ -664,16 +665,11 @@ vres nfs_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 	vres tcres = { .index = count, .err_no = 0 };
 	struct vattrs *final_attrs = NULL;
 	int miss_count = 0;
-	bool *hitArray = NULL;
+	vector<bool> hitArray(count, false);
 	int j = 0;
 
-	hitArray = new bool[count]();
-	if (hitArray == NULL)
-		return vfailure(0, ENOMEM);
-
-	std::fill_n(hitArray, count, false);
-
-	final_attrs = getattr_check_pagecache(attrs, count, &miss_count, hitArray);
+	final_attrs =
+	    getattr_check_pagecache(attrs, count, &miss_count, hitArray);
 	if (final_attrs == NULL)
 		goto mem_failure2;
 
@@ -699,13 +695,11 @@ exit:
 			j++;
 		}
 	}
-	delete[] hitArray;
 	free(final_attrs);
 
 	return tcres;
 
 mem_failure2:
-	delete[] hitArray;
 	return vfailure(0, ENOMEM);
 }
 
@@ -784,8 +778,9 @@ static bool poco_direntry(const struct vattrs *dentry, const char *dir,
 	return true;
 }
 
-static const char **listdir_check_pagecache(bool *hitArray, const char **dirs,
-					    int count, int *miss_count)
+static const char **listdir_check_pagecache(vector<bool> &hitArray,
+					    const char **dirs, int count,
+					    int *miss_count)
 {
 	const char **finalDirs;
 	int i = 0;
@@ -833,7 +828,7 @@ void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem,
 	}
 }
 
-void reply_from_pagecache(const char **dirs, int count, bool *hitArray,
+void reply_from_pagecache(const char **dirs, int count, vector<bool> &hitArray,
 			  vec_listdir_cb cb, void *cbarg,
 			  struct vattrs_masks masks)
 {
@@ -862,16 +857,10 @@ vres nfs_listdirv(const char **dirs, int count, struct vattrs_masks masks,
 	// TODO fix memory leak
 	const char **finalDirs;
 	int miss_count = 0;
-	bool *hitArray = NULL;
+	vector<bool> hitArray(count, false);
 	temp = new listDirPxy;
 	if (temp == NULL)
 		goto failure;
-
-	hitArray = new bool[count]();
-	if (hitArray == NULL)
-		goto bool_failure;
-
-	std::fill_n(hitArray, count, false);
 
 	finalDirs = listdir_check_pagecache(hitArray, dirs, count, &miss_count);
 
@@ -887,8 +876,6 @@ vres nfs_listdirv(const char **dirs, int count, struct vattrs_masks masks,
 
 	reply_from_pagecache(dirs, count, hitArray, cb, cbarg, masks);
 
-//dir_failure:
-	delete[] hitArray;
 bool_failure:
 	delete temp;
 failure:
