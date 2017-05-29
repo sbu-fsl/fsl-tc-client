@@ -432,13 +432,15 @@ vres nfs4_do_iovec(struct viovec *iovs, int count, bool istxn,
 
 	parts = tc_split_iov_array(&iova, CPD_LIMIT, &nparts);
 
+	int j = 0;
 	for (i = 0; i < nparts; ++i) {
-		tcres = fn(parts[i].iovs, parts[i].size, istxn, old_attrs,
-			   new_attrs);
+		tcres = fn(parts[i].iovs, parts[i].size, istxn, old_attrs + j,
+			   new_attrs + j);
 		if (!vokay(tcres)) {
 			/* TODO: FIX tcres */
 			goto exit;
 		}
+		j += parts[i].size;
 	}
 
 exit:
