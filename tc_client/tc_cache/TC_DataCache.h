@@ -226,7 +226,8 @@ void DataCacheShard::put(const std::string& path, size_t offset, size_t length,
 		i += CACHE_BLOCK_SIZE;
 	}
 	while (write_len < length) {
-		std::string key = GetBlockKey(path, (offset + i) / CACHE_BLOCK_SIZE);
+		std::string key =
+		    GetBlockKey(path, (offset + i) / CACHE_BLOCK_SIZE);
 		if (length - write_len < CACHE_BLOCK_SIZE) {
 			SharedPtr<DataBlock> ptrElem = DataCacheBase::get(key);
 			if (!ptrElem.isNull()) {
@@ -418,7 +419,6 @@ public:
 		return shard(path)->get(path, offset, length, buf, revalidate);
 	}
 	void clear() {
-	  std::cout << "cleared" << std::endl;
 		for (int i = 0; i < kNumCacheShards; ++i) {
 			shards_[i]->clear();
 		}

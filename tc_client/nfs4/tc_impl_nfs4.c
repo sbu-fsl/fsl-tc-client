@@ -406,9 +406,10 @@ static int nfs4_fill_fd_iovecs(struct viovec *iovs, int count)
 }
 
 vres nfs4_do_iovec(struct viovec *iovs, int count, bool istxn,
-		     vres (*fn)(struct viovec *iovs, int count, bool istxn,
-				  struct vattrs *old_attrs, struct vattrs *new_attrs),
-		     struct vattrs *old_attrs, struct vattrs *new_attrs)
+		   vres (*fn)(struct viovec *iovs, int count, bool istxn,
+			      struct vattrs *old_attrs,
+			      struct vattrs *new_attrs),
+		   struct vattrs *old_attrs, struct vattrs *new_attrs)
 {
 	static const int CPD_LIMIT = (1 << 20);
 	int i;
@@ -447,7 +448,8 @@ exit:
 }
 
 vres nfs4_readv(struct viovec *iovs, int count, bool istxn,
-		  struct vattrs *attrs) {
+		struct vattrs *attrs)
+{
 	return nfs4_do_iovec(iovs, count, istxn, nfs4_do_readv, NULL, attrs);
 }
 
@@ -458,7 +460,7 @@ vres nfs4_readv(struct viovec *iovs, int count, bool istxn,
  *              (Or number of reads)
  */
 vres nfs4_do_writev(struct viovec *iovs, int write_count, bool istxn,
-		      struct vattrs *old_attrs, struct vattrs *new_attrs)
+		    struct vattrs *old_attrs, struct vattrs *new_attrs)
 {
 	struct gsh_export *export = op_ctx->export;
 	vres tcres = { .index = 0, .err_no = (int)ENOENT };
@@ -489,7 +491,7 @@ vres nfs4_do_writev(struct viovec *iovs, int write_count, bool istxn,
 }
 
 vres nfs4_writev(struct viovec *iovs, int count, bool istxn,
-		   struct vattrs *old_attrs, struct vattrs *new_attrs)
+		 struct vattrs *old_attrs, struct vattrs *new_attrs)
 {
 	return nfs4_do_iovec(iovs, count, istxn, nfs4_do_writev, old_attrs,
 			     new_attrs);

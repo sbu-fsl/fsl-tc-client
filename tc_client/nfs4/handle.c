@@ -2543,8 +2543,7 @@ static inline bool tc_prepare_rdwr(struct viovec *iov, bool write)
  * Caller has to make sure iovs and fields inside are allocated and freed.
  */
 static vres tc_nfs4_writev(struct viovec *iovs, int count,
-			     struct vattrs *old_attrs,
-			     struct vattrs *new_attrs)
+			   struct vattrs *old_attrs, struct vattrs *new_attrs)
 {
 	vres tcres = { 0 };
 	int rc;
@@ -2576,9 +2575,11 @@ static vres tc_nfs4_writev(struct viovec *iovs, int count,
 			&iovs[i].file,
 			O_WRONLY | (iovs[i].is_creation ? O_CREAT : 0),
 			tc_auto_buf(64), &input_attr[i], &opened_file) &&
-			tc_prepare_getattr(old_fattr_blobs + i * FATTR_BLOB_SZ, &fs_bitmap_getattr) &&
-			tc_prepare_rdwr(&iovs[i], true) &&
-			tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ, &fs_bitmap_getattr);
+		    tc_prepare_getattr(old_fattr_blobs + i * FATTR_BLOB_SZ,
+				       &fs_bitmap_getattr) &&
+		    tc_prepare_rdwr(&iovs[i], true) &&
+		    tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
+				       &fs_bitmap_getattr);
 		if (!r || !tc_has_enough_ops(1)) { // reserve for CLOSE
 			opcnt = saved_opcnt;
 			opened_file = saved_file;
@@ -2624,17 +2625,17 @@ static vres tc_nfs4_writev(struct viovec *iovs, int count,
 		else if (resoparray[j].resop == NFS4_OP_GETATTR) {
 			if (attr_count % 2 == 1) {
 				fattr4_to_vattrs(
-					&resoparray[j]
-					.nfs_resop4_u.opgetattr.GETATTR4res_u.resok4
-					.obj_attributes,
-					new_attrs + attr_count/2);
+				    &resoparray[j]
+					 .nfs_resop4_u.opgetattr.GETATTR4res_u
+					 .resok4.obj_attributes,
+				    new_attrs + attr_count / 2);
 			}
 			else {
 				fattr4_to_vattrs(
-                                        &resoparray[j]
-                                        .nfs_resop4_u.opgetattr.GETATTR4res_u.resok4
-                                        .obj_attributes,
-                                        old_attrs + attr_count/2);
+				    &resoparray[j]
+					 .nfs_resop4_u.opgetattr.GETATTR4res_u
+					 .resok4.obj_attributes,
+				    old_attrs + attr_count / 2);
 			}
                         ++attr_count;
 		}
