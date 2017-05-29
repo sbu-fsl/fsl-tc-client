@@ -399,17 +399,16 @@ vres nfs_readv(struct viovec *iovs, int count, bool istxn)
 	vres tcres = { .index = count, .err_no = 0 };
 	std::vector<bool> hitArray(count, false);
 	int miss_count = 0;
-	viovec *final_iovec = NULL;
 	std::vector<struct vattrs> attrs(count);
 
-	// XXX
-	vector<vfile> saved_tcfs = nfs_updateIovec_FilenameToFh(iovs, count);
-
-	final_iovec =
+	viovec *final_iovec =
 	    check_dataCache(iovs, count, &miss_count, hitArray);
 	if (final_iovec == NULL) {
 		return vfailure(0, ENOMEM);
 	}
+
+	vector<vfile> saved_tcfs =
+	    nfs_updateIovec_FilenameToFh(final_iovec, miss_count);
 
 	g_miss_count += miss_count;
 	if (miss_count == 0) {
@@ -419,8 +418,8 @@ vres nfs_readv(struct viovec *iovs, int count, bool istxn)
 
 	tcres = nfs4_readv(final_iovec, miss_count, istxn, attrs.data());
 	if (vokay(tcres)) {
-
-
+		nfs_restoreIovec_FhToFilename(final_iovec, miss_count,
+					      saved_tcfs);
 		for (int i = 0; i < miss_count; i++) {
 			if (final_iovec[i].file.type == VFILE_PATH ||
 			    final_iovec[i].file.type == VFILE_DESCRIPTOR) {
@@ -431,8 +430,6 @@ vres nfs_readv(struct viovec *iovs, int count, bool istxn)
 		}
 		update_dataCache(iovs, final_iovec, count, hitArray);
 	}
-
-	nfs_restoreIovec_FhToFilename(iovs, count, saved_tcfs);
 
 exit:
 	// TODO fix new_path memory leak

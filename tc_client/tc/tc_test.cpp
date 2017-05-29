@@ -968,7 +968,7 @@ static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)
 		EXPECT_NOTNULL(iovs[i].data);
 
 		viov2path(&read_iovs[i], pairs[i].dst_path, 0, N,
-			    (char *)malloc(N));
+			  (char *)malloc(N));
 		EXPECT_NOTNULL(read_iovs[i].data);
 	}
 
