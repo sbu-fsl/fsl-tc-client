@@ -545,7 +545,8 @@ static inline void vstat2attrs(const struct stat *st, struct vattrs *attrs)
 	}
 }
 
-static inline void tc_attrs2attrs(struct vattrs *dstAttrs, const struct vattrs *srcAttrs)
+static inline void tc_attrs2attrs(struct vattrs *dstAttrs,
+				  const struct vattrs *srcAttrs)
 {
 	memcpy(&dstAttrs->file, &srcAttrs->file, sizeof(vfile));
 

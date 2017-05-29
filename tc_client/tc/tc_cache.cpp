@@ -19,6 +19,7 @@ TC_DataCache *dataCache = NULL;
 unordered_map<int, string> *fd_to_path_map = NULL;;
 std::mutex *fd_to_path_mutex = nullptr;
 
+// TODO: make this thread-safe
 int g_miss_count = 0;
 
 void reset_miss_count() {
@@ -234,9 +235,15 @@ void fill_newIovec(struct viovec *fiovec, struct viovec *siovec)
 	memcpy((void *) fiovec, (void *) siovec, sizeof(struct viovec));
 }
 
+// Return whether we can cache the given file.
+static inline bool cacheable(const vfile *vf)
+{
+	return vf->type == VFILE_PATH || vf->type == VFILE_DESCRIPTOR;
+}
+
 // Get the path of the given vfile.
 //
-// REQUIRES: |vf| must be of VFILE_PATH and VFILE_DESCRIPTOR type.
+// REQUIRES: |vf| must be cacheable
 static const char *get_path(const vfile *vf)
 {
 	const char *p = nullptr;
@@ -315,7 +322,6 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 			}
 		}
 		else if (!ptrElem.isNull()) {
-			printf("Data Cache hit. MDCache hit.\n");
 			//Add to getattrs
 			hits[i] = hit;
 			reval[i] = true;
@@ -324,7 +330,6 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 			revalidate_count++;
 		}
 		else {
-			printf("Data Cache hit. MDCache miss.\n");
 			hits[i] = 0;
 			reval[i] = false;
 			//Remove from data cache?
@@ -571,87 +576,99 @@ void fill_newAttr(struct vattrs *fAttrs, struct vattrs *sAttrs)
 	memcpy((void *)&fAttrs->file, (void *)&sAttrs->file, sizeof(vfile));
 }
 
-static struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
+static char *join_path(const char *parent, const char *child)
+{
+	if (child == nullptr) {
+		return strndup(parent, PATH_MAX);
+	}
+	size_t len = strlen(parent) + strlen(child) + 2;
+	char *new_path = (char *)malloc(len);
+	if (new_path) {
+		snprintf(new_path, len, "%s/%s", parent, child);
+	}
+	return new_path;
+}
+
+static struct vattrs *getattr_check_metacache(struct vattrs *sAttrs, int count,
 					      int *miss_count,
 					      vector<bool> &hitArray)
 {
 	struct vattrs *final_attrs = NULL;
-	struct vattrs *cur_sAttr = NULL;
-	struct vattrs *cur_fAttr = NULL;
 
-	final_attrs =
-	    (struct vattrs *)malloc(sizeof(struct vattrs) * count);
+	final_attrs = (struct vattrs *)malloc(sizeof(struct vattrs) * count);
 	if (final_attrs == NULL)
 		return NULL;
 
+	auto addMissedAttrs = [&final_attrs, &miss_count](
+	    const struct vattrs *va) {
+		struct vattrs *fva = &final_attrs[(*miss_count)++];
+		*fva = *va;
+		fva->masks = VATTRS_MASK_ALL;
+		return fva;
+	};
+
+	vfile prev_file = {0};  // NULL, PATH, or HANDLE
 	for (int i = 0; i < count; ++i) {
-		cur_sAttr = sAttrs + i;
-		if (cur_sAttr->file.type != VFILE_PATH) {
-			/* fill final_array[miss_count] */
-			// same comment as for data cache
-			cur_fAttr = final_attrs + *miss_count;
-			fill_newAttr(cur_fAttr, cur_sAttr);
-			cur_fAttr->masks = VMASK_INIT_ALL;
-			// same comment as for data cache
-			if (i > 0 && hitArray[i - 1] == true &&
-			    cur_fAttr->file.type == VFILE_CURRENT) {
-				char *new_path = (char *)malloc(
-				    strlen(sAttrs[i - 1].file.path) +
-				    strlen(sAttrs[i].file.path) + 2);
-				sprintf(new_path, "%s/%s",
-					sAttrs[i - 1].file.path,
-					sAttrs[i].file.path);
-				cur_fAttr->file.path = new_path;
-				cur_fAttr->file.type = VFILE_PATH;
+		vfile cur_file = sAttrs[i].file;
+		const char *p = nullptr;
+		if (sAttrs[i].file.type == VFILE_CURRENT) {
+			assert(prev_file.type != VFILE_NULL);
+			if (prev_file.type == VFILE_HANDLE) {
+				addMissedAttrs(&sAttrs[i]);
+				prev_file = cur_file;
+				continue;
+			} else {
+				assert(prev_file.type == VFILE_PATH);
+				p = join_path(prev_file.path, cur_file.path);
 			}
-			(*miss_count)++;
+		} else if (cacheable(&cur_file)) {
+			// VFILE_PATH or VFILE_DESCRIPTOR
+			p = get_path(&cur_file);
+		} else {
+			// VFILE_HANDLE or others
+			addMissedAttrs(&sAttrs[i]);
+			prev_file = cur_file;
 			continue;
 		}
-		SharedPtr<DirEntry> ptrElem =
-		    mdCache->get(cur_sAttr->file.path);
+
+		SharedPtr<DirEntry> ptrElem = mdCache->get(p);
 		if (!ptrElem.isNull() &&
 		    (time(NULL) - ptrElem->getTimestamp() <= MD_REFRESH_TIME)) {
 			/* Cache hit */
-			ptrElem->getAttrs(cur_sAttr);
+			ptrElem->getAttrs(&sAttrs[i]);
 			hitArray[i] = true;
 		} else {
-			/* fill final_array[miss_count] */
-			cur_fAttr = final_attrs + *miss_count;
-			fill_newAttr(cur_fAttr, cur_sAttr);
-			cur_fAttr->masks = VMASK_INIT_ALL;
-			(*miss_count)++;
+			addMissedAttrs(&sAttrs[i]);
 		}
+
+		prev_file.type = VFILE_PATH;
+		prev_file.path = p;
 	}
 
 	return final_attrs;
 }
 
-void getattr_update_pagecache(struct vattrs *sAttrs,
-			      struct vattrs *final_attrs, int count,
-			      vector<bool> &hitArray)
+static void getattr_update_metacache(struct vattrs *sAttrs,
+				     struct vattrs *final_attrs, int count,
+				     vector<bool> &hitArray)
 {
-	int i = 0;
 	int j = 0;
 	struct vattrs *cur_sAttr = NULL;
 	struct vattrs *cur_fAttr = NULL;
 
-	while (i < count) {
+	for (int i = 0; i < count; ++i) {
+		if (hitArray[i]) {
+			continue;
+		}
+
 		cur_sAttr = sAttrs + i;
-		if (hitArray[i] == false && cur_sAttr->file.type == VFILE_PATH) {
-			cur_fAttr = final_attrs + j;
-
-			DirEntry de1(cur_sAttr, nullptr);
-			mdCache->add(cur_sAttr->file.path, de1);
-
-			j++;
+		cur_fAttr = final_attrs + j++;
+		if (cacheable(&cur_fAttr->file)) {
+			const char *p = get_path(&cur_fAttr->file);
+			DirEntry de1(p, cur_fAttr);
+			mdCache->add(p, de1);
 		}
-		else if (hitArray[i] == false) {
-			cur_fAttr = final_attrs + j;
-			tc_attrs2attrs(cur_sAttr, cur_fAttr);
-			j++;
-		}
-
-		i++;
+		tc_attrs2attrs(cur_sAttr, cur_fAttr);
 	}
 }
 
@@ -661,12 +678,11 @@ vres nfs_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 	struct vattrs *final_attrs = NULL;
 	int miss_count = 0;
 	vector<bool> hitArray(count, false);
-	int j = 0;
 
 	final_attrs =
-	    getattr_check_pagecache(attrs, count, &miss_count, hitArray);
+	    getattr_check_metacache(attrs, count, &miss_count, hitArray);
 	if (final_attrs == NULL)
-		goto mem_failure2;
+		return vfailure(0, ENOMEM);
 
 	g_miss_count += miss_count;
 	if (miss_count == 0) {
@@ -677,15 +693,16 @@ vres nfs_lgetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 	tcres = nfs4_lgetattrsv(final_attrs, miss_count, is_transaction);
 
 	if (vokay(tcres)) {
-		getattr_update_pagecache(attrs, final_attrs, count, hitArray);
+		getattr_update_metacache(attrs, final_attrs, count, hitArray);
 	}
 
 exit:
 	// this should be done above too
+	int j = 0;
 	for (int i = 0; i < count; i++) {
 		if (hitArray[i] == false) {
 			if (attrs[i].file.type == VFILE_CURRENT &&
-				final_attrs[j].file.type == VFILE_PATH)
+			    final_attrs[j].file.type == VFILE_PATH)
 				free((void *) final_attrs[j].file.path);
 			j++;
 		}
@@ -693,9 +710,6 @@ exit:
 	free(final_attrs);
 
 	return tcres;
-
-mem_failure2:
-	return vfailure(0, ENOMEM);
 }
 
 static void setattr_update_pagecache(struct vattrs *sAttrs, int count)
