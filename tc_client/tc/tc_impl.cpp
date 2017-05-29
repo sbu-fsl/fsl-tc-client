@@ -211,12 +211,11 @@ int sca_close(vfile *tcf)
 
 vres vec_read(struct viovec *reads, int count, bool is_transaction)
 {
-	int i;
 	vres tcres;
 	TC_DECLARE_COUNTER(read);
 
 	TC_START_COUNTER(read);
-	for (i = 0; i < count; ++i) {
+	for (int i = 0; i < count; ++i) {
 		if (reads[i].is_creation) {
 			TC_STOP_COUNTER(read, count, false);
 			return vfailure(i, EINVAL);
@@ -950,7 +949,8 @@ vres vec_ldup(struct vextent_pair *pairs, int count, bool is_transaction)
 	if (!vokay(tcres)) {
 		fprintf(stderr,
 			"vec_ldup failed when reading %s (%d-th file): %s",
-			pairs[i].src_path, i, strerror(tcres.err_no));
+			pairs[tcres.index].src_path, tcres.index,
+			strerror(tcres.err_no));
 		goto exit;
 	}
 
