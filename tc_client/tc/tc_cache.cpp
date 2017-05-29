@@ -1,3 +1,5 @@
+#include <mutex>
+
 #include "nfs4/tc_impl_nfs4.h"
 #include "tc_nfs.h"
 #include "tc_helper.h"
@@ -9,7 +11,11 @@ using namespace std;
 
 TC_MetaDataCache<string, DirEntry > *mdCache = NULL;
 TC_DataCache *dataCache = NULL;
+
+// TODO: merge fd_to_path_map into tc_kfd
 unordered_map<int, string> *fd_to_path_map = NULL;;
+std::mutex *fd_to_path_mutex = nullptr;
+
 int g_miss_count = 0;
 
 void reset_miss_count() {
@@ -29,6 +35,7 @@ void init_data_cache(uint64_t size, uint64_t time)
 {
 	dataCache = new TC_DataCache(size, time);
 	fd_to_path_map = new unordered_map<int, string>();
+	fd_to_path_mutex = new std::mutex();
 }
 
 void deinit_page_cache()
@@ -39,15 +46,33 @@ void deinit_page_cache()
 void deinit_data_cache()
 {
 	dataCache->clear();
+	delete fd_to_path_map;
+	delete fd_to_path_mutex;
 }
 
-void nfs_restore_FhToFilename(struct vattrs *attrs, int count,
-			      vfile *saved_tcfs);
+static void add_fd_to_path(int fd, const char *path)
+{
+	std::lock_guard<std::mutex> lock(*fd_to_path_mutex);
+	(*fd_to_path_map)[fd] = path;
+}
+
+static const char* get_path_from_fd(int fd)
+{
+	std::lock_guard<std::mutex> lock(*fd_to_path_mutex);
+	auto it = fd_to_path_map->find(fd);
+	return it == fd_to_path_map->end() ? nullptr : it->second.data();
+}
+
+static void clear_fd_to_path(int fd)
+{
+	std::lock_guard<std::mutex> lock(*fd_to_path_mutex);
+	fd_to_path_map->erase(fd);
+}
 
 struct file_handle *copyFH(const struct file_handle *old)
 {
 	size_t oldLen = old->handle_bytes;
-	struct file_handle *fh = NULL;
+	struct file_handle *fh = nullptr;
 
 	fh = (struct file_handle *)malloc(sizeof(*fh) + oldLen);
 	if (fh) {
@@ -58,6 +83,9 @@ struct file_handle *copyFH(const struct file_handle *old)
 
 	return fh;
 }
+
+void nfs_restore_FhToFilename(struct vattrs *attrs, int count,
+			      vfile *saved_tcfs);
 
 /*
  * Update fileHandle for single vfile object
