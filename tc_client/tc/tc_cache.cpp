@@ -1,8 +1,11 @@
 #include <mutex>
+#include <vector>
 
 #include "nfs4/tc_impl_nfs4.h"
 #include "tc_nfs.h"
 #include "tc_helper.h"
+#include "path_utils.h"
+
 
 #include "../tc_cache/TC_MetaDataCache.h"
 #include "../tc_cache/TC_DataCache.h"
@@ -69,21 +72,6 @@ static void clear_fd_to_path(int fd)
 	fd_to_path_map->erase(fd);
 }
 
-struct file_handle *copyFH(const struct file_handle *old)
-{
-	size_t oldLen = old->handle_bytes;
-	struct file_handle *fh = nullptr;
-
-	fh = (struct file_handle *)malloc(sizeof(*fh) + oldLen);
-	if (fh) {
-		fh->handle_bytes = oldLen;
-		fh->handle_type = old->handle_type;
-		memcpy(fh->f_handle, old->f_handle, oldLen);
-	}
-
-	return fh;
-}
-
 void nfs_restore_FhToFilename(struct vattrs *attrs, int count,
 			      vfile *saved_tcfs);
 
@@ -96,22 +84,10 @@ void update_file(vfile *tcf)
 	struct file_handle *h;
 
 	SharedPtr<DirEntry> ptrElem = mdCache->get(tcf->path);
-	if (ptrElem.isNull()) {
-		return;
+	if (!ptrElem.isNull() && (h = ptrElem->copyFileHandle()) != nullptr) {
+		tcf->type = VFILE_HANDLE;
+		tcf->handle = h;
 	}
-
-	pthread_rwlock_rdlock(&((ptrElem)->attrLock));
-	curHandle = (struct file_handle *)(ptrElem)->fh;
-	if(!curHandle) {
-		pthread_rwlock_unlock(&((ptrElem)->attrLock));
-		return;
-	}
-
-	h = copyFH(curHandle);
-	pthread_rwlock_unlock(&((ptrElem)->attrLock));
-
-	tcf->type = VFILE_HANDLE;
-	tcf->handle = h;
 }
 
 /**
@@ -209,16 +185,6 @@ void nfs_restoreIovec_FhToFilename(struct viovec *iovs, int count,
 	free(saved_tcfs);
 }
 
-/**
- * Validate memtadata cache by comparing the timestamp of cached entry with the
- * latest timestamp from the server side.
- * Return whether the metadata cache entry is valid.
- */
-static bool validate_metacache(DirEntry *dentry, const struct vattrs *attrs)
-{
-	return timespec_diff(&dentry->attrs.st_ctim, &attrs->ctime) == 0;
-}
-
 vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 {
 	struct vattrs *attrs;
@@ -231,23 +197,16 @@ vfile *nfs_openv(const char **paths, int count, int *flags, mode_t *modes)
 	for (int i = 0; file && i < tcres.index; i++) {
 		SharedPtr<DirEntry> ptrElem = mdCache->get(paths[i]);
 		if (!ptrElem.isNull()) {
-			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
-			if (!validate_metacache(ptrElem.get(), &attrs[i])) {
+			if (!ptrElem->refreshAttrs(&attrs[i], true)) {
 				//Data cache contains stale data
 				dataCache->remove(paths[i]);
 			}
-			//Update metadata cache
-			vattrs2stat(&attrs[i], &(ptrElem)->attrs);
-			ptrElem->timestamp = time(NULL);
-			pthread_rwlock_unlock(&((ptrElem)->attrLock));
 		}
 		else {
-			DirEntry de(paths[i]);
-			vattrs2stat(&attrs[i], &de.attrs);
-			de.fh = NULL;
-			mdCache->add(de.path, de);
+			DirEntry de(paths[i], &attrs[i]);
+			mdCache->add(paths[i], de);
 		}
-		(*fd_to_path_map)[file[i].fd] = paths[i];
+		add_fd_to_path(file[i].fd, paths[i]);
 	}
 	free(attrs);
 	return file;
@@ -259,7 +218,7 @@ vres nfs_closev(vfile *tcfs, int count)
 
 	tcres = nfs4_closev(tcfs, count);
 	for (int i = 0; i < tcres.index; i++) {
-		fd_to_path_map->erase(tcfs[i].fd);
+		clear_fd_to_path(tcfs[i].fd);
 	}
 
 	return tcres;
@@ -275,8 +234,28 @@ void fill_newIovec(struct viovec *fiovec, struct viovec *siovec)
 	memcpy((void *) fiovec, (void *) siovec, sizeof(struct viovec));
 }
 
+// Get the path of the given vfile.
+//
+// REQUIRES: |vf| must be of VFILE_PATH and VFILE_DESCRIPTOR type.
+static const char *get_path(const vfile *vf)
+{
+	const char *p = nullptr;
+
+	if (vf->type == VFILE_PATH) {
+		p = vf->path;
+	} else if (vf->type == VFILE_DESCRIPTOR) {
+		p = get_path_from_fd(vf->fd);
+	} else {
+		assert(false);  // not VFILE_PATH or VFILE_DESCRIPTOR
+	}
+
+	assert(p != nullptr);
+	return p;
+}
+
+// hitArray[i] tells where the i-th I/O is a full cache hit.
 struct viovec *check_dataCache(struct viovec *siovec, int count,
-				 int *miss_count, bool *hitArray)
+			       int *miss_count, std::vector<bool> &hitArray)
 {
 	struct viovec *final_iovec = NULL;
 	struct viovec *cur_siovec = NULL;
@@ -316,33 +295,22 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 			reval[i] = false;
 			continue;
 		}
-		if (cur_siovec->file.type == VFILE_DESCRIPTOR) {
-			unordered_map<int, string>::iterator it =
-				fd_to_path_map->find(cur_siovec->file.fd);
-			if (it != fd_to_path_map->end()) {
-				cur_siovec->file.path = it->second.c_str();
-			}
-			else {
-				hits[i] = 0;
-				reval[i] = false;
-				continue;
-			}
-		}
+		const char *p = get_path(&cur_siovec->file);
 		int hit =
-		    dataCache->get(cur_siovec->file.path, cur_siovec->offset,
-				   cur_siovec->length, cur_siovec->data, &revalidate);
+		    dataCache->get(p, cur_siovec->offset, cur_siovec->length,
+				   cur_siovec->data, &revalidate);
 		if (hit == 0) {
 			hits[i] = 0;
 			reval[i] = false;
 			continue;
 		}
-		SharedPtr<DirEntry> ptrElem = mdCache->get(cur_siovec->file.path);
+		SharedPtr<DirEntry> ptrElem = mdCache->get(p);
 		if (revalidate == false && !ptrElem.isNull() &&
-				(time(NULL) - ptrElem->timestamp <= MD_REFRESH_TIME)) {
+		    (time(NULL) - ptrElem->getTimestamp() <= MD_REFRESH_TIME)) {
 			hits[i] = hit;
 			reval[i] = false;
-			if ((size_t)ptrElem->attrs.st_size <=
-					cur_siovec->offset + cur_siovec->length){
+			if (ptrElem->getFileSize() <=
+			    cur_siovec->offset + cur_siovec->length) {
 				cur_siovec->is_eof = true;
 			}
 		}
@@ -352,7 +320,7 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 			hits[i] = hit;
 			reval[i] = true;
 			attrs[revalidate_count].file = cur_siovec->file;
-			attrs[revalidate_count].masks = VATTRS_MASK_ALL; 
+			attrs[revalidate_count].masks = VATTRS_MASK_ALL;
 			revalidate_count++;
 		}
 		else {
@@ -362,24 +330,27 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 			//Remove from data cache?
 		}
 	}
+
 	//Do getattrs
 	if (revalidate_count != 0) {
 		vres tcres = { .index = revalidate_count, .err_no = 0 };
 		tcres = nfs4_lgetattrsv(attrs, revalidate_count, false);
 		int l = 0;
 		if (vokay(tcres)) {
-			//Compare attrs in loop. If ctime is different, set hits[i] to 0.
+			// Compare attrs in loop. If ctime is different, set
+			// hits[i] to 0.
 			for (int k = 0; k < count; k++) {
 				if (!reval[k])
 					continue;
 				cur_siovec = siovec + k;
-				SharedPtr<DirEntry> ptrElem = 
-					mdCache->get(cur_siovec->file.path);
-				if (ptrElem.isNull() || 
-					!validate_metacache(ptrElem.get(), &attrs[l])) {
+				const char *p = get_path(&cur_siovec->file);
+				SharedPtr<DirEntry> ptrElem = mdCache->get(p);
+				if (ptrElem.isNull() ||
+				    !ptrElem->validate(&attrs[l].ctime)) {
 					hits[k] = 0;
-				}
-				else if ((size_t)ptrElem->attrs.st_size <= cur_siovec->offset + cur_siovec->length){
+				} else if (ptrElem->getFileSize() <=
+					   cur_siovec->offset +
+					       cur_siovec->length) {
 					cur_siovec->is_eof = true;
 				}
 				l++;
@@ -389,46 +360,41 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 			goto exit;
 		}
 	}
-	i = 0;
-	while (i < count) {
+
+	*miss_count = 0;
+	for (i = 0; i < count; ++i) {
 		cur_siovec = siovec + i;
 		if (hits[i] == 0) {
 			/* fill final_array[miss_count] */
 			cur_fiovec = final_iovec + *miss_count;
 			fill_newIovec(cur_fiovec, cur_siovec);
 			if (i > 0 && hitArray[i-1] == true &&
-			// is this logic correct? , when is new_path freed
 				cur_fiovec->file.type == VFILE_CURRENT) {
-				char *new_path = (char *) malloc(strlen(siovec[i-1].file.path) +
-						strlen(siovec[i].file.path) + 2);
-				sprintf(new_path, "%s/%s", siovec[i-1].file.path, siovec[i].file.path);
+			// is this logic correct? , when is new_path freed
+			// FIXME: multiple VFILE_CURRENT before it
+				char *new_path = (char *)malloc(
+				    strlen(siovec[i - 1].file.path) +
+				    strlen(siovec[i].file.path) + 2);
+				sprintf(new_path, "%s/%s",
+					siovec[i - 1].file.path,
+					siovec[i].file.path);
 				cur_fiovec->file.path = new_path;
 				cur_fiovec->file.type = VFILE_PATH;
 			}
 			(*miss_count)++;
-			i++;
-			continue;
-		}
-		if (hits[i] == cur_siovec->length) {
-                        /* Cache hit */
+		} else if (hits[i] >= cur_siovec->length) {
+			/* Cache hit */
 			hitArray[i] = true;
-		}
-		else if (hits[i] > 0) {
+		} else {  //  (hits[i] > 0) {
 			/*Handle partial hit*/
 			// requires miss_count to be initialized by user
 			cur_fiovec = final_iovec + *miss_count;
 			fill_newIovec(cur_fiovec, cur_siovec);
-			cur_fiovec->offset = hits[i];
+			cur_fiovec->offset += hits[i];
 			cur_fiovec->length = cur_fiovec->length - hits[i];
 			cur_fiovec->data = cur_fiovec->data + hits[i];
 			(*miss_count)++;
 		}
-		else {
-			cur_fiovec = final_iovec + *miss_count;
-			fill_newIovec(cur_fiovec, cur_siovec);
-			(*miss_count)++;
-		}
-		i++;
 	}
 exit:
 	free(attrs);
@@ -438,48 +404,33 @@ exit:
 	return final_iovec;
 }
 
-void update_dataCache(struct viovec *siovec,
-			struct viovec *final_iovec, int count,
-			bool *hitArray)
+static void update_dataCache(struct viovec *siovec, struct viovec *final_iovec,
+			     int count, std::vector<bool> &hitArray)
 {
-        int i = 0;
         int j = 0;
         struct viovec *cur_siovec = NULL;
         struct viovec *cur_fiovec = NULL;
-	unordered_map<int, string>::iterator it;
 
-        while (i < count) {
-                cur_siovec = siovec + i;
-		if (hitArray[i] == false && 
-			cur_siovec->file.type == VFILE_DESCRIPTOR) {
-			cur_fiovec = final_iovec + j;
-			it = fd_to_path_map->find(cur_siovec->file.fd);
-			if (it != fd_to_path_map->end()) {
-				cur_fiovec->file.path = it->second.c_str();
-			}
+        for (int i = 0; i < count; ++i) {
+		if (hitArray[i]) {
+			continue;  // ignore full cache hit
 		}
-                if (hitArray[i] == false && (cur_siovec->file.type == VFILE_PATH ||
-			it != fd_to_path_map->end())) {
-                        cur_fiovec = final_iovec + j;
-
-                        dataCache->put(cur_fiovec->file.path, cur_fiovec->offset,
-					 cur_fiovec->length, cur_fiovec->data);
-			cur_siovec->length = cur_fiovec->length + cur_fiovec->offset - 
-						cur_siovec->offset;
-			cur_siovec->is_failure = cur_fiovec->is_failure;
-			cur_siovec->is_eof = cur_fiovec->is_eof;
-			cur_siovec->is_write_stable = cur_fiovec->is_write_stable;
-                        //memcpy(cur_siovec, cur_fiovec, sizeof(struct viovec));
-			
-                        j++;
-                }
-                else if (hitArray[i] == false) {
-                        cur_fiovec = final_iovec + j;
+                cur_siovec = siovec + i;
+		cur_fiovec = final_iovec + j++;
+		if (cur_siovec->file.type != VFILE_DESCRIPTOR &&
+		    cur_siovec->file.type != VFILE_PATH) {
 			memcpy(cur_siovec, cur_fiovec, sizeof(struct viovec));
-                        j++;
-                }
+			continue;
+		}
 
-                i++;
+		const char *p = get_path(&cur_siovec->file);
+		dataCache->put(p, cur_fiovec->offset, cur_fiovec->length,
+			       cur_fiovec->data);
+		cur_siovec->length = cur_fiovec->length + cur_fiovec->offset -
+				     cur_siovec->offset;
+		cur_siovec->is_failure = cur_fiovec->is_failure;
+		cur_siovec->is_eof = cur_fiovec->is_eof;
+		cur_siovec->is_write_stable = cur_fiovec->is_write_stable;
         }
 }
 
@@ -487,22 +438,19 @@ vres nfs_readv(struct viovec *iovs, int count, bool istxn)
 {
 	vres tcres = { .index = count, .err_no = 0 };
 	vfile *saved_tcfs = NULL;
-	bool *hitArray = NULL;
+	std::vector<bool> hitArray(count, false);
 	int miss_count = 0;
 	viovec *final_iovec = NULL;
-	struct vattrs *attrs = NULL;
+	std::vector<struct vattrs> attrs(count);
 
+	// XXX
 	saved_tcfs = nfs_updateIovec_FilenameToFh(iovs, count);
 	if (!saved_tcfs) {
 		return vfailure(0, ENOMEM);
 	}
-	hitArray = new bool[count]();
-	if (hitArray == NULL)
-		return vfailure(0, ENOMEM);
 
-	std::fill_n(hitArray, count, false);
-
-	final_iovec = check_dataCache(iovs, count, &miss_count, hitArray);
+	final_iovec =
+	    check_dataCache(iovs, count, &miss_count, hitArray);
 	if (final_iovec == NULL)
 		goto mem_failure2;
 
@@ -511,24 +459,16 @@ vres nfs_readv(struct viovec *iovs, int count, bool istxn)
 		/* Full cache hit */
 		goto exit;
 	}
-	attrs = (struct vattrs *) malloc(miss_count * sizeof(struct vattrs));
-	tcres = nfs4_readv(final_iovec, miss_count, istxn, attrs);
+	tcres = nfs4_readv(final_iovec, miss_count, istxn, attrs.data());
 	if (vokay(tcres)) {
+
+
 		for (int i = 0; i < miss_count; i++) {
-			if (final_iovec[i].file.type == VFILE_PATH || 
-				final_iovec[i].file.type == VFILE_DESCRIPTOR) {
-				if (final_iovec[i].file.type == VFILE_DESCRIPTOR) {
-					unordered_map<int, string>::iterator it =
-						fd_to_path_map->find(final_iovec[i].file.fd);
-					if (it != fd_to_path_map->end())
-						final_iovec[i].file.path = it->second.c_str();
-					else
-						continue;
-				}
-				DirEntry de(final_iovec[i].file.path);
-				vattrs2stat(&attrs[i], &de.attrs);
-				de.fh = NULL;
-				mdCache->add(de.path, de);
+			if (final_iovec[i].file.type == VFILE_PATH ||
+			    final_iovec[i].file.type == VFILE_DESCRIPTOR) {
+				const char *p = get_path(&final_iovec[i].file);
+				DirEntry de(p, &attrs[i]);
+				mdCache->add(p, de);
 			}
 		}
 		update_dataCache(iovs, final_iovec, count, hitArray);
@@ -537,14 +477,11 @@ vres nfs_readv(struct viovec *iovs, int count, bool istxn)
 	nfs_restoreIovec_FhToFilename(iovs, count, saved_tcfs);
 
 exit:
-	delete[] hitArray;
 	// TODO fix new_path memory leak
 	free(final_iovec);
-	free(attrs);
 	return tcres;
 
 mem_failure2:
-	delete[] hitArray;
 	return vfailure(0, ENOMEM);;
 }
 
@@ -559,22 +496,12 @@ vres check_and_remove(struct viovec *writes, int write_count,
 		    writes[i].file.type != VFILE_PATH) {
 			continue;
 		}
-		if (writes[i].file.type == VFILE_DESCRIPTOR) {
-			unordered_map<int, string>::iterator it =
-				fd_to_path_map->find(writes[i].file.fd);
-			if (it != fd_to_path_map->end()) {
-				writes[i].file.path = it->second.c_str();
-			}
-			else{
-				continue;
-			}
-		}
-		SharedPtr<DirEntry> ptrElem = mdCache->get(writes[i].file.path);
-		if (!ptrElem.isNull() &&
-		    dataCache->isCached(writes[i].file.path)) {
-			//If present in both, validate 
-			if (!validate_metacache(ptrElem.get(), &old_attrs[i])) {
-				dataCache->remove(writes[i].file.path);
+		const char *p = get_path(&writes[i].file);
+		SharedPtr<DirEntry> ptrElem = mdCache->get(p);
+		if (!ptrElem.isNull() && dataCache->isCached(p)) {
+			//If present in both, validate
+			if (!ptrElem->validate(&old_attrs[i].ctime)) {
+				dataCache->remove(p);
 			}
 		}
 	}
@@ -586,14 +513,14 @@ vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 {
 	vres tcres = { .index = write_count, .err_no = 0 };
 	vfile *saved_tcfs = NULL;
-	struct vattrs *attrs = NULL;
-	struct vattrs *old_attrs = NULL;
+	struct vattrs *attrs = NULL;     // attrs after writes
+	struct vattrs *old_attrs = NULL; // attrs before writes
 
 	saved_tcfs = nfs_updateIovec_FilenameToFh(writes, write_count);
 	if (!saved_tcfs) {
 		return vfailure(0, ENOMEM);
 	}
-	attrs = (struct vattrs *) malloc(write_count* 
+	attrs = (struct vattrs *) malloc(write_count*
 					sizeof(struct vattrs));
 	old_attrs = (struct vattrs *) malloc(write_count*
 			sizeof(struct vattrs));
@@ -609,36 +536,21 @@ vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 			return tcres;
 		}
 		for (int i = 0; i < write_count; i++) {
-			if (writes[i].file.type == VFILE_DESCRIPTOR) {
-				unordered_map<int, string>::iterator it =
-                                  fd_to_path_map->find(writes[i].file.fd);
-				if (it != fd_to_path_map->end()) {
-					writes[i].file.path = it->second.c_str();
-				}
-				else
-					continue;
-			}
 			if (writes[i].file.type == VFILE_PATH ||
-				writes[i].file.type == VFILE_DESCRIPTOR) {
-				DirEntry de(writes[i].file.path);
-				vattrs2stat(&attrs[i], &de.attrs);
-				de.fh = NULL;
-				mdCache->add(de.path, de);
-			}
-			if (writes[i].file.type == VFILE_PATH ||
-				writes[i].file.type == VFILE_DESCRIPTOR) {
+			    writes[i].file.type == VFILE_DESCRIPTOR) {
+				const char *p = get_path(&writes[i].file);
+				DirEntry de(p, &attrs[i]);
+				mdCache->add(p, de);
 				if (writes[i].offset != TC_OFFSET_END &&
 					writes[i].offset != TC_OFFSET_CUR) {
-					dataCache->put(writes[i].file.path,
-							writes[i].offset,
-							writes[i].length,
-							writes[i].data);
+					dataCache->put(p, writes[i].offset,
+						       writes[i].length,
+						       writes[i].data);
 				}
 				else if (writes[i].offset == TC_OFFSET_END){
-					dataCache->put(writes[i].file.path,
-							attrs[i].size - writes[i].length,
-							writes[i].length,
-							writes[i].data);
+					dataCache->put(
+					    p, attrs[i].size - writes[i].length,
+					    writes[i].length, writes[i].data);
 				}
 				else if (writes[i].offset == TC_OFFSET_CUR) {
 					//Can this be handled?
@@ -700,14 +612,9 @@ struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
 		SharedPtr<DirEntry> ptrElem =
 		    mdCache->get(cur_sAttr->file.path);
 		if (!ptrElem.isNull() &&
-		    (time(NULL) - ptrElem->timestamp <= MD_REFRESH_TIME)) {
+		    (time(NULL) - ptrElem->getTimestamp() <= MD_REFRESH_TIME)) {
 			/* Cache hit */
-			pthread_rwlock_rdlock(&((ptrElem)->attrLock));
-
-			vstat2attrs(&(ptrElem)->attrs, cur_sAttr);
-
-			pthread_rwlock_unlock(&((ptrElem)->attrLock));
-
+			ptrElem->getAttrs(cur_sAttr);
 			hitArray[i] = true;
 		} else {
 			/* fill final_array[miss_count] */
@@ -737,25 +644,14 @@ void getattr_update_pagecache(struct vattrs *sAttrs,
 		if (hitArray[i] == false && cur_sAttr->file.type == VFILE_PATH) {
 			cur_fAttr = final_attrs + j;
 
-			DirEntry de1(cur_sAttr->file.path);
-			vattrs2stat(cur_fAttr, &de1.attrs);
-			de1.fh = NULL;
-
-			pthread_rwlock_wrlock(&(de1.attrLock));
-
-			mdCache->add(de1.path, de1);
-
-			// Do we need to perform this with outside the
-			// write lock?
-			vstat2attrs(&de1.attrs, cur_sAttr);
-
-			pthread_rwlock_unlock(&(de1.attrLock));
+			DirEntry de1(cur_sAttr, nullptr);
+			mdCache->add(cur_sAttr->file.path, de1);
 
 			j++;
 		}
 		else if (hitArray[i] == false) {
 			cur_fAttr = final_attrs + j;
-			tc_attrs2attrs(cur_sAttr, cur_fAttr); 
+			tc_attrs2attrs(cur_sAttr, cur_fAttr);
 			j++;
 		}
 
@@ -828,13 +724,7 @@ static void setattr_update_pagecache(struct vattrs *sAttrs, int count)
 		    mdCache->get(cur_sAttr->file.path);
 		if (!ptrElem.isNull()) {
 			/* Update cache */
-			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
-
-			// why not use cache's update method
-			vattrs2stat(cur_sAttr, &(ptrElem)->attrs);
-			ptrElem->timestamp = time(NULL);
-
-			pthread_rwlock_unlock(&((ptrElem)->attrLock));
+			ptrElem->refreshAttrs(cur_sAttr, false);
 		}
 
 		i++;
@@ -856,7 +746,7 @@ vres nfs_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 	if (vokay(tcres)) {
 		setattr_update_pagecache(attrs, count);
 	}
-	
+
 	return tcres;
 }
 
@@ -877,26 +767,14 @@ static bool poco_direntry(const struct vattrs *dentry, const char *dir,
 	if (!parentElem.isNull()) {
 		SharedPtr<DirEntry> ptrElem = mdCache->get(dentry->file.path);
 		if (ptrElem.isNull()) {
-			DirEntry de1(dentry->file.path);
-			de1.fh = NULL;
-			vattrs2stat(dentry, &de1.attrs);
-
-			pthread_rwlock_wrlock(&(de1.attrLock));
-			
-			mdCache->add(de1.path, de1);
-			de1.parent = parentElem;
-			pthread_rwlock_unlock(&(de1.attrLock));
+			DirEntry de1(dentry, parentElem);
+			mdCache->add(dentry->file.path, de1);
 			ptrElem = mdCache->get(dentry->file.path);
 		} else {
-			pthread_rwlock_wrlock(&((ptrElem)->attrLock));
-			vattrs2stat(dentry, &(ptrElem)->attrs);
-			(ptrElem)->parent = parentElem;
-			pthread_rwlock_unlock(&((ptrElem)->attrLock));
+			ptrElem->setAttrsAndParent(dentry, parentElem);
 		}
 
-		pthread_rwlock_wrlock(&((parentElem)->attrLock));
-		(parentElem)->children[dentry->file.path] = ptrElem;
-		pthread_rwlock_unlock(&((parentElem)->attrLock));
+		parentElem->addChild(dentry->file.path, ptrElem);
 	}
 
 	finalDentry.masks = temp->masks;
@@ -924,7 +802,7 @@ static const char **listdir_check_pagecache(bool *hitArray, const char **dirs,
 		curDir = dirs[i];
 		curElem = mdCache->get(curDir);
 		if (curElem.isNull() || !(curElem)->has_listdir ||
-		    (time(NULL) - curElem->timestamp > MD_REFRESH_TIME)) {
+		    (time(NULL) - curElem->getTimestamp() > MD_REFRESH_TIME)) {
 			(*miss_count)++;
 			finalDirs[j++] = curDir;
 		} else {
@@ -946,9 +824,10 @@ void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem,
 
 	for (const auto &mypair : (curElem)->children) {
 		fileEntry = mypair.second;
+		std::string path = fileEntry->path();
 		finalDentry.masks = masks;
-		finalDentry.file = vfile_from_path((fileEntry)->path.c_str());
-		vstat2attrs(&(fileEntry)->attrs, &finalDentry);
+		finalDentry.file = vfile_from_path(path.c_str());
+		fileEntry->getAttrs(&finalDentry);
 
 		cb(&finalDentry, curDir, cbarg);
 	}
@@ -958,21 +837,19 @@ void reply_from_pagecache(const char **dirs, int count, bool *hitArray,
 			  vec_listdir_cb cb, void *cbarg,
 			  struct vattrs_masks masks)
 {
-	int i = 0;
 	SharedPtr<DirEntry> curElem;
 	const char *curDir = NULL;
 
-	while (i < count) {
+	for (int i = 0; i < count; ++i) {
 		curDir = dirs[i];
 		curElem = mdCache->get(curDir);
 		if (!curElem.isNull()) {
 			(curElem)->has_listdir = true;
 			if (hitArray[i] == true) {
-				invoke_callback(dirs[i], curElem, cb, cbarg, masks);
+				invoke_callback(dirs[i], curElem, cb, cbarg,
+						masks);
 			}
 		}
-
-		i++;
 	}
 }
 
