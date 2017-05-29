@@ -579,14 +579,12 @@ static struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
 	struct vattrs *cur_sAttr = NULL;
 	struct vattrs *cur_fAttr = NULL;
 
-	int i = 0;
-
 	final_attrs =
 	    (struct vattrs *)malloc(sizeof(struct vattrs) * count);
 	if (final_attrs == NULL)
 		return NULL;
 
-	while (i < count) {
+	for (int i = 0; i < count; ++i) {
 		cur_sAttr = sAttrs + i;
 		if (cur_sAttr->file.type != VFILE_PATH) {
 			/* fill final_array[miss_count] */
@@ -595,7 +593,7 @@ static struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
 			fill_newAttr(cur_fAttr, cur_sAttr);
 			cur_fAttr->masks = VMASK_INIT_ALL;
 			// same comment as for data cache
-			if (hitArray[i - 1] == true &&
+			if (i > 0 && hitArray[i - 1] == true &&
 			    cur_fAttr->file.type == VFILE_CURRENT) {
 				char *new_path = (char *)malloc(
 				    strlen(sAttrs[i - 1].file.path) +
@@ -607,7 +605,6 @@ static struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
 				cur_fAttr->file.type = VFILE_PATH;
 			}
 			(*miss_count)++;
-			i++;
 			continue;
 		}
 		SharedPtr<DirEntry> ptrElem =
@@ -624,8 +621,6 @@ static struct vattrs *getattr_check_pagecache(struct vattrs *sAttrs, int count,
 			cur_fAttr->masks = VMASK_INIT_ALL;
 			(*miss_count)++;
 		}
-
-		i++;
 	}
 
 	return final_attrs;
