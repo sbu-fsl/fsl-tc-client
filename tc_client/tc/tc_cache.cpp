@@ -76,9 +76,8 @@ static void clear_fd_to_path(int fd)
 /*
  * Update fileHandle for single vfile object
  */
-void update_file(vfile *tcf)
+void metacache_path_to_handle(vfile *tcf)
 {
-	struct file_handle *curHandle;
 	struct file_handle *h;
 
 	SharedPtr<DirEntry> ptrElem = mdCache->get(tcf->path);
@@ -100,7 +99,7 @@ vector<vfile> nfs_updateAttr_FilenameToFh(struct vattrs *attrs, int count)
 		vfile *tcf = &attrs[i].file;
 		saved_tcfs[i] = *tcf;
 		if (tcf->type == VFILE_PATH) {
-			update_file(tcf);
+			metacache_path_to_handle(tcf);
 		}
 	}
 
@@ -137,7 +136,7 @@ vector<vfile> nfs_updateIovec_FilenameToFh(struct viovec *iovs, int count)
 		tcf = &iovs[i].file;
 		saved_tcfs[i] = *tcf;
 		if (tcf->type == VFILE_PATH) {
-			update_file(tcf);
+			metacache_path_to_handle(tcf);
 		}
 	}
 
@@ -438,7 +437,7 @@ exit:
 }
 
 vres check_and_remove(struct viovec *writes, int write_count,
-			struct vattrs *old_attrs)
+		      struct vattrs *old_attrs)
 {
 	int hit_count = 0;
 	vres tcres = { .index = hit_count, .err_no = 0 };
@@ -835,7 +834,7 @@ vector<vfile> nfs_updatePair_FilenameToFh(vfile_pair *pairs, int count)
 		vfile *tcf = &pairs[i].src_file;
 		saved_tcfs[j] = *tcf;
 		if (tcf->type == VFILE_PATH) {
-			update_file(tcf);
+			metacache_path_to_handle(tcf);
 		}
 
 		j++;
@@ -843,7 +842,7 @@ vector<vfile> nfs_updatePair_FilenameToFh(vfile_pair *pairs, int count)
 		tcf = &pairs[i].dst_file;
 		saved_tcfs[j] = *tcf;
 		if (tcf->type == VFILE_PATH) {
-			update_file(tcf);
+			metacache_path_to_handle(tcf);
 		}
 
 		j++;
@@ -903,7 +902,7 @@ vector<vfile> nfs_updateFile_FilenameToFh(vfile *vfiles, int count)
 		vfile *tcf = &vfiles[i];
 		saved_tcfs[i] = *tcf;
 		if (tcf->type == VFILE_PATH) {
-			update_file(tcf);
+			metacache_path_to_handle(tcf);
 		}
 	}
 
