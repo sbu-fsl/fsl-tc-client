@@ -964,7 +964,7 @@ static void CopyOrDupFiles(const char *dir, bool copy, int nfiles)
 				  dst_paths[i].c_str(), 0, N);
 
 		viov4creation(&iovs[i], pairs[i].src_path, N,
-				getRandomBytes(N));
+			      getRandomBytes(N));
 		EXPECT_NOTNULL(iovs[i].data);
 
 		viov2path(&read_iovs[i], pairs[i].dst_path, 0, N,
@@ -1664,6 +1664,9 @@ TYPED_TEST_P(TcTest, UnalignedCacheWrite)
         free_iovec(writev, count);
         free_iovec(readv, count);
 }
+
+// TODO; add test interaction between data cache and writes to TC_OFFSET_CUR
+// See tc_cache.cpp:nfs_writev.
 
 
 REGISTER_TYPED_TEST_CASE_P(TcTest,

@@ -484,20 +484,19 @@ vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 				const char *p = get_path(&writes[i].file);
 				DirEntry de(p, &attrs[i]);
 				mdCache->add(p, de);
-				if (writes[i].offset != TC_OFFSET_END &&
-					writes[i].offset != TC_OFFSET_CUR) {
-					dataCache->put(p, writes[i].offset,
-						       writes[i].length,
-						       writes[i].data);
+				size_t offset = writes[i].offset;
+				if (offset == TC_OFFSET_END){
+					offset =
+					    attrs[i].size - writes[i].length;
+				} else if (offset == TC_OFFSET_CUR) {
+					assert(writes[i].file.type ==
+					       VFILE_DESCRIPTOR);
+					offset = sca_fseek(&writes[i].file, 0,
+							   SEEK_CUR) -
+						 writes[i].length;
 				}
-				else if (writes[i].offset == TC_OFFSET_END){
-					dataCache->put(
-					    p, attrs[i].size - writes[i].length,
-					    writes[i].length, writes[i].data);
-				}
-				else if (writes[i].offset == TC_OFFSET_CUR) {
-					//Can this be handled?
-				}
+				dataCache->put(p, offset, writes[i].length,
+					       writes[i].data);
 			}
 		}
 	}
@@ -505,11 +504,6 @@ vres nfs_writev(struct viovec *writes, int write_count, bool is_transaction)
 	nfs_restoreIovec_FhToFilename(writes, write_count, saved_tcfs);
 
 	return tcres;
-}
-
-void fill_newAttr(struct vattrs *fAttrs, struct vattrs *sAttrs)
-{
-	memcpy((void *)&fAttrs->file, (void *)&sAttrs->file, sizeof(vfile));
 }
 
 static char *join_path(const char *parent, const char *child)
