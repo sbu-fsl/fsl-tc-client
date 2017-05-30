@@ -936,13 +936,8 @@ vres vec_ldup(struct vextent_pair *pairs, int count, bool is_transaction)
 	iovs = (struct viovec*) malloc(count * sizeof(*iovs));
 	assert(iovs);
 	for (i = 0; i < count; ++i) {
-		iovs[i].file = vfile_from_path(pairs[i].src_path);
-		iovs[i].offset = pairs[i].src_offset;
-		iovs[i].length = pairs[i].length;
-		iovs[i].data = (char*) malloc(pairs[i].length);
-		iovs[i].is_creation = false;
-		iovs[i].is_failure = false;
-		iovs[i].is_eof = false;
+		viov2path(&iovs[i], pairs[i].src_path, pairs[i].src_offset,
+			  pairs[i].length, (char *)malloc(pairs[i].length));
 	}
 
 	tcres = vec_read(iovs, count, is_transaction);
@@ -957,8 +952,10 @@ vres vec_ldup(struct vextent_pair *pairs, int count, bool is_transaction)
 	for (i = 0; i < count; ++i) {
 		iovs[i].file = vfile_from_path(pairs[i].dst_path);
 		iovs[i].is_creation = true;
-		iovs[i].is_write_stable = true;
+		iovs[i].is_write_stable = false;
 		iovs[i].is_failure = false;
+		iovs[i].is_direct_io = false;
+		iovs[i].is_eof = false;
 	}
 	tcres = vec_write(iovs, count, is_transaction);
 	if (!vokay(tcres)) {
