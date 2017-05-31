@@ -370,12 +370,12 @@ do { \
 } while (0)
 
 #define COMPOUNDV4_ARG_ADD_OP_WRITE_STATE(opcnt, argarray, inoffset, inbuf,    \
-					  inlen, __stateid)                    \
+					  inlen, __stateid, sync)              \
 	do {                                                                   \
 		nfs_argop4 *op = argarray + opcnt;                             \
 		opcnt++;                                                       \
 		op->argop = NFS4_OP_WRITE;                                     \
-		op->nfs_argop4_u.opwrite.stable = DATA_SYNC4;                  \
+		op->nfs_argop4_u.opwrite.stable = sync;                        \
 		op->nfs_argop4_u.opwrite.stateid.seqid = __stateid->seqid;     \
 		memcpy(op->nfs_argop4_u.opwrite.stateid.other,                 \
 		       __stateid->other, 12);                                  \

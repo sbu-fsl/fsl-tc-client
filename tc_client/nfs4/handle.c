@@ -2521,8 +2521,9 @@ static inline bool tc_prepare_rdwr(struct viovec *iov, bool write)
 		sid = fd_data->stateid;
 	}
 	if (write) {
-		COMPOUNDV4_ARG_ADD_OP_WRITE_STATE(opcnt, argoparray, offset,
-						  iov->data, iov->length, sid);
+		COMPOUNDV4_ARG_ADD_OP_WRITE_STATE(
+		    opcnt, argoparray, offset, iov->data, iov->length, sid,
+		    iov->is_write_stable ? DATA_SYNC4 : UNSTABLE4);
 	} else {
 		rok = &resoparray[opcnt].nfs_resop4_u.opread.READ4res_u.resok4;
 		rok->data.data_val = iov->data;
