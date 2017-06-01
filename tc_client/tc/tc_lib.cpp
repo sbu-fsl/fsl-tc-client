@@ -340,7 +340,12 @@ vres sca_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 	unsigned int created = 0;  // index to directories created so far
 	while (created < dirs.size() || !files_to_copy.empty()) {
 		int n = dirs.size() - created;
-		tcres = vec_listdir(dirs.data() + created, n, listdir_mask, 0,
+		// Make a copy of the dir listing because we might invalidate
+		// its underlying ".data()" pointer when appending new
+		// directories in the callback function.
+		vector<const char *> dirs_listing(dirs.begin() + created,
+						  dirs.end());
+		tcres = vec_listdir(dirs_listing.data(), n, listdir_mask, 0,
 				    false, cp_list_callback, &cbargs, false);
 		if (!vokay(tcres)) {
 			break;
