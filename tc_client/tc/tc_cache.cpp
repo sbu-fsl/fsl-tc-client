@@ -711,7 +711,7 @@ static bool poco_direntry(const struct vattrs *dentry, const char *dir,
 	return true;
 }
 
-static const char **listdir_check_pagecache(vector<bool> &hitArray,
+static const char **listdir_check_metacache(vector<bool> &hitArray,
 					    const char **dirs, int count,
 					    int *miss_count)
 {
@@ -761,7 +761,7 @@ void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem,
 	}
 }
 
-void reply_from_pagecache(const char **dirs, int count, vector<bool> &hitArray,
+void reply_from_metacache(const char **dirs, int count, vector<bool> &hitArray,
 			  vec_listdir_cb cb, void *cbarg,
 			  struct vattrs_masks masks)
 {
@@ -782,8 +782,8 @@ void reply_from_pagecache(const char **dirs, int count, vector<bool> &hitArray,
 }
 
 vres nfs_listdirv(const char **dirs, int count, struct vattrs_masks masks,
-		    int max_entries, bool recursive, vec_listdir_cb cb,
-		    void *cbarg, bool is_transaction)
+		  int max_entries, bool recursive, vec_listdir_cb cb,
+		  void *cbarg, bool is_transaction)
 {
 	vres tcres = { .index = count, .err_no = 0 };
 	struct listDirPxy *temp = NULL;
@@ -795,7 +795,7 @@ vres nfs_listdirv(const char **dirs, int count, struct vattrs_masks masks,
 	if (temp == NULL)
 		goto failure;
 
-	finalDirs = listdir_check_pagecache(hitArray, dirs, count, &miss_count);
+	finalDirs = listdir_check_metacache(hitArray, dirs, count, &miss_count);
 
 	if (miss_count > 0) {
 		temp->cb = cb;
@@ -807,7 +807,7 @@ vres nfs_listdirv(const char **dirs, int count, struct vattrs_masks masks,
 				      is_transaction);
 	}
 
-	reply_from_pagecache(dirs, count, hitArray, cb, cbarg, masks);
+	reply_from_metacache(dirs, count, hitArray, cb, cbarg, masks);
 
 bool_failure:
 	delete temp;
