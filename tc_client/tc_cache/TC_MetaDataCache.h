@@ -62,10 +62,10 @@ private:
 	std::string path_;
 	struct file_handle *fh = nullptr;
 	struct stat attrs_;
+	bool has_listdir_ = false;
 
 public:
 	SharedPtr<DirEntry> parent;
-	bool has_listdir = false;
 	std::unordered_map<std::string, SharedPtr<DirEntry>> children;
 	time_t timestamp_;
 
@@ -92,8 +92,18 @@ public:
 
 	DirEntry(const DirEntry &de)
 	    : path_(de.path_), fh(de.fh), attrs_(de.attrs_), parent(de.parent),
-	      has_listdir(de.has_listdir), children(de.children)
+	      has_listdir_(de.has_listdir_), children(de.children)
 	{
+	}
+
+	bool hasDirListed() const {
+		std::lock_guard<std::mutex> lock(mu_);
+		return has_listdir_;
+	}
+
+	void setDirListed(bool listed) {
+		std::lock_guard<std::mutex> lock(mu_);
+		has_listdir_ = listed;
 	}
 
 	void addChild(const std::string &p, SharedPtr<DirEntry> child)

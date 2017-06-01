@@ -677,7 +677,7 @@ vres nfs_lsetattrsv(struct vattrs *attrs, int count, bool is_transaction)
 	return tcres;
 }
 
-struct listDirPxy
+struct ListDirCbData
 {
 	vec_listdir_cb cb;
 	void *cbarg;
@@ -687,7 +687,7 @@ struct listDirPxy
 static bool poco_direntry(const struct vattrs *dentry, const char *dir,
 			  void *cbarg)
 {
-	struct listDirPxy *temp = (struct listDirPxy *)cbarg;
+	struct ListDirCbData *cbdata = (struct ListDirCbData *)cbarg;
 	struct vattrs finalDentry;
 
 	SharedPtr<DirEntry> parentElem = mdCache->get(dir);
@@ -704,43 +704,30 @@ static bool poco_direntry(const struct vattrs *dentry, const char *dir,
 		parentElem->addChild(dentry->file.path, ptrElem);
 	}
 
-	finalDentry.masks = temp->masks;
+	finalDentry.masks = cbdata->masks;
 	tc_attrs2attrs(&finalDentry, dentry);
-	(temp->cb)(&finalDentry, dir, temp->cbarg);
+	(cbdata->cb)(&finalDentry, dir, cbdata->cbarg);
 
 	return true;
 }
 
-static const char **listdir_check_metacache(vector<bool> &hitArray,
-					    const char **dirs, int count,
-					    int *miss_count)
+static vector<const char *> listdir_check_metacache(vector<bool> &hits,
+						    const char **dirs,
+						    int count)
 {
-	const char **finalDirs;
-	int i = 0;
-	int j = 0;
-	const char *curDir = NULL;
-	SharedPtr<DirEntry> curElem;
+	vector<const char *> uncached_dirs;
 
-	finalDirs = (const char**)malloc(count * sizeof(char*));
-	if (!finalDirs) {
-		return NULL;
-	}
-
-	while (i < count) {
-		curDir = dirs[i];
-		curElem = mdCache->get(curDir);
-		if (curElem.isNull() || !(curElem)->has_listdir ||
+	for (int i = 0; i < count; ++i) {
+		SharedPtr<DirEntry> curElem = mdCache->get(dirs[i]);
+		if (curElem.isNull() || !(curElem)->hasDirListed() ||
 		    (time(NULL) - curElem->getTimestamp() > MD_REFRESH_TIME)) {
-			(*miss_count)++;
-			finalDirs[j++] = curDir;
+			uncached_dirs.push_back(dirs[i]);
 		} else {
-			hitArray[i] = true;
+			hits[i] = true;
 		}
-
-		i++;
 	}
 
-	return finalDirs;
+	return uncached_dirs;
 }
 
 void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem,
@@ -761,19 +748,18 @@ void invoke_callback(const char *curDir, SharedPtr<DirEntry> &curElem,
 	}
 }
 
-void reply_from_metacache(const char **dirs, int count, vector<bool> &hitArray,
+void reply_from_metacache(const char **dirs, int count, vector<bool> &hits,
 			  vec_listdir_cb cb, void *cbarg,
 			  struct vattrs_masks masks)
 {
 	SharedPtr<DirEntry> curElem;
-	const char *curDir = NULL;
 
 	for (int i = 0; i < count; ++i) {
-		curDir = dirs[i];
-		curElem = mdCache->get(curDir);
+		// FIXME: what if dir listed get evicted in the middle?
+		curElem = mdCache->get(dirs[i]);
 		if (!curElem.isNull()) {
-			(curElem)->has_listdir = true;
-			if (hitArray[i] == true) {
+			(curElem)->setDirListed(true);
+			if (hits[i] == true) {
 				invoke_callback(dirs[i], curElem, cb, cbarg,
 						masks);
 			}
@@ -786,32 +772,25 @@ vres nfs_listdirv(const char **dirs, int count, struct vattrs_masks masks,
 		  void *cbarg, bool is_transaction)
 {
 	vres tcres = { .index = count, .err_no = 0 };
-	struct listDirPxy *temp = NULL;
-	// TODO fix memory leak
-	const char **finalDirs;
-	int miss_count = 0;
-	vector<bool> hitArray(count, false);
-	temp = new listDirPxy;
-	if (temp == NULL)
-		goto failure;
+	struct ListDirCbData cbdata;
+	vector<bool> hits(count, false);
 
-	finalDirs = listdir_check_metacache(hitArray, dirs, count, &miss_count);
+	vector<const char *> uncached_dirs =
+	    listdir_check_metacache(hits, dirs, count);
 
-	if (miss_count > 0) {
-		temp->cb = cb;
-		temp->cbarg = cbarg;
-		temp->masks = masks;
+	if (!uncached_dirs.empty()) {
+		cbdata.cb = cb;
+		cbdata.cbarg = cbarg;
+		cbdata.masks = masks;
 		masks = VMASK_INIT_ALL;
-		tcres = nfs4_listdirv(finalDirs, miss_count, masks, max_entries,
-				      recursive, poco_direntry, temp,
-				      is_transaction);
+		tcres =
+		    nfs4_listdirv(uncached_dirs.data(), uncached_dirs.size(),
+				  masks, max_entries, recursive, poco_direntry,
+				  &cbdata, is_transaction);
 	}
 
-	reply_from_metacache(dirs, count, hitArray, cb, cbarg, masks);
+	reply_from_metacache(dirs, count, hits, cb, cbarg, masks);
 
-bool_failure:
-	delete temp;
-failure:
 	return tcres;
 }
 
