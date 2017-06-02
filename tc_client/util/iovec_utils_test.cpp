@@ -103,6 +103,7 @@ TEST(IovecUtils, SmallCpdsAreNotSplit)
 		auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
 		EXPECT_EQ(1, nparts);
 		for (int i = 0; i < iova.size; ++i) {
+			parts[0].iovs[i].__is_last_of_multiparts = false;
 			EXPECT_EQ(0, memcmp(iova.iovs + i, parts[0].iovs + i,
 					    sizeof(struct viovec)));
 		}
