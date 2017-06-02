@@ -244,6 +244,7 @@ struct viovec
 	unsigned int is_failure : 1;  /* OUT: is this I/O a failure? */
 	unsigned int is_eof : 1;      /* OUT: does this I/O reach EOF? */
 	unsigned int is_write_stable : 1;   /* IN/OUT: stable write? */
+	unsigned int __is_last_of_multiparts : 1;   /* internal use only */
 };
 
 struct viov_array
@@ -278,6 +279,7 @@ static inline struct viovec *viov2file(struct viovec *iov,
 	iov->is_failure = false;
 	iov->is_eof = false;
 	iov->is_write_stable = false;
+	iov->__is_last_of_multiparts = false;
 	return iov;
 }
 
@@ -300,6 +302,7 @@ static inline struct viovec *viov2path(struct viovec *iov, const char *path,
 	iov->is_failure = false;
 	iov->is_eof = false;
 	iov->is_write_stable = false;
+	iov->__is_last_of_multiparts = false;
 	return iov;
 }
 
@@ -315,6 +318,7 @@ static inline struct viovec *viov2fd(struct viovec *iov, int fd, size_t off,
 	iov->is_failure = false;
 	iov->is_eof = false;
 	iov->is_write_stable = false;
+	iov->__is_last_of_multiparts = false;
 	return iov;
 }
 
@@ -330,6 +334,7 @@ viov4creation(struct viovec *iov, const char *path, size_t len, char *buf)
 	iov->is_failure = false;
 	iov->is_eof = false;
 	iov->is_write_stable = false;
+	iov->__is_last_of_multiparts = false;
 	return iov;
 }
 

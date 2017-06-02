@@ -251,3 +251,29 @@ TEST(IovecUtils, HandleOverlappedIovecs)
 	delete[] iovs[0].data;
 	delete[] iovs[1].data;
 }
+
+TEST(IovecUtils, LastFlagIsCorrectlySet)
+{
+	struct viovec iovs[3];
+	viov2fd(iovs + 0, (1 << 30) + 1, 0, 8_MB, new char[8_MB]);
+	viov2fd(iovs + 1, (1 << 30) + 2, 0, 8_MB, new char[8_MB]);
+	viov2fd(iovs + 2, (1 << 30) + 3, 0, 4_KB, new char[4_KB]);
+
+	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, 2);
+	int nparts;
+	auto parts = tc_split_iov_array(&iova, 1_MB, &nparts);
+
+	size_t len = 0;
+	for (int i = 0; i < nparts; ++i) {
+		for (int j = 0; j < parts[i].size; ++j) {
+			len += parts[i].iovs[j].length;
+			EXPECT_EQ(parts[i].iovs[j].__is_last_of_multiparts,
+				  ((len % 8_MB) == 0) ||
+				      (len == (16_MB + 4_KB)));
+		}
+	}
+
+	delete[] iovs[0].data;
+	delete[] iovs[1].data;
+	delete[] iovs[2].data;
+}

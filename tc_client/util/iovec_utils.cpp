@@ -150,9 +150,10 @@ struct viov_array *tc_split_iov_array(const struct viov_array *iova,
 		iov.data += i_off;
 		iov.length = len;
 		iov.is_creation = i_iov->is_creation && i_off == 0;
-		cur_cpd.push_back(iov);
 		cpd_size += (tc_get_iov_overhead(&iov) + len);
 		i_off += iov.length;
+		iov.__is_last_of_multiparts = (i_off == i_iov->length);
+		cur_cpd.push_back(iov);
 	};
 
 	while (i < iova->size) {
