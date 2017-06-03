@@ -194,7 +194,7 @@ vres nfs_closev(vfile *tcfs, int count)
 		clear_fd_to_path(tcfs[i].fd);
 	}
 	if (vokay(tcres)) {
-		free(files);
+		free(tcfs);
 	}
 
 	return tcres;
