@@ -2390,7 +2390,8 @@ static nfsstat4 get_nfs4_op_status(const nfs_resop4 *op_res)
 	return NFS4ERR_IO;
 }
 
-static inline bool tc_prepare_rdwr(struct viovec *iov, bool write);
+static inline bool tc_prepare_rdwr(struct viovec *iov, bool write,
+				   bool need_close);
 
 static bool sca_open_file_if_necessary(const vfile *tcf, int flags,
 				      buf_t *pbuf_owner, fattr4 *attrs4,
@@ -2447,10 +2448,11 @@ static vres tc_nfs4_readv(struct viovec *iovs, int count,
 		saved_opcnt = opcnt;
 		saved_file = opened_file;
 		r = sca_open_file_if_necessary(&iovs[i].file, O_RDONLY,
-					      tc_auto_buf(64), NULL,
-					      &opened_file) &&
-		    tc_prepare_rdwr(&iovs[i], false) &&
-		    tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ, &fs_bitmap_getattr);
+					       tc_auto_buf(64), NULL,
+					       &opened_file) &&
+		    tc_prepare_rdwr(&iovs[i], false, opened_file != NULL) &&
+		    tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
+				       &fs_bitmap_getattr);
 		if (!r || !tc_has_enough_ops(1)) { // reserve for CLOSE
 			opcnt = saved_opcnt;
 			opened_file = saved_file;
@@ -2504,7 +2506,8 @@ exit:
         return tcres;
 }
 
-static inline bool tc_prepare_rdwr(struct viovec *iov, bool write)
+static inline bool tc_prepare_rdwr(struct viovec *iov, bool write,
+				   bool need_close)
 {
 	size_t offset = iov->offset;
 	struct nfs4_fd_data *fd_data;
@@ -2521,9 +2524,14 @@ static inline bool tc_prepare_rdwr(struct viovec *iov, bool write)
 		sid = fd_data->stateid;
 	}
 	if (write) {
-		COMPOUNDV4_ARG_ADD_OP_WRITE_STATE(
-		    opcnt, argoparray, offset, iov->data, iov->length, sid,
-		    iov->is_write_stable ? DATA_SYNC4 : UNSTABLE4);
+		enum stable_how4 stable =
+		    iov->is_write_stable ? DATA_SYNC : UNSTABLE4;
+		if (need_close && iov->__is_last_of_multiparts) {
+			stable = DATA_SYNC;
+		}
+		COMPOUNDV4_ARG_ADD_OP_WRITE_STATE(opcnt, argoparray, offset,
+						  iov->data, iov->length, sid,
+						  stable);
 	} else {
 		rok = &resoparray[opcnt].nfs_resop4_u.opread.READ4res_u.resok4;
 		rok->data.data_val = iov->data;
@@ -2578,7 +2586,7 @@ static vres tc_nfs4_writev(struct viovec *iovs, int count,
 			tc_auto_buf(64), &input_attr[i], &opened_file) &&
 		    tc_prepare_getattr(old_fattr_blobs + i * FATTR_BLOB_SZ,
 				       &fs_bitmap_getattr) &&
-		    tc_prepare_rdwr(&iovs[i], true) &&
+		    tc_prepare_rdwr(&iovs[i], true, opened_file != NULL) &&
 		    tc_prepare_getattr(fattr_blobs + i * FATTR_BLOB_SZ,
 				       &fs_bitmap_getattr);
 		if (!r || !tc_has_enough_ops(1)) { // reserve for CLOSE
@@ -3831,6 +3839,7 @@ static bool sca_open_file_if_necessary(const vfile *tcf, int flags,
 		}
                 /* close previously opened file first */
 		r = tc_prepare_close(NULL, NULL);
+                *opened_file = NULL;
 	}
 
 	if (flags & O_CREAT) {
