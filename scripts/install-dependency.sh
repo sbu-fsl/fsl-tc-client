@@ -22,8 +22,8 @@ cd $DIR/../
 
 # NFS-ganesha specific
 git submodule update --init --recursive
-wget http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-6.noarch.rpm
-rpm -ivh epel-release-7-6.noarch.rpm
+wegt https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+rpm -ivh epel-release-latest-7.noarch.rpm
 
 #sudo yum -y update
 
@@ -72,13 +72,14 @@ if [ ! -d gmock-1.7.0 ]; then
 fi
 
 # install poco
-POCO_VER='1.7.8'
-wget https://pocoproject.org/releases/poco-${POCO_VER}/poco-${POCO_VER}-all.tar.gz
-tar -xzf poco-${POCO_VER}-all.tar.gz
-cd poco-${POCO_VER}-all
-./configure --omit=Data/ODBC,Data/MySQL
-make -j2
-make install
+yum install -y poco-devel
+#POCO_VER='1.7.8'
+#wget https://pocoproject.org/releases/poco-${POCO_VER}/poco-${POCO_VER}-all.tar.gz
+#tar -xzf poco-${POCO_VER}-all.tar.gz
+#cd poco-${POCO_VER}-all
+#./configure --omit=Data/ODBC,Data/MySQL
+#make -j2
+#make install
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
 
