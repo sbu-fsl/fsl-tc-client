@@ -193,6 +193,9 @@ vres nfs_closev(vfile *tcfs, int count)
 	for (int i = 0; i < tcres.index; i++) {
 		clear_fd_to_path(tcfs[i].fd);
 	}
+	if (vokay(tcres)) {
+		free(files);
+	}
 
 	return tcres;
 }
@@ -254,7 +257,7 @@ struct viovec *check_dataCache(struct viovec *siovec, int count,
 	for(i = 0; i < count; i++) {
 		cur_siovec = siovec + i;
 		if (cur_siovec->file.type != VFILE_PATH &&
-			cur_siovec->file.type != VFILE_DESCRIPTOR) {
+		    cur_siovec->file.type != VFILE_DESCRIPTOR) {
 			hits[i] = 0;
 			reval[i] = false;
 			continue;

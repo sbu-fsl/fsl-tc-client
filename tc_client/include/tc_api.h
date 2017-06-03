@@ -363,6 +363,7 @@ vfile *vec_open(const char **paths, int count, int *flags, mode_t *modes);
 
 vfile *vec_open_simple(const char **paths, int count, int flags, mode_t mode);
 
+/* |files| will be freed by vec_close(). */
 vres vec_close(vfile *files, int count);
 
 /**
@@ -812,9 +813,8 @@ struct vextent_pair
 };
 
 static inline void vfill_extent_pair(struct vextent_pair *tcep,
-				       const char *spath, size_t soff,
-				       const char *dpath, size_t doff,
-				       size_t len)
+				     const char *spath, size_t soff,
+				     const char *dpath, size_t doff, size_t len)
 {
 	tcep->src_path = spath;
 	tcep->dst_path = dpath;
