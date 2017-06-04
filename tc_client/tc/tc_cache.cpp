@@ -439,8 +439,8 @@ exit:
 	return tcres;
 }
 
-vres check_and_remove(struct viovec *writes, int write_count,
-		      struct vattrs *old_attrs)
+vres check_and_remove(const struct viovec *writes, int write_count,
+		      const struct vattrs *old_attrs)
 {
 	int hit_count = 0;
 	vres tcres = { .index = hit_count, .err_no = 0 };

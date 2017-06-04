@@ -412,7 +412,7 @@ vres nfs4_do_iovec(struct viovec *iovs, int count, bool istxn,
 		   struct vattrs *old_attrs, struct vattrs *new_attrs)
 {
 	static const int CPD_LIMIT = (1 << 20);
-	int i;
+	int i, j, k;
 	int nparts;
 	struct viov_array iova = VIOV_ARRAY_INITIALIZER(iovs, count);
 	struct viov_array *parts;
@@ -432,7 +432,7 @@ vres nfs4_do_iovec(struct viovec *iovs, int count, bool istxn,
 
 	parts = tc_split_iov_array(&iova, CPD_LIMIT, &nparts);
 
-	int j = 0;
+	j = 0;
 	for (i = 0; i < nparts; ++i) {
 		tcres = fn(parts[i].iovs, parts[i].size, istxn, old_attrs + j,
 			   new_attrs + j);
@@ -440,7 +440,11 @@ vres nfs4_do_iovec(struct viovec *iovs, int count, bool istxn,
 			/* TODO: FIX tcres */
 			goto exit;
 		}
-		j += parts[i].size;
+		for (k = 0; k < parts[i].size; ++k) {
+			if (parts[i].iovs[k].__is_last_of_multiparts) {
+				++j;
+			}
+		}
 	}
 
 exit:
