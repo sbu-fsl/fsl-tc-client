@@ -40,7 +40,7 @@ DEFINE_int32(nfiles, 1000, "Number of files");
 
 using std::vector;
 
-const size_t kSizeLimit = (8 << 20);
+const size_t kSizeLimit = (16 << 20);
 
 static char *GetFilePath(const char *dir, int i)
 {

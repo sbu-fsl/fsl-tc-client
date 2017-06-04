@@ -624,9 +624,6 @@ vres nfs4_closev(vfile *files, int count)
 			tc_free_fd(files[i].fd);
 		}
 	}
-	if (vokay(tcres)) {
-		free(files);
-	}
 	free(seqs);
 	free(sids);
 	free(fh4s);
