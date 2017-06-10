@@ -2655,6 +2655,8 @@ exit:
 		nfs4_Fattr_Free(&input_attr[i]);
 	}
 	free(input_attr);
+	free(fattr_blobs);
+	free(old_fattr_blobs);
         return tcres;
 }
 
