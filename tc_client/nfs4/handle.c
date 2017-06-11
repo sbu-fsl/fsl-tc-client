@@ -4350,6 +4350,14 @@ static int tc_parse_dir_entries(struct glist_head *dir_queue,
         TC_DECLARE_COUNTER(listdircb);
 
 	while (entries && (*limit == -1 || *limit > 0)) {
+		// Occasionally but mostly not, NFS-Ganesha server lists "..".
+		// Ignore it as well as ".".
+		if (strncmp("..", entries->name.utf8string_val,
+			    entries->name.utf8string_len) == 0) {
+			parent->cookie = entries->cookie;
+			entries = entries->nextentry;
+			continue;
+		}
 		path = malloc(PATH_MAX);
 		buf = mkbuf(path, PATH_MAX);
 		ret = tc_path_join_s(toslice(parent->path),
@@ -4361,7 +4369,7 @@ static int tc_parse_dir_entries(struct glist_head *dir_queue,
 		fattr4_to_vattrs(&entries->attrs, &attrs);
                 attrs.masks.has_mode = has_mode;
 
-                TC_START_COUNTER(listdircb);
+		TC_START_COUNTER(listdircb);
 		success = cb(&attrs, parent->path, cbarg);
                 TC_STOP_COUNTER(listdircb, 1, success);
 
@@ -4520,9 +4528,9 @@ exit:
 	return tcres;
 }
 
-vres tc_nfs4_listdirv(const char **dirs, int count,
-			struct vattrs_masks masks, int max_entries,
-			bool recursive, vec_listdir_cb cb, void *cbarg)
+vres tc_nfs4_listdirv(const char **dirs, int count, struct vattrs_masks masks,
+		      int max_entries, bool recursive, vec_listdir_cb cb,
+		      void *cbarg)
 {
         int i = 0;
 	vres tcres = { .err_no = 0 };
