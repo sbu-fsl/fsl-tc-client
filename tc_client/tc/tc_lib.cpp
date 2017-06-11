@@ -26,6 +26,7 @@
 #include "path_utils.h"
 
 #include <algorithm>
+#include <iostream>
 #include <queue>
 #include <vector>
 
@@ -99,8 +100,10 @@ static char *new_cp_target_path(const char *src_obj, const char *src_dir,
 }
 
 static vres tc_cp_mkdirs(const char *src_dir, const char **dirs, int count,
-			   const char *dst_dir)
+			 const char *dst_dir)
 {
+	vres res = {0};
+	if (count <= 0) return res;
 	vector<struct vattrs> attrs(count);
 	for (int i = 0; i < count; i++) {
 		attrs[i].file = vfile_from_path(
@@ -109,7 +112,7 @@ static vres tc_cp_mkdirs(const char *src_dir, const char **dirs, int count,
 		attrs[i].masks.has_mode = true;
 		attrs[i].mode = 0755;
 	}
-	vres res = vec_mkdir(attrs.data(), count, false);
+	res = vec_mkdir(attrs.data(), count, false);
 	if (!vokay(res)) {
 		printf("mkdirv-failed: %s (%d-th %s)\n", strerror(res.err_no),
 		       res.index, attrs[res.index].file.path);
@@ -121,7 +124,7 @@ static vres tc_cp_mkdirs(const char *src_dir, const char **dirs, int count,
 }
 
 static vres tc_symlink_objs(const vector<const char *> &srcs,
-			      const char *src_dir, const char *dst_dir)
+			    const char *src_dir, const char *dst_dir)
 {
 	vres tcres;
 	const int count = srcs.size();
@@ -203,7 +206,7 @@ static vres tc_dup_files(const vector<struct vattrs> &srcs,
 			big_files_indices.push_back(i);
 			continue;
 		}
-		struct vextent_pair ext;
+		struct vextent_pair ext = { 0 };
 		ext.src_path = srcs[i].file.path;
 		ext.dst_path = dst_paths[i];
 		ext.src_offset = 0;
@@ -283,9 +286,10 @@ static vres tc_cp_setattrs(const vector<struct vattrs> &srcs,
 }
 
 vres tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
-		      const char *dst_dir)
+		    const char *dst_dir)
 {
-	const size_t count = links.size();
+	vector<const char *> mylinks(links.begin(), links.end());
+	const size_t count = mylinks.size();
 	char *linkbufs;
 	vector<char *> bufs(count);
 	vector<size_t> bufsizes(count, PATH_MAX);
@@ -294,26 +298,26 @@ vres tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 	for (size_t i = 0; i < count; ++i) {
 		bufs[i] = linkbufs + i * PATH_MAX;
 	}
-	vres tcres = vec_readlink((const char **)(links.data()), bufs.data(),
+	vres tcres = vec_readlink((const char **)(mylinks.data()), bufs.data(),
 				    bufsizes.data(), count, false);
 	if (!vokay(tcres)) {
 		fprintf(stderr, "vec_readlink failed: %s at %d (%s)\n",
 			strerror(tcres.err_no), tcres.index,
-			links[tcres.index]);
+			mylinks[tcres.index]);
 		free(linkbufs);
 		return tcres;
 	}
 
 	vector<const char *> newlinks(count);
 	for (size_t i = 0; i < count; ++i) {
-		newlinks[i] = new_cp_target_path(links[i], src_dir, dst_dir);
+		newlinks[i] = new_cp_target_path(mylinks[i], src_dir, dst_dir);
 	}
 	tcres = vec_symlink((const char **)bufs.data(), newlinks.data(), count,
 			    false);
 	if (!vokay(tcres)) {
 		fprintf(stderr, "vec_readlink failed: %s at %d (%s)\n",
 			strerror(tcres.err_no), tcres.index,
-			links[tcres.index]);
+			mylinks[tcres.index]);
 	}
 
 	free(linkbufs);
@@ -322,7 +326,7 @@ vres tc_cp_symlinks(const vector<const char *> &links, const char *src_dir,
 }
 
 vres sca_cp_recursive(const char *src_dir, const char *dst, bool symlink,
-		       bool use_server_side_copy)
+		      bool use_server_side_copy)
 {
 	vector<const char *> dirs;
 	vector<struct vattrs> files_to_copy;
@@ -340,22 +344,26 @@ vres sca_cp_recursive(const char *src_dir, const char *dst, bool symlink,
 	unsigned int created = 0;  // index to directories created so far
 	while (created < dirs.size() || !files_to_copy.empty()) {
 		int n = dirs.size() - created;
-		// Make a copy of the dir listing because we might invalidate
-		// its underlying ".data()" pointer when appending new
-		// directories in the callback function.
-		vector<const char *> dirs_listing(dirs.begin() + created,
-						  dirs.end());
-		tcres = vec_listdir(dirs_listing.data(), n, listdir_mask, 0,
-				    false, cp_list_callback, &cbargs, false);
-		if (!vokay(tcres)) {
-			break;
-		}
+		if (n > 0) {
+			// Make a copy of the dir listing because we might
+			// invalidate its underlying ".data()" pointer when
+			// appending new directories in the callback function.
+			vector<const char *> dirs_listing(
+			    dirs.begin() + created, dirs.end());
+			tcres = vec_listdir(dirs_listing.data(), n,
+					    listdir_mask, 0, false,
+					    cp_list_callback, &cbargs, false);
+			if (!vokay(tcres)) {
+				break;
+			}
 
-		tcres = tc_cp_mkdirs(src_dir, dirs.data() + created, n, dst);
-		if (!vokay(tcres)) {
-			break;
+			tcres =
+			    tc_cp_mkdirs(src_dir, dirs_listing.data(), n, dst);
+			if (!vokay(tcres)) {
+				break;
+			}
+			created += n;
 		}
-		created += n;
 
 		if (symlink) {
 			std::vector<const char *> paths(files_to_copy.size());
@@ -421,7 +429,7 @@ vres vec_unlink_recursive(const char **objs, int count)
 
 		for (int i = 0; (size_t)i < attrs.size(); ) {
 			vres tcres = vec_getattrs(attrs.data() + i,
-						    attrs.size() - i, false);
+						  attrs.size() - i, false);
 			if (vokay(tcres)) {
 				break;
 			} else if (tcres.err_no == ENOENT) {
