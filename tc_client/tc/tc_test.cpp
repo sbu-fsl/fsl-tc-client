@@ -1662,6 +1662,7 @@ TYPED_TEST_P(TcTest, UnalignedCacheWrite)
         }
 
         free_iovec(writev, count);
+        free_iovec(writev2, count);
         free_iovec(readv, count);
 }
 

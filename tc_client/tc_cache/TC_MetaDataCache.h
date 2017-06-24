@@ -91,8 +91,9 @@ public:
 	}
 
 	DirEntry(const DirEntry &de)
-	    : path_(de.path_), fh(de.fh), attrs_(de.attrs_), parent(de.parent),
-	      has_listdir_(de.has_listdir_), children(de.children)
+	    : path_(de.path_), fh(de.fh), attrs_(de.attrs_),
+	      has_listdir_(de.has_listdir_), parent(de.parent),
+	      children(de.children)
 	{
 	}
 

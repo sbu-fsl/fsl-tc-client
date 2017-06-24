@@ -416,7 +416,7 @@ vres vec_unlink_recursive(const char **objs, int count)
 	struct rm_cb_args cbargs;
 	cbargs.dirs = &dirs;
 	cbargs.files = &files_to_remove;
-	const char **dirs_p;
+	const char **dirs_p = NULL;
 
 	// initialize "dirs"
 	{
@@ -470,6 +470,7 @@ vres vec_unlink_recursive(const char **objs, int count)
 		tcres = vec_listdir(dirs_p, n, listdir_mask, 0,
 				    false, rm_list_callback, &cbargs, false);
 		if (!vokay(tcres)) {
+			free(dirs_p);
 			return tcres;
 		}
 
@@ -480,11 +481,13 @@ vres vec_unlink_recursive(const char **objs, int count)
 		vector<const char*> dirs_to_remove(dirs.rbegin(), dirs.rend());
 		vres tcres = vec_unlink(dirs_to_remove.data(), dirs.size());
 		if (!vokay(tcres)) {
+			free(dirs_p);
 			return tcres;
 		}
 
 		free_paths(&dirs);
 	}
-
+	if (dirs_p)
+		free(dirs_p);
 	return vfailure(0, 0);
 }
