@@ -22,7 +22,7 @@ cd $DIR/../
 
 # NFS-ganesha specific
 git submodule update --init --recursive
-wegt https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 rpm -ivh epel-release-latest-7.noarch.rpm
 
 #sudo yum -y update
