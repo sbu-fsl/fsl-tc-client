@@ -524,11 +524,7 @@ vfile *nfs4_openv(const char **paths, int count, int *flags, mode_t *modes,
 		if (flags[i] & O_CREAT) {
 			vset_up_creation(attrs + i, paths[i],
 					   modes ? modes[i] : 0);
-		}
-		else if(flags[i] & O_EXCL) {
-			return NULL;
-		} 
-		else {
+		} else {
 			(attrs)[i].file = vfile_from_path(paths[i]);
 		}
 	}

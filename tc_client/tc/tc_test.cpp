@@ -1670,69 +1670,6 @@ TYPED_TEST_P(TcTest, UnalignedCacheWrite)
 // See tc_cache.cpp:nfs_writev.
 
 
-TYPED_TEST_P(TcTest, UUIDReadFlagCheck)
-{
-	const int N = 4;
-        const char *PATHS[] = { "PRE-1-open.txt",
-                                "PRE-2-open.txt",
-                                "PRE-3-open.txt",
-                                "PRE-4-open.txt" };
-        vfile *files;
-        files = vec_open_simple(PATHS, N, NULL, 0);
-	if(files != NULL){
-                vec_close(files, N);
-        }
-	EXPECT_NOTNULL(files);
-}
-
-TYPED_TEST_P(TcTest, UUIDOpenExclFlagCheck)
-{
-        const int N = 4;
-        const char *PATHS[] = { "PRE-1-open-excl.txt",
-				"PRE-2-open-excl.txt",
-				"PRE-3-open-excl.txt",
-				"PRE-4-open-excl.txt" };
-        vfile *files;
-        files = vec_open_simple(PATHS, N, O_EXCL | O_CREAT, 0);
-	if(files != NULL){
-		vec_close(files, N);
-	}
-	EXPECT_NOTNULL(files);
-
-}
-
-TYPED_TEST_P(TcTest, UUIDExclFlagCheck)
-{
-        const int N = 4;
-        const char *PATHS[] = { "TcTest-1-open.txt",
-                                "TcTest-2-open.txt",
-                                "TcTest-3-open.txt",
-                                "TcTest-4-open.txt" };
-        vfile *files;
-        files = vec_open_simple(PATHS, N, O_EXCL, 0);
-	if(files != NULL){
-                vec_close(files, N);
-        }
-	EXPECT_NOTNULL(files);
-}
-
-TYPED_TEST_P(TcTest, UUIDOpenFlagCheck)
-{
-        const int N = 4;
-        const char *PATHS[] = { "PRE-1-open.txt",
-                                "PRE-2-open.txt",
-                                "PRE-3-open.txt",
-                                "PRE-4-open.txt" };
-        vfile *files;
-        files = vec_open_simple(PATHS, N, O_CREAT, 0);
-	if(files != NULL){
-                vec_close(files, N);
-        }
-	EXPECT_NOTNULL(files);
-
-}
-
-
 REGISTER_TYPED_TEST_CASE_P(TcTest,
 			   WritevCanCreateFiles,
 			   TestFileDesc,
@@ -1774,11 +1711,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTest,
 			   TcRmRecursive,
 			   RequestDoesNotFitIntoOneCompound,
 			   UnalignedCacheRead,
-			   UnalignedCacheWrite,
-			   UUIDOpenExclFlagCheck,
-			   UUIDOpenFlagCheck,
-			   UUIDReadFlagCheck,
-			   UUIDExclFlagCheck);
+			   UnalignedCacheWrite);
 
 typedef ::testing::Types<TcNFS4Impl, TcPosixImpl> TcImpls;
 INSTANTIATE_TYPED_TEST_CASE_P(TC, TcTest, TcImpls);
