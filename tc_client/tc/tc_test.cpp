@@ -1701,7 +1701,6 @@ TYPED_TEST_P(TcTest, UUIDOpenExclFlagCheck)
         files = vec_open_simple(PATHS, N, O_EXCL | O_CREAT, 0);
         EXPECT_NOTNULL(files);
 	vec_close(files, N);
-
 }
 
 TYPED_TEST_P(TcTest, UUIDExclFlagCheck)
@@ -1718,7 +1717,6 @@ TYPED_TEST_P(TcTest, UUIDExclFlagCheck)
         files = vec_open_simple(PATHS, N, O_EXCL, 0);
         ASSERT_TRUE(files == NULL);
 	vec_close(files, N);
-
 }
 
 TYPED_TEST_P(TcTest, UUIDOpenFlagCheck)
@@ -1735,8 +1733,6 @@ TYPED_TEST_P(TcTest, UUIDOpenFlagCheck)
         files = vec_open_simple(PATHS, N, O_CREAT, 0);
 	EXPECT_NOTNULL(files);
 	vec_close(files, N);
-	
-
 }
 
 
