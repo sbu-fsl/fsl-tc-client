@@ -1669,7 +1669,6 @@ TYPED_TEST_P(TcTest, UnalignedCacheWrite)
 // TODO; add test interaction between data cache and writes to TC_OFFSET_CUR
 // See tc_cache.cpp:nfs_writev.
 
-
 TYPED_TEST_P(TcTest, UUIDReadFlagCheck)
 {
 	const int N = 4;
@@ -1777,11 +1776,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTest,
 			   TcRmRecursive,
 			   RequestDoesNotFitIntoOneCompound,
 			   UnalignedCacheRead,
-			   UnalignedCacheWrite,
-			   UUIDOpenExclFlagCheck,
-			   UUIDOpenFlagCheck,
-			   UUIDReadFlagCheck,
-			   UUIDExclFlagCheck);
+			   UnalignedCacheWrite);
 
 typedef ::testing::Types<TcNFS4Impl, TcPosixImpl> TcImpls;
 INSTANTIATE_TYPED_TEST_CASE_P(TC, TcTest, TcImpls);
