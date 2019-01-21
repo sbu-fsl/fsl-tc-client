@@ -1681,7 +1681,7 @@ TYPED_TEST_P(TcTest, UUIDReadFlagCheck)
 
         Removev(PATHS, 4);
 
-        files = vec_open_simple(PATHS, N, NULL, 0);
+        files = vec_open_simple(PATHS, N, 0, 0);
        	ASSERT_TRUE(files == NULL);
 	vec_close(files, N);
 
