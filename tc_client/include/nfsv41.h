@@ -7552,8 +7552,11 @@ extern "C" {
 	{
 		if (!xdr_count4(xdrs, &objp->wr_ids))
 			return false;
-		if (!xdr_stateid4(xdrs, &objp->wr_callback_id))
-			return false;
+		if (objp->wr_ids > 1) return false;
+		if (objp->wr_ids == 1) {
+			if (!xdr_stateid4(xdrs, &objp->wr_callback_id))
+				return false;
+		}
 		if (!xdr_length4(xdrs, &objp->wr_count))
 			return false;
 		if (!xdr_stable_how4(xdrs, &objp->wr_committed))
