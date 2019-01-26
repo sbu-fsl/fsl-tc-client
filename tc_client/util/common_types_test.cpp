@@ -34,7 +34,9 @@ using std::vector;
 TEST(BufTest, Basics) {
 	buf_t *pbuf = new_buf(20);
 	EXPECT_TRUE(pbuf);
-	EXPECT_EQ(sizeof(buf_t), (size_t)abs((size_t)pbuf - (size_t)(pbuf->data)));
+	intptr_t sz = abs(reinterpret_cast<intptr_t>(pbuf) -
+		reinterpret_cast<intptr_t>(pbuf->data));
+	EXPECT_EQ(sizeof(buf_t), static_cast<size_t>(sz));
 	EXPECT_EQ((size_t)20, pbuf->capacity);
 	EXPECT_EQ(0, pbuf->size);
 	EXPECT_EQ(5, buf_append_str(pbuf, "abcde"));
