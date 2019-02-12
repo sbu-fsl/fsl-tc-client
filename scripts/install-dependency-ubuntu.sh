@@ -38,7 +38,6 @@ sudo apt-get install -y libtbb-dev
 sudo apt-get install -y libaio-dev
 sudo apt-get install -y libcrypto++-dev
 sudo apt-get install -y build-essential
-#yum install -y gcc-c++
 sudo apt-get install -y bison flex
 sudo apt-get install -y libcurl4-gnutls-dev
 sudo apt-get install -y libcurl4-openssl-dev
@@ -57,6 +56,7 @@ sudo apt-get install -y unzip
 sudo apt-get install -y libpoco-dev
 sudo apt-get install -y nfs-common
 sudo apt-get install -y rpcbind
+sudo apt-get install -y sysstat
 
 mkdir -p /opt
 cd /opt
