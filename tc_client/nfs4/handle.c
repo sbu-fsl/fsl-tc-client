@@ -38,6 +38,7 @@
 #include <sys/stat.h>
 #include <sys/poll.h>
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 #include "ganesha_list.h"
 #include "abstract_atomic.h"
 #include "fsal_types.h"
@@ -1482,14 +1483,12 @@ static int fs_create_session()
 static void *fs_clientid_renewer(void *arg)
 {
 	int rc;
-	/* TODO: make this configurable */
-	uint32_t lease_time = 40;
 
 	while (true) {
-		fs_rpc_renewer_wait(lease_time);
+                fs_rpc_renewer_wait(1);
 		if (atomic_fetch_uint8_t(&fs_session_valid)) {
 			/* Simply renew the client id you've got */
-			LogDebug(COMPONENT_FSAL, "Renewing session");
+			LogEvent(COMPONENT_FSAL, "Renewing session");
                         vreset_compound(true);
 			rc = fs_nfsv4_call(op_ctx->creds, NULL);
 			if (rc == NFS4_OK) {

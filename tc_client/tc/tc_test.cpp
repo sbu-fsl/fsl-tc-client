@@ -933,7 +933,7 @@ TYPED_TEST_P(TcTest, SessionTimeout)
 
 	EXPECT_OK(vec_write(&iov, 1, false));
 
-	sleep(1);
+	sleep(10);
 
 	viov2path(&iov, path, 0, size, data1);
 
