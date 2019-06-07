@@ -93,7 +93,7 @@ if(APPLE)
 endif(APPLE)
 
 add_library(support STATIC ${support_STAT_SRCS})
-target_link_libraries(support hashtable avltree nfsproto)
+target_link_libraries(support hashtable avltree nfsproto nfs4pseudo)
 set_target_properties(support PROPERTIES POSITION_INDEPENDENT_CODE on)
 
 ########### install files ###############

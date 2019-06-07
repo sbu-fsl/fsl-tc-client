@@ -58,12 +58,16 @@ SET(nfsproto_STAT_SRCS
    nfs4_op_test_stateid.c
    nfs4_op_verify.c
    nfs4_op_write.c
-   nfs4_pseudo.c
    nfs_proto_tools.c
 )
 
 add_library(nfsproto STATIC ${nfsproto_STAT_SRCS})
 target_link_libraries(nfsproto cache_inode sal)
+
+set(nfs4pseudoSRCS
+   nfs4_pseudo.c
+)
+add_library(nfs4pseudo STATIC ${nfs4pseudoSRCS})
 
 set(nfs4callbackSRCS
    nfs4_cb_Compound.c
