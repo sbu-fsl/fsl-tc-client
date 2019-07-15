@@ -43,7 +43,7 @@ target_link_libraries(tc_impl
   #tc_util
   #tc_impl_posix
   #tc_impl_nfs4
-#) 
+#)
 
 set_target_properties(tc_impl PROPERTIES POSITION_INDEPENDENT_CODE on)
 
@@ -78,6 +78,7 @@ function (add_unittest TestName LibName)
 endfunction (add_unittest)
 
 add_unittest(tc_test tc_impl)
+add_unittest(tc_txn_test tc_impl)
 add_unittest(tc_datacache_test tc_impl)
 
 find_package(gflags REQUIRED)
