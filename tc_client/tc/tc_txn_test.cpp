@@ -1,5 +1,91 @@
+/**
+ * Copyright (C) Stony Brook University 2016
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301 USA
+ */
+#include <sys/types.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdarg.h>
+#include <fcntl.h>
 
-TYPED_TEST_P(TcTest, UUIDOpenExclFlagCheck)
+#include <algorithm>
+#include <list>
+#include <random>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
+#include "tc_test.hpp"
+
+TYPED_TEST_CASE_P(TcTxnTest);
+
+static bool vec_mkdir_simple(const char **paths, int n)
+{
+  struct vattrs *attrs = (struct vattrs*)alloca(n * sizeof(*attrs));
+  struct vattrs_masks mask;
+  if (!attrs)
+    return false;
+
+  mask.has_mode = 1;
+  mask.has_uid = 1;
+  mask.has_gid = 1;
+
+  for (int i = 0; i < n; ++i) {
+    attrs[i].file = vfile_from_path(paths[i]);
+    attrs[i].mode = 0777;
+    attrs[i].uid = 0;
+    attrs[i].gid = 0;
+    attrs[i].masks = mask;
+  }
+  return tx_vec_mkdir(attrs, n, true);
+}
+
+/**
+ * Issue a compound of several mkdir commands, where there is an invalid one
+ * in the middle (causing EEXIST).
+ *
+ * Expected: Compound fails, and no new directories will be created
+ */
+TYPED_TEST_P(TcTxnTest, BadMkdir)
+{
+  const int N = 4;
+  const char *PATHS[] = { "bad-mkdir-a",
+                          "bad-mkdir-b",
+                          "bad-mkdir-c",
+                          "bad-mkdir-d" };
+
+  /* preparation: create a directory */
+  ASSERT_TRUE(vec_mkdir_simple(&PATHS[2], 1));
+
+  /* execute compound */
+  EXPECT_FALSE(vec_mkdir_simple(PATHS, N));
+
+  /* check existence of PATHS[0] and PATHS[1] */
+  EXPECT_FALSE(sca_exists(PATHS[0]));
+  EXPECT_FALSE(sca_exists(PATHS[1]));
+  EXPECT_TRUE(sca_exists(PATHS[2]));
+  vec_unlink(&PATHS[2], 1);
+  EXPECT_FALSE(sca_exists(PATHS[3]));
+}
+
+TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 {
 	const int N = 4;
 	const char *PATHS[] = { "PRE-1-open-excl.txt",
@@ -15,13 +101,13 @@ TYPED_TEST_P(TcTest, UUIDOpenExclFlagCheck)
 	vec_close(files, N);
 }
 
-TYPED_TEST_P(TcTest, UUIDExclFlagCheck)
+TYPED_TEST_P(TcTxnTest, UUIDExclFlagCheck)
 {
 	const int N = 4;
-	const char *PATHS[] = { "TcTest-1-open.txt",
-	                        "TcTest-2-open.txt",
-	                        "TcTest-3-open.txt",
-	                        "TcTest-4-open.txt" };
+	const char *PATHS[] = { "TcTxnTest-1-open.txt",
+	                        "TcTxnTest-2-open.txt",
+	                        "TcTxnTest-3-open.txt",
+	                        "TcTxnTest-4-open.txt" };
 	vfile *files;
 
 	Removev(PATHS, 4);
@@ -31,7 +117,7 @@ TYPED_TEST_P(TcTest, UUIDExclFlagCheck)
 	vec_close(files, N);
 }
 
-TYPED_TEST_P(TcTest, UUIDOpenFlagCheck)
+TYPED_TEST_P(TcTxnTest, UUIDOpenFlagCheck)
 {
 	const int N = 4;
 	const char *PATHS[] = { "PRE-1-open.txt",
@@ -47,13 +133,13 @@ TYPED_TEST_P(TcTest, UUIDOpenFlagCheck)
 	vec_close(files, N);
 }
 
-TYPED_TEST_P(TcTest, UUIDReadFlagCheck)
+TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck)
 {
 	const int N = 4;
-	const char *PATHS[] = { "TcTest-TestFileDesc1.txt",
-	                        "TcTest-TestFileDesc2.txt",
-	                        "TcTest-TestFileDesc3.txt",
-	                        "TcTest-TestFileDesc4.txt" };
+	const char *PATHS[] = { "TcTxnTest-TestFileDesc1.txt",
+	                        "TcTxnTest-TestFileDesc2.txt",
+	                        "TcTxnTest-TestFileDesc3.txt",
+	                        "TcTxnTest-TestFileDesc4.txt" };
 	vfile *files;
 
 	Removev(PATHS, 4);
@@ -64,3 +150,12 @@ TYPED_TEST_P(TcTest, UUIDReadFlagCheck)
 
 }
 
+REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
+        BadMkdir,
+        UUIDOpenExclFlagCheck,
+        UUIDExclFlagCheck,
+        UUIDOpenFlagCheck,
+        UUIDReadFlagCheck);
+
+typedef ::testing::Types<TcNFS4Impl> TcTxnImpls;
+INSTANTIATE_TYPED_TEST_CASE_P(TC, TcTxnTest, TcTxnImpls);
