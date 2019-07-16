@@ -34,16 +34,19 @@
 
 #include "tc_test.hpp"
 
+template<typename T>
+using TcTxnTest = TcTest<T>;
+
 TYPED_TEST_CASE_P(TcTxnTest);
 
-static bool vec_mkdir_simple(const char **paths, int n)
+static bool vec_mkdir_simple(const char **paths, int n, int mode)
 {
   struct vattrs *attrs = (struct vattrs*)alloca(n * sizeof(*attrs));
   if (!attrs)
     return false;
 
   for (int i = 0; i < n; ++i) {
-    vset_up_creation(&attrs[i], paths[i], 0755);
+    vset_up_creation(&attrs[i], paths[i], mode);
   }
 
   return tx_vec_mkdir(attrs, n, true);
@@ -64,10 +67,10 @@ TYPED_TEST_P(TcTxnTest, BadMkdir)
                           "bad-mkdir-d" };
 
   /* preparation: create a directory */
-  ASSERT_TRUE(vec_mkdir_simple(&PATHS[2], 1));
+  ASSERT_TRUE(vec_mkdir_simple(&PATHS[2], 1, 0777));
 
   /* execute compound */
-  EXPECT_FALSE(vec_mkdir_simple(PATHS, N));
+  EXPECT_FALSE(vec_mkdir_simple(PATHS, N, 0777));
 
   vec_unlink(&PATHS[2], 1);
 
@@ -90,9 +93,9 @@ TYPED_TEST_P(TcTxnTest, BadMkdir2)
                            "bad-mkdir/c",
                            "bad-mkdir/d" };
 
-  ASSERT_TRUE(vec_mkdir_simple(paths1, N1));
+  ASSERT_TRUE(vec_mkdir_simple(paths1, N1, 0777));
 
-  EXPECT_FALSE(vec_mkdir_simple(paths2, N2));
+  EXPECT_FALSE(vec_mkdir_simple(paths2, N2, 0777));
 
   EXPECT_TRUE(sca_exists(paths1[0]));
   EXPECT_TRUE(sca_exists(paths1[1]));
