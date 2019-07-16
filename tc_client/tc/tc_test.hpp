@@ -106,27 +106,3 @@ public:
 	}
 };
 
-template <typename T>
-class TcTxnTest : public TcTest<T> {
-public:
-  static char *serverdir;
-  static void SetUpTestCase() {
-    TcTest<T>::SetUpTestCase();
-    serverdir = "/tcserver";
-  }
-
-  static void TearDownTestCase() {
-    TcTest<T>::TearDownTestCase();
-  }
-
-  void SetUp() override {
-    TcTest<T>::SetUp();
-  }
-
-  void TearDown() override {
-    TcTest<T>::TearDown();
-  }
-};
-
-template <typename T>
-char *TcTxnTest<T>::serverdir = nullptr;
