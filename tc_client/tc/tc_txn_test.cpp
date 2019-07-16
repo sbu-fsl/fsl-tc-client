@@ -39,21 +39,13 @@ TYPED_TEST_CASE_P(TcTxnTest);
 static bool vec_mkdir_simple(const char **paths, int n)
 {
   struct vattrs *attrs = (struct vattrs*)alloca(n * sizeof(*attrs));
-  struct vattrs_masks mask;
   if (!attrs)
     return false;
 
-  mask.has_mode = 1;
-  mask.has_uid = 1;
-  mask.has_gid = 1;
-
   for (int i = 0; i < n; ++i) {
-    attrs[i].file = vfile_from_path(paths[i]);
-    attrs[i].mode = 0777;
-    attrs[i].uid = 0;
-    attrs[i].gid = 0;
-    attrs[i].masks = mask;
+    vset_up_creation(&attrs[i], paths[i], 0755);
   }
+
   return tx_vec_mkdir(attrs, n, true);
 }
 
@@ -77,12 +69,43 @@ TYPED_TEST_P(TcTxnTest, BadMkdir)
   /* execute compound */
   EXPECT_FALSE(vec_mkdir_simple(PATHS, N));
 
+  vec_unlink(&PATHS[2], 1);
+
   /* check existence of PATHS[0] and PATHS[1] */
   EXPECT_FALSE(sca_exists(PATHS[0]));
   EXPECT_FALSE(sca_exists(PATHS[1]));
-  EXPECT_TRUE(sca_exists(PATHS[2]));
-  vec_unlink(&PATHS[2], 1);
+  EXPECT_FALSE(sca_exists(PATHS[2]));
   EXPECT_FALSE(sca_exists(PATHS[3]));
+}
+
+TYPED_TEST_P(TcTxnTest, BadMkdir2)
+{
+  const int N1 = 2, N2 = 6;
+  const char *paths1[] = { "bad-mkdir",
+                           "bad-mkdir/c" };
+  const char *paths2[] = { "bad-mkdir/a",
+                           "bad-mkdir/a/b",
+                           "bad-mkdir/a/c",
+                           "bad-mkdir/b",
+                           "bad-mkdir/c",
+                           "bad-mkdir/d" };
+
+  ASSERT_TRUE(vec_mkdir_simple(paths1, N1));
+
+  EXPECT_FALSE(vec_mkdir_simple(paths2, N2));
+
+  EXPECT_TRUE(sca_exists(paths1[0]));
+  EXPECT_TRUE(sca_exists(paths1[1]));
+
+  vec_unlink(&paths1[1], 1);
+  vec_unlink(&paths1[0], 1);
+
+  EXPECT_FALSE(sca_exists(paths2[0]));
+  EXPECT_FALSE(sca_exists(paths2[1]));
+  EXPECT_FALSE(sca_exists(paths2[2]));
+  EXPECT_FALSE(sca_exists(paths2[3]));
+  EXPECT_FALSE(sca_exists(paths2[4]));
+  EXPECT_FALSE(sca_exists(paths2[5]));
 }
 
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
@@ -152,6 +175,7 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck)
 
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadMkdir,
+        BadMkdir2,
         UUIDOpenExclFlagCheck,
         UUIDExclFlagCheck,
         UUIDOpenFlagCheck,
