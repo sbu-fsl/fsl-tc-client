@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "tc_api.h"
 #include "tc_helper.h"
 #include "path_utils.h"
@@ -106,3 +108,29 @@ public:
 	}
 };
 
+/* We still need an individual test fixture class for TcTxnTest. This is because
+ * we want to store a special var `posix_base` intended for the base path of
+ * TC-server's local root. It's not a good idea to test states using NFS api
+ * because the metadata cache may not have been flushed after rollback. */
+template <typename T>
+class TcTxnTest : public TcTest<T> {
+public:
+  std::string posix_base;
+
+  static void SetUpTestCase() {
+    TcTest<T>::SetUpTestCase();
+  }
+
+  static void TearDownTestCase() {
+    TcTest<T>::TearDownTestCase();
+  }
+
+  void SetUp() override {
+    TcTest<T>::SetUp();
+    posix_base = "/tcserver/tc_nfs4_test/";
+  }
+
+  void TearDown() override {
+    TcTest<T>::TearDown();
+  }
+};
