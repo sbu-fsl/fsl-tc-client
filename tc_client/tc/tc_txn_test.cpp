@@ -200,22 +200,6 @@ TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 	vec_close(files, N);
 }
 
-TYPED_TEST_P(TcTxnTest, UUIDExclFlagCheck)
-{
-	const int N = 4;
-	const char *PATHS[] = { "TcTxnTest-1-open.txt",
-	                        "TcTxnTest-2-open.txt",
-	                        "TcTxnTest-3-open.txt",
-	                        "TcTxnTest-4-open.txt" };
-	vfile *files;
-
-	Removev(PATHS, 4);
-
-	files = vec_open_simple(PATHS, N, O_EXCL, 0);
-	ASSERT_TRUE(files == NULL);
-	vec_close(files, N);
-}
-
 TYPED_TEST_P(TcTxnTest, UUIDOpenFlagCheck)
 {
 	const int N = 4;
@@ -255,7 +239,6 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadFileCreation,
         BadFileCreation2,
         UUIDOpenExclFlagCheck,
-        UUIDExclFlagCheck,
         UUIDOpenFlagCheck,
         UUIDReadFlagCheck);
 
