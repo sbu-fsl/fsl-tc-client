@@ -23,6 +23,7 @@
 #include <fcntl.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <list>
 #include <random>
 #include <string>
@@ -33,9 +34,6 @@
 #include <gmock/gmock.h>
 
 #include "tc_test.hpp"
-
-template<typename T>
-using TcTxnTest = TcTest<T>;
 
 TYPED_TEST_CASE_P(TcTxnTest);
 
@@ -50,6 +48,18 @@ static bool vec_mkdir_simple(const char **paths, int n, int mode)
   }
 
   return tx_vec_mkdir(attrs, n, true);
+}
+
+static bool posix_exists(std::string base, std::string path)
+{
+  std::string full_path(base + path);
+  FILE *fp = fopen(full_path.c_str(), "rb");
+  if (fp != nullptr) {
+    fclose(fp);
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -109,6 +119,39 @@ TYPED_TEST_P(TcTxnTest, BadMkdir2)
   EXPECT_FALSE(sca_exists(paths2[3]));
   EXPECT_FALSE(sca_exists(paths2[4]));
   EXPECT_FALSE(sca_exists(paths2[5]));
+}
+
+TYPED_TEST_P(TcTxnTest, BadFileCreation)
+{
+  const int n = 6;
+  const char *basedir = "bad-creation";
+  const char *dir1 = "bad-creation/good";
+  const char *dir2 = "bad-creation/bad";
+  const char *paths[] = { "bad-creation/good/a",
+                          "bad-creation/good/b",
+                          "bad-creation/good/c",
+                          "bad-creation/good/d",
+                          "bad-creation/bad/",
+                          "bad-creation/good/f" };
+  vfile *files;
+
+  /* create dirs */
+  ASSERT_TRUE(vec_mkdir_simple(&basedir, 1, 0777));
+  ASSERT_TRUE(vec_mkdir_simple(&dir1, 1, 0777));
+  ASSERT_TRUE(vec_mkdir_simple(&dir2, 1, 0000));
+
+  files = vec_open_simple(paths, n, O_CREAT, 0666);
+  EXPECT_EQ(files, nullptr);
+
+  /* expect the files NOT to exist */
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_FALSE(posix_exists(this->posix_base, paths[i])) << paths[i];
+  }
+  EXPECT_FALSE(posix_exists(this->posix_base, paths[5]));
+
+  EXPECT_OK(vec_unlink(&dir2, 1));
+  EXPECT_OK(vec_unlink(&dir1, 1));
+  EXPECT_OK(vec_unlink(&basedir, 1));
 }
 
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
@@ -179,6 +222,7 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck)
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadMkdir,
         BadMkdir2,
+        BadFileCreation,
         UUIDOpenExclFlagCheck,
         UUIDExclFlagCheck,
         UUIDOpenFlagCheck,
