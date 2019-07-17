@@ -184,6 +184,51 @@ TYPED_TEST_P(TcTxnTest, BadFileCreation2)
   }
 }
 
+/* Invalid OPEN compound with CREATE flag, but some files already exist. */
+TYPED_TEST_P(TcTxnTest, BadCreationWithExisting)
+{
+  const int n1 = 2, n2 = 6;
+  const char *dir1 = "bad-creation3";
+  const char *dir2 = "bad-creation3/no";
+  const char *paths1[] = { "bad-creation3/c",
+                           "bad-creation3/d" };
+  const char *paths2[] = { "bad-creation3/a",
+                           "bad-creation3/b",
+                           "bad-creation3/c",
+                           "bad-creation3/d",
+                           "bad-creation3/no",
+                           "bad-creation3/f" };
+  vfile *files1, *files2;
+
+  ASSERT_TRUE(vec_mkdir_simple(&dir1, 1, 0777));
+  ASSERT_TRUE(vec_mkdir_simple(&dir2, 1, 0777));
+
+  /* create files in paths1[] */
+  files1 = vec_open_simple(paths1, n1, O_CREAT, 0666);
+  ASSERT_NE(files1, nullptr);
+  vec_close(files1, n1);
+
+  /* create files in paths2[] - this will fail and rollback, but we expect that
+   * files in paths1 won't be removed */
+  files2 = vec_open_simple(paths2, n2, O_CREAT, 0666);
+  EXPECT_EQ(files2, nullptr);
+
+  /* check that files in paths1[] are not removed during rollback */
+  for (int i = 0; i < n1; ++i) {
+    EXPECT_TRUE(posix_exists(this->posix_base, paths1[i])) << paths1[i];
+  }
+  
+  /* remove files in paths1[] as well as dir2 */
+  EXPECT_OK(vec_unlink(paths1, n1));
+  EXPECT_OK(vec_unlink(&dir2, 1));
+
+  for (int i = 0; i < n2; ++i) {
+    EXPECT_FALSE(posix_exists(this->posix_base, paths2[i])) << paths2[i];
+  }
+
+  EXPECT_OK(vec_unlink(&dir1, 1));
+}
+
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 {
 	const int N = 4;
@@ -238,6 +283,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadMkdir2,
         BadFileCreation,
         BadFileCreation2,
+        BadCreationWithExisting,
         UUIDOpenExclFlagCheck,
         UUIDOpenFlagCheck,
         UUIDReadFlagCheck);
