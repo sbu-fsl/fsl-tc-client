@@ -117,6 +117,7 @@ TYPED_TEST_P(TcTxnTest, BadMkdir2)
   }
 }
 
+/* Invalid OPEN compound */
 TYPED_TEST_P(TcTxnTest, BadFileCreation)
 {
   const int n = 6;
@@ -148,6 +149,39 @@ TYPED_TEST_P(TcTxnTest, BadFileCreation)
   EXPECT_OK(vec_unlink(&dir2, 1));
   EXPECT_OK(vec_unlink(&dir1, 1));
   EXPECT_OK(vec_unlink(&basedir, 1));
+}
+
+/* BadFileCreation with hierarchy dir structure */
+TYPED_TEST_P(TcTxnTest, BadFileCreation2)
+{
+  const int n = 6;
+  const char *dirs[] = { "bad-creation2",
+                         "bad-creation2/a",
+                         "bad-creation2/a/b",
+                         "bad-creation2/a/b/c",
+                         "bad-creation2/a/b/c/d",
+                         "bad-creation2/a/b/c/d/e" };
+  const char *paths[] = { "bad-creation2/1",
+                          "bad-creation2/a/2",
+                          "bad-creation2/a/b/3",
+                          "bad-creation2/a/b/c/4",
+                          "bad-creation2/a/b/c/d",
+                          "bad-creation2/a/b/c/d/e/5" };
+  vfile *files;
+
+  ASSERT_TRUE(vec_mkdir_simple(dirs, n, 0777));
+
+  files = vec_open_simple(paths, n, O_CREAT, 0666);
+  EXPECT_EQ(files, nullptr);
+
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_FALSE(posix_exists(this->posix_base, paths[i])) << paths[i];
+  }
+  EXPECT_FALSE(posix_exists(this->posix_base, paths[5]));
+
+  for (int i = n - 1; i >= 0; --i) {
+    EXPECT_OK(vec_unlink(&dirs[i], 1));
+  }
 }
 
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
@@ -219,6 +253,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadMkdir,
         BadMkdir2,
         BadFileCreation,
+        BadFileCreation2,
         UUIDOpenExclFlagCheck,
         UUIDExclFlagCheck,
         UUIDOpenFlagCheck,
