@@ -229,6 +229,46 @@ TYPED_TEST_P(TcTxnTest, BadCreationWithExisting)
   EXPECT_OK(vec_unlink(&dir1, 1));
 }
 
+/* Invalid REMOVE operation */
+TYPED_TEST_P(TcTxnTest, BadRemove)
+{
+  const int n = 5;
+  const char *dir = "bad-remove";
+  const char *not_exist = "bad-remove/no";
+  const char *paths[] = { "bad-remove/a",
+                          "bad-remove/b",
+                          "bad-remove/c",
+                          "bad-remove/no",
+                          "bad-remove/d" };
+  vfile *files;
+
+  ASSERT_TRUE(vec_mkdir_simple(&dir, 1, 0777));
+
+  /* create files in paths[] */
+  files = vec_open_simple(paths, n, O_CREAT, 0666);
+  ASSERT_NE(files, nullptr);
+  vec_close(files, n);
+
+  /* remove `bad-remove/no` */
+  EXPECT_OK(vec_unlink(&not_exist, 1));
+
+  /* remove files in paths[]
+   * Since `bad-remove/no` no longer exists, the compound will fail and
+   * trigger rollback */
+  EXPECT_FAIL(vec_unlink(paths, n));
+
+  /* a, b, c, d should exist */
+  EXPECT_TRUE(posix_exists(this->posix_base, paths[0]));
+  EXPECT_TRUE(posix_exists(this->posix_base, paths[1]));
+  EXPECT_TRUE(posix_exists(this->posix_base, paths[2]));
+  EXPECT_TRUE(posix_exists(this->posix_base, paths[4]));
+
+  /* cleanup */
+  EXPECT_OK(vec_unlink(paths, 3));
+  EXPECT_OK(vec_unlink(&paths[4], 1));
+  EXPECT_OK(vec_unlink(&dir, 1));
+}
+
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 {
 	const int N = 4;
@@ -283,6 +323,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadMkdir2,
         BadFileCreation,
         BadFileCreation2,
+        BadRemove,
         BadCreationWithExisting,
         UUIDOpenExclFlagCheck,
         UUIDOpenFlagCheck,
