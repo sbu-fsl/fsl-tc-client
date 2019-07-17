@@ -228,9 +228,9 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck)
 	Removev(PATHS, 4);
 
 	files = vec_open_simple(PATHS, N, 0, 0);
-	ASSERT_TRUE(files == NULL);
-	vec_close(files, N);
-
+	EXPECT_EQ(files, nullptr);
+  if (files)
+	  vec_close(files, N);
 }
 
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
