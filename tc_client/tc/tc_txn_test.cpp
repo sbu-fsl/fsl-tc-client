@@ -71,24 +71,23 @@ static bool posix_exists(std::string base, std::string path)
 TYPED_TEST_P(TcTxnTest, BadMkdir)
 {
   const int N = 4;
-  const char *PATHS[] = { "bad-mkdir-a",
+  const char *paths[] = { "bad-mkdir-a",
                           "bad-mkdir-b",
                           "bad-mkdir-c",
                           "bad-mkdir-d" };
 
   /* preparation: create a directory */
-  ASSERT_TRUE(vec_mkdir_simple(&PATHS[2], 1, 0777));
+  ASSERT_TRUE(vec_mkdir_simple(&paths[2], 1, 0777));
 
   /* execute compound */
-  EXPECT_FALSE(vec_mkdir_simple(PATHS, N, 0777));
+  EXPECT_FALSE(vec_mkdir_simple(paths, N, 0777));
 
-  vec_unlink(&PATHS[2], 1);
+  vec_unlink(&paths[2], 1);
 
   /* check existence of PATHS[0] and PATHS[1] */
-  EXPECT_FALSE(sca_exists(PATHS[0]));
-  EXPECT_FALSE(sca_exists(PATHS[1]));
-  EXPECT_FALSE(sca_exists(PATHS[2]));
-  EXPECT_FALSE(sca_exists(PATHS[3]));
+  for (int i = 0; i < N; ++i) {
+    EXPECT_FALSE(posix_exists(this->posix_base, paths[i]));
+  }
 }
 
 TYPED_TEST_P(TcTxnTest, BadMkdir2)
@@ -113,12 +112,9 @@ TYPED_TEST_P(TcTxnTest, BadMkdir2)
   vec_unlink(&paths1[1], 1);
   vec_unlink(&paths1[0], 1);
 
-  EXPECT_FALSE(sca_exists(paths2[0]));
-  EXPECT_FALSE(sca_exists(paths2[1]));
-  EXPECT_FALSE(sca_exists(paths2[2]));
-  EXPECT_FALSE(sca_exists(paths2[3]));
-  EXPECT_FALSE(sca_exists(paths2[4]));
-  EXPECT_FALSE(sca_exists(paths2[5]));
+  for (int i = 0; i < N2; ++i) {
+    EXPECT_FALSE(posix_exists(this->posix_base, paths2[i]));
+  }
 }
 
 TYPED_TEST_P(TcTxnTest, BadFileCreation)
