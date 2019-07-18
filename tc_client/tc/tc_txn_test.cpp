@@ -62,6 +62,27 @@ static bool posix_exists(std::string base, std::string path)
   return false;
 }
 
+static bool posix_integrity(std::string base, std::string path, void *data,
+                            size_t len)
+{
+  std::string full_path(base + path);
+  FILE *fp = fopen(full_path.c_str(), "rb");
+  char *buffer = nullptr;
+  bool result;
+  if (fp == nullptr) {
+    return false;
+  }
+
+  buffer = (char *)malloc(len);
+  assert(buffer);
+
+  fread(buffer, len, 1, fp);
+  result = (memcmp(buffer, data, len) == 0);
+  fclose(fp);
+
+  return result;
+}
+
 /**
  * Issue a compound of several mkdir commands, where there is an invalid one
  * in the middle (causing EEXIST).
@@ -269,6 +290,65 @@ TYPED_TEST_P(TcTxnTest, BadRemove)
   EXPECT_OK(vec_unlink(&dir, 1));
 }
 
+/* Invalid REMOVE operation - with content check */
+TYPED_TEST_P(TcTxnTest, BadRemoveCheckContent)
+{
+  const int n = 5;
+  const size_t datasize = 4096;
+  const char *dir = "bad-remove2";
+  const char *not_exist = "bad-remove2/no";
+  const char *paths[] = { "bad-remove2/a",
+                          "bad-remove2/b",
+                          "bad-remove2/c",
+                          "bad-remove2/no",
+                          "bad-remove2/e" };
+  struct viovec *iov = nullptr;
+  vfile *files;
+
+  /* create base dir */
+  ASSERT_TRUE(vec_mkdir_simple(&dir, 1, 0777));
+
+  /* create files in paths[] */
+  files = vec_open_simple(paths, n, O_CREAT | O_WRONLY, 0666);
+  ASSERT_NE(files, nullptr);
+
+  /* write to these files */
+  iov = (struct viovec *)calloc(n, sizeof(*iov));
+  ASSERT_NE(iov, nullptr);
+  for (int i = 0; i < n; ++i) {
+    viov2file(&iov[i], &files[i], 0, datasize, getRandomBytes(datasize));
+  }
+  EXPECT_OK(vec_write(iov, n, true));
+  vec_close(files, n);
+
+  /* remove `bad-remove2/no` */
+  EXPECT_OK(vec_unlink(&not_exist, 1));
+
+  /* remove files in paths[]
+   * Since `bad-remove/no` no longer exists, the compound should fail and
+   * rollback, and other files will be restored. */
+  EXPECT_FAIL(vec_unlink(paths, n));
+
+  /* a, b, c, d should exist and their content should be intact */
+  EXPECT_TRUE(posix_integrity(this->posix_base, paths[0], iov[0].data,
+                              datasize));
+  EXPECT_TRUE(posix_integrity(this->posix_base, paths[1], iov[1].data,
+                              datasize));
+  EXPECT_TRUE(posix_integrity(this->posix_base, paths[2], iov[2].data,
+                              datasize));
+  EXPECT_TRUE(posix_integrity(this->posix_base, paths[4], iov[4].data,
+                              datasize));
+
+  /* cleanup */
+  EXPECT_OK(vec_unlink(paths, 3));
+  EXPECT_OK(vec_unlink(&paths[4], 1));
+  EXPECT_OK(vec_unlink(&dir, 1));
+  for (int i = 0; i < n; ++i) {
+    free(iov[i].data);
+  }
+  free(iov);
+}
+
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 {
 	const int N = 4;
@@ -324,6 +404,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadFileCreation,
         BadFileCreation2,
         BadRemove,
+        BadRemoveCheckContent,
         BadCreationWithExisting,
         UUIDOpenExclFlagCheck,
         UUIDOpenFlagCheck,
