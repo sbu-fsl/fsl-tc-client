@@ -558,6 +558,66 @@ TYPED_TEST_P(TcTxnTest, BadWriteMiddle)
   free(v2);
 }
 
+/* Invalid WRITE operation, but expands the file */
+TYPED_TEST_P(TcTxnTest, BadWriteExpanding)
+{
+  const int n = 6;
+  const size_t datasize = 34567;
+  const size_t maxsize = datasize * 2;
+  const char *dir = "bad-write3";
+  const char *paths[] = { "bad-write3/a",
+                          "bad-write3/b",
+                          "bad-write3/c",
+                          "bad-write3/d",
+                          "bad-write3/e",
+                          "bad-write3/f" };
+  int flags[n] = {O_RDWR};
+  mode_t modes[n] = {0666};
+  vfile *files;
+  struct viovec *v1, *v2;
+
+  /* create base dir */
+  ASSERT_TRUE(vec_mkdir_simple(&dir, 1, 0777));
+  /* create files in paths[] and write random data */
+  files = vec_open_simple(paths, n, O_CREAT | O_WRONLY, 0666);
+  ASSERT_NE(files, nullptr);
+  v1 = (struct viovec *)calloc(n, sizeof(*v1));
+  v2 = (struct viovec *)calloc(n, sizeof(*v2));
+  ASSERT_TRUE(v1 && v2);
+  for (int i = 0; i < n; ++i) {
+    viov2file(&v1[i], &files[i], 0, datasize, getRandomBytes(datasize));
+  }
+  EXPECT_OK(vec_write(v1, n, true));
+  EXPECT_OK(vec_close(files, n));
+  /* Issue a WRITE compound cmd that has a invalid req in the middle */
+  flags[4] = O_RDONLY;
+  files = vec_open(paths, n, flags, modes);
+  ASSERT_NE(files, nullptr);
+  /* this time let's write at random offset and random size. However
+   * these requests will expand the original file */
+  for (int i = 0; i < n; ++i) {
+    size_t offset = stdexp::randint(datasize / 2, datasize);
+    size_t len = stdexp::randint(datasize - offset, maxsize);
+    viov2file(&v2[i], &files[i], offset, len, getRandomBytes(len));
+  }
+  EXPECT_FAIL(vec_write(v2, n, true));
+  EXPECT_OK(vec_close(files, n));
+  /* check state */
+  for (int i = 0; i < n; ++i) {
+    EXPECT_TRUE(posix_integrity(this->posix_base, paths[i], v1[i].data,
+                datasize)) << paths[i];
+  }
+  /* clean up */
+  EXPECT_OK(vec_unlink(paths, n));
+  EXPECT_OK(vec_unlink(&dir, 1));
+  for (int i = 0; i < n; ++i) {
+    free(v1[i].data);
+    free(v2[i].data);
+  }
+  free(v1);
+  free(v2);
+}
+
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 {
 	const int N = 4;
@@ -619,6 +679,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadSymLink,
         BadWrite,
         BadWriteMiddle,
+        BadWriteExpanding,
         UUIDOpenExclFlagCheck,
         UUIDOpenFlagCheck,
         UUIDReadFlagCheck);
