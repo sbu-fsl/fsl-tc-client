@@ -220,6 +220,56 @@ TYPED_TEST_P(TcTxnTest, BadFileCreation2)
   }
 }
 
+/* Invalid OPEN with O_TRUNC */
+TYPED_TEST_P(TcTxnTest, BadOpenWithTrunc)
+{
+  const int n = 6;
+  const size_t datasize = 16387;
+  const char *dir = "bad-opentrunc";
+  const char *paths[] = { "bad-opentrunc/a",
+                          "bad-opentrunc/b",
+                          "bad-opentrunc/c",
+                          "bad-opentrunc/d",
+                          "bad-opentrunc/e",
+                          "bad-opentrunc/f" };
+  vfile *files;
+  struct viovec *v1;
+
+  /* create dir */
+  ASSERT_TRUE(vec_mkdir_simple(&dir, 1, 0777));
+  /* create files and write some data */
+  files = vec_open_simple(paths, n, O_CREAT | O_WRONLY, 0666);
+  ASSERT_NE(files, nullptr);
+  v1 = (struct viovec *)calloc(n, sizeof(*v1));
+  ASSERT_NE(v1, nullptr);
+  for (int i = 0; i < n; ++i) {
+    viov2file(&v1[i], &files[i], 0, datasize, getRandomBytes(datasize));
+  }
+  EXPECT_OK(vec_write(v1, n, true));
+  EXPECT_OK(vec_close(files, n));
+
+  /* issue open command with O_TRUNC 
+   * One of them is invalid because the name is not a regular file */
+  paths[3] = "bad-opentrunc/";
+  files = vec_open_simple(paths, n, O_CREAT | O_TRUNC, 0666);
+  EXPECT_EQ(files, nullptr);
+
+  paths[3] = "bad-opentrunc/d";
+  /* check state */
+  for (int i = 0; i < n; ++i) {
+    EXPECT_TRUE(posix_integrity(this->posix_base, paths[i], v1[i].data,
+                datasize)) << paths[i];
+  }
+
+  /* cleanup */
+  EXPECT_OK(vec_unlink(paths, n));
+  EXPECT_OK(vec_unlink(&dir, 1));
+  for (int i = 0; i < n; ++i) {
+    free(v1[i].data);
+  }
+  free(v1);
+}
+
 /* Invalid OPEN compound with CREATE flag, but some files already exist. */
 TYPED_TEST_P(TcTxnTest, BadCreationWithExisting)
 {
@@ -674,6 +724,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadMkdir2,
         BadFileCreation,
         BadFileCreation2,
+        BadOpenWithTrunc,
         BadRemove,
         BadRemoveCheckContent,
         BadCreationWithExisting,
