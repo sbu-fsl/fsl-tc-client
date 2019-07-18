@@ -294,7 +294,7 @@ TYPED_TEST_P(TcTxnTest, BadRemove)
 TYPED_TEST_P(TcTxnTest, BadRemoveCheckContent)
 {
   const int n = 5;
-  const size_t datasize = 4096;
+  const size_t datasize = 13457;
   const char *dir = "bad-remove2";
   const char *not_exist = "bad-remove2/no";
   const char *paths[] = { "bad-remove2/a",
@@ -391,6 +391,68 @@ TYPED_TEST_P(TcTxnTest, BadLink)
   EXPECT_OK(vec_unlink(&dir, 1));
 }
 
+/* Invalid WRITE operation */
+TYPED_TEST_P(TcTxnTest, BadWrite)
+{
+  const int n = 6;
+  const size_t datasize = 12345;
+  const char *dir = "bad-write";
+  const char *paths[] = { "bad-write/a",
+                          "bad-write/b",
+                          "bad-write/c",
+                          "bad-write/d",
+                          "bad-write/e",
+                          "bad-write/f" };
+  int flags[n] = {0};
+  mode_t modes[n] = {0};
+  vfile *files;
+  struct viovec *v1, *v2;
+
+  /* create base dir */
+  ASSERT_TRUE(vec_mkdir_simple(&dir, 1, 0777));
+  /* create files in paths[] and write some data */
+  files = vec_open_simple(paths, n, O_CREAT | O_WRONLY, 0666);
+  ASSERT_NE(files, nullptr);
+  v1 = (struct viovec *)calloc(n, sizeof(*v1));
+  v2 = (struct viovec *)calloc(n, sizeof(*v2));
+  ASSERT_TRUE(v1 && v2);
+  for (int i = 0; i < n; ++i) {
+    viov2file(&v1[i], &files[i], 0, datasize, getRandomBytes(datasize));
+  }
+  EXPECT_OK(vec_write(v1, n, true));
+  EXPECT_OK(vec_close(files, n));
+  /* now do a invalid vwrite operation
+   * One of the file is opened in RDONLY mode, so the whold compound
+   * will fail and rollback. Thus the content of other files should
+   * remain that of v1[i].data */
+  for (int i = 0; i < n; ++i) {
+    flags[i] = O_RDWR;
+    modes[i] = 0666;
+  }
+  flags[3] = O_RDONLY;
+  files = vec_open(paths, n, flags, modes);
+  ASSERT_NE(files, nullptr);
+  for (int i = 0; i < n; ++i) {
+    viov2file(&v2[i], &files[i], 0, datasize, getRandomBytes(datasize));
+  }
+  EXPECT_FAIL(vec_write(v2, n, true));
+  EXPECT_OK(vec_close(files, n));
+  /* check state */
+  for (int i = 0; i < n; ++i) {
+    EXPECT_TRUE(posix_integrity(this->posix_base, paths[i], v1[i].data,
+                datasize)) << paths[i];
+  }
+  /* clean up */
+  EXPECT_OK(vec_unlink(paths, n));
+  EXPECT_OK(vec_unlink(&dir, 1));
+  for (int i = 0; i < n; ++i) {
+    free(v1[i].data);
+    free(v2[i].data);
+  }
+  free(v1);
+  free(v2);
+}
+
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 {
 	const int N = 4;
@@ -449,6 +511,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadRemoveCheckContent,
         BadCreationWithExisting,
         BadLink,
+        BadWrite,
         UUIDOpenExclFlagCheck,
         UUIDOpenFlagCheck,
         UUIDReadFlagCheck);
