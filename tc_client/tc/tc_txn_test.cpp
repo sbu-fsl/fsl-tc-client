@@ -68,18 +68,30 @@ static bool posix_integrity(std::string base, std::string path, void *data,
   std::string full_path(base + path);
   FILE *fp = fopen(full_path.c_str(), "rb");
   char *buffer = nullptr;
+  size_t fsize = 0;
   bool result;
   if (fp == nullptr) {
     return false;
   }
 
+  /* check size first */
+  fseek(fp, 0, SEEK_END);
+  fsize = ftell(fp);
+  if (fsize != len) {
+    result = false;
+    goto end;
+  }
+  rewind(fp);
+
+  /* then check content */
   buffer = (char *)malloc(len);
   assert(buffer);
 
   fread(buffer, len, 1, fp);
   result = (memcmp(buffer, data, len) == 0);
-  fclose(fp);
 
+end:
+  fclose(fp);
   return result;
 }
 
