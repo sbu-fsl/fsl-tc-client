@@ -349,6 +349,48 @@ TYPED_TEST_P(TcTxnTest, BadRemoveCheckContent)
   free(iov);
 }
 
+/* Invalid LINK operation */
+TYPED_TEST_P(TcTxnTest, BadLink)
+{
+  const int n = 6;
+  const char *dir = "bad-link";
+  const char *src[] = { "bad-link/a",
+                        "bad-link/b",
+                        "bad-link/c",
+                        "bad-link/d",
+                        "bad-link/e",
+                        "bad-link/f" };
+  const char *dest[] = { "bad-link/1",
+                         "bad-link/2",
+                         "bad-link/3",
+                         "bad-link/d",
+                         "bad-link/5",
+                         "bad-link/6" };
+  vfile *files;
+
+  /* create base dir */
+  ASSERT_TRUE(vec_mkdir_simple(&dir, 1, 0777));
+  /* create files in src[] */
+  files = vec_open_simple(src, n, O_CREAT, 0666);
+  ASSERT_NE(files, nullptr);
+  vec_close(files, n);
+
+  /* LINK src[] to dest[]
+   * This compound should fail because `bad-link/d` already exists. */
+  EXPECT_FAIL(vec_hardlink(src, dest, n, true));
+
+  /* remove files in src[] */
+  EXPECT_OK(vec_unlink(src, n));
+
+  /* now none of the file in dest[] should exist */
+  for (int i = 0; i < n; ++i) {
+    EXPECT_FALSE(posix_exists(this->posix_base, dest[i])) << dest[i];
+  }
+
+  /* cleanup */
+  EXPECT_OK(vec_unlink(&dir, 1));
+}
+
 TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck)
 {
 	const int N = 4;
@@ -406,6 +448,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadRemove,
         BadRemoveCheckContent,
         BadCreationWithExisting,
+        BadLink,
         UUIDOpenExclFlagCheck,
         UUIDOpenFlagCheck,
         UUIDReadFlagCheck);
