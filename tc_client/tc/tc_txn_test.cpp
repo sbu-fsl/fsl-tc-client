@@ -450,8 +450,8 @@ TYPED_TEST_P(TcTxnTest, BadWrite)
                           "bad-write/d",
                           "bad-write/e",
                           "bad-write/f" };
-  int flags[n] = {0};
-  mode_t modes[n] = {0};
+  int flags[n];
+  mode_t modes[n];
   vfile *files;
   struct viovec *v1, *v2;
 
@@ -472,11 +472,9 @@ TYPED_TEST_P(TcTxnTest, BadWrite)
    * One of the file is opened in RDONLY mode, so the whold compound
    * will fail and rollback. Thus the content of other files should
    * remain that of v1[i].data */
-  for (int i = 0; i < n; ++i) {
-    flags[i] = O_RDWR;
-    modes[i] = 0666;
-  }
-  flags[3] = O_RDONLY;
+  std::fill_n(flags, n, O_RDWR);
+  std::fill_n(modes, n, 0666);
+  flags[4] = O_RDONLY;
   files = vec_open(paths, n, flags, modes);
   ASSERT_NE(files, nullptr);
   for (int i = 0; i < n; ++i) {
@@ -512,8 +510,8 @@ TYPED_TEST_P(TcTxnTest, BadWriteMiddle)
                           "bad-write2/d",
                           "bad-write2/e",
                           "bad-write2/f" };
-  int flags[n] = {O_RDWR};
-  mode_t modes[n] = {0666};
+  int flags[n];
+  mode_t modes[n];
   vfile *files;
   struct viovec *v1, *v2;
 
@@ -531,6 +529,8 @@ TYPED_TEST_P(TcTxnTest, BadWriteMiddle)
   EXPECT_OK(vec_write(v1, n, true));
   EXPECT_OK(vec_close(files, n));
   /* Issue a WRITE compound cmd that has a invalid req in the middle */
+  std::fill_n(flags, n, O_RDWR);
+  std::fill_n(modes, n, 0666);
   flags[4] = O_RDONLY;
   files = vec_open(paths, n, flags, modes);
   ASSERT_NE(files, nullptr);
@@ -571,8 +571,8 @@ TYPED_TEST_P(TcTxnTest, BadWriteExpanding)
                           "bad-write3/d",
                           "bad-write3/e",
                           "bad-write3/f" };
-  int flags[n] = {O_RDWR};
-  mode_t modes[n] = {0666};
+  int flags[n];
+  mode_t modes[n];
   vfile *files;
   struct viovec *v1, *v2;
 
@@ -590,6 +590,8 @@ TYPED_TEST_P(TcTxnTest, BadWriteExpanding)
   EXPECT_OK(vec_write(v1, n, true));
   EXPECT_OK(vec_close(files, n));
   /* Issue a WRITE compound cmd that has a invalid req in the middle */
+  std::fill_n(flags, n, O_RDWR);
+  std::fill_n(modes, n, 0666);
   flags[4] = O_RDONLY;
   files = vec_open(paths, n, flags, modes);
   ASSERT_NE(files, nullptr);
