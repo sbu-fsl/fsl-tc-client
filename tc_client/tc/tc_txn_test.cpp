@@ -403,6 +403,38 @@ TYPED_TEST_P(TcTxnTest, BadLink)
   EXPECT_OK(vec_unlink(&dir, 1));
 }
 
+/* Invalid symlink operation - This actually tests undo_create */
+TYPED_TEST_P(TcTxnTest, BadSymLink)
+{
+  const int n = 7;
+  const char *src[] = { "bad-symlink-a",
+                        "bad-symlink-a/1",
+                        "bad-symlink-a/2",
+                        "bad-symlink-a/3",
+                        "bad-symlink-a/4",
+                        "bad-symlink-a/5",
+                        "bad-symlink-a/6" };
+  const char *dst[] = { "bad-symlink-b",
+                        "bad-symlink-b/a",
+                        "bad-symlink-b/a/b",
+                        "bad-symlink-b/a/b/c",
+                        "bad-symlink-b/a/b/c/d",
+                        "bad-symlink-a/5",
+                        "bad-symlink-b/f" };
+  /* create sources */
+  ASSERT_TRUE(vec_mkdir_simple(src, n, 0777));
+
+  /* Symlink src[] to dst[] 
+   * This should fail because `bad-symlink-a/5` exists */
+  EXPECT_FAIL(vec_symlink(src, dst, n, true));
+  for (int i = 0; i < 5; ++i) {
+    EXPECT_FALSE(posix_exists(this->posix_base, dst[i]));
+  }
+
+  /* clean up */
+  EXPECT_OK(vec_unlink_recursive(&src[0], 1));
+}
+
 /* Invalid WRITE operation */
 TYPED_TEST_P(TcTxnTest, BadWrite)
 {
@@ -523,6 +555,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest,
         BadRemoveCheckContent,
         BadCreationWithExisting,
         BadLink,
+        BadSymLink,
         BadWrite,
         UUIDOpenExclFlagCheck,
         UUIDOpenFlagCheck,
