@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <experimental/filesystem>
 #include <experimental/random>
 #include <list>
 #include <random>
@@ -37,6 +38,7 @@
 #include "tc_test.hpp"
 
 namespace stdexp = std::experimental;
+namespace fs = stdexp::filesystem;
 
 TYPED_TEST_CASE_P(TcTxnTest);
 
@@ -51,20 +53,36 @@ static bool vec_mkdir_simple(const char **paths, int n, int mode) {
   return tx_vec_mkdir(attrs, n, true);
 }
 
+/* @brief Check if a file exists in local file system
+ * 
+ * @param[in] base    The base directory
+ * @param[in] path    The path relative to base
+ * 
+ * @return true or false
+ */
 static bool posix_exists(std::string base, std::string path) {
-  std::string full_path(base + path);
-  FILE *fp = fopen(full_path.c_str(), "rb");
-  if (fp != nullptr) {
-    fclose(fp);
-    return true;
-  }
+  fs::path full_path(base);
+  full_path = full_path.append(path);
 
-  return false;
+  return fs::exists(full_path);
 }
 
+/* @brief Check if a local file has the same length and content
+ *        as the given data
+ *
+ * @param[in] base    The base directory
+ * @param[in] path    The path relative to base
+ * @param[in] data    The buffer of data to compare
+ * @param[in] len     The length of data
+ * 
+ * @returns True if the file size is equal to len and the content is the same
+ * as data. Otherwise returns false. If the file does not exist, returns false.
+ */
 static bool posix_integrity(std::string base, std::string path, void *data,
                             size_t len) {
-  std::string full_path(base + path);
+  fs::path full_path(base);
+  full_path = full_path.append(path);
+
   FILE *fp = fopen(full_path.c_str(), "rb");
   char *buffer = nullptr;
   size_t fsize = 0;
