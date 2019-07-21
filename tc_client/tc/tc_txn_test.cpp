@@ -424,6 +424,8 @@ TYPED_TEST_P(TcTxnTest, BadSymLink) {
   for (int i = 0; i < 5; ++i) {
     EXPECT_FALSE(posix_exists(this->posix_base, dst[i]));
   }
+  EXPECT_TRUE(posix_exists(this->posix_base, dst[5]));
+  EXPECT_FALSE(posix_exists(this->posix_base, dst[6]));
 
   /* clean up */
   EXPECT_OK(tc::sca_unlink_recursive(src[0]));
