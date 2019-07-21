@@ -458,7 +458,7 @@ TYPED_TEST_P(TcTxnTest, BadWrite) {
   EXPECT_OK(vec_write(v1, n, true));
   EXPECT_OK(vec_close(files, n));
   /* now do a invalid vwrite operation
-   * One of the file is opened in RDONLY mode, so the whold compound
+   * One of the file is opened in RDONLY mode, so the whole compound
    * will fail and rollback. Thus the content of other files should
    * remain that of v1[i].data */
   std::fill_n(flags.begin(), n, O_RDWR);
