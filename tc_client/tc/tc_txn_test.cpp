@@ -239,7 +239,6 @@ TYPED_TEST_P(TcTxnTest, BadOpenWithTrunc) {
   }
 
   /* cleanup */
-  EXPECT_OK(tc::vec_unlink(paths));
   EXPECT_OK(tc::sca_unlink_recursive(dir));
   for (int i = 0; i < n; ++i) {
     free(v1[i].data);
@@ -317,8 +316,6 @@ TYPED_TEST_P(TcTxnTest, BadRemove) {
   EXPECT_TRUE(posix_exists(this->posix_base, paths[4]));
 
   /* cleanup */
-  EXPECT_OK(tc::vec_unlink(paths, 3));
-  EXPECT_OK(tc::sca_unlink(paths[4]));
   EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
 
@@ -369,8 +366,6 @@ TYPED_TEST_P(TcTxnTest, BadRemoveCheckContent) {
       posix_integrity(this->posix_base, paths[4], iov[4].data, datasize));
 
   /* cleanup */
-  EXPECT_OK(tc::vec_unlink(paths, 3));
-  EXPECT_OK(tc::sca_unlink(paths[4]));
   EXPECT_OK(tc::sca_unlink_recursive(dir));
   for (int i = 0; i < n; ++i) {
     free(iov[i].data);
@@ -481,7 +476,6 @@ TYPED_TEST_P(TcTxnTest, BadWrite) {
         << paths[i];
   }
   /* clean up */
-  EXPECT_OK(tc::vec_unlink(paths));
   EXPECT_OK(tc::sca_unlink_recursive(dir));
   for (int i = 0; i < n; ++i) {
     free(v1[i].data);
@@ -538,7 +532,6 @@ TYPED_TEST_P(TcTxnTest, BadWriteMiddle) {
         << paths[i];
   }
   /* clean up */
-  EXPECT_OK(tc::vec_unlink(paths));
   EXPECT_OK(tc::sca_unlink_recursive(dir));
   for (int i = 0; i < n; ++i) {
     free(v1[i].data);
@@ -597,7 +590,6 @@ TYPED_TEST_P(TcTxnTest, BadWriteExpanding) {
         << paths[i];
   }
   /* clean up */
-  EXPECT_OK(tc::vec_unlink(paths));
   EXPECT_OK(tc::sca_unlink_recursive(dir));
   for (int i = 0; i < n; ++i) {
     free(v1[i].data);
@@ -618,6 +610,7 @@ TYPED_TEST_P(TcTxnTest, UUIDOpenExclFlagCheck) {
   files = tc::vec_open_simple(paths, O_EXCL | O_CREAT, 0);
   EXPECT_NOTNULL(files);
   vec_close(files, paths.size());
+  tc::vec_unlink(paths);
 }
 
 TYPED_TEST_P(TcTxnTest, UUIDOpenFlagCheck) {
@@ -630,6 +623,7 @@ TYPED_TEST_P(TcTxnTest, UUIDOpenFlagCheck) {
   files = tc::vec_open_simple(paths, O_CREAT, 0);
   EXPECT_NOTNULL(files);
   vec_close(files, paths.size());
+  tc::vec_unlink(paths);
 }
 
 TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
