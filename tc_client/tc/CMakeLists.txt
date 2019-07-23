@@ -6,6 +6,7 @@ add_definitions(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(tc_SRC
+  tc_api_wrapper.cpp
   tc_cache.cpp
   tc_impl.cpp
   tc_lib.cpp
@@ -43,7 +44,7 @@ target_link_libraries(tc_impl
   #tc_util
   #tc_impl_posix
   #tc_impl_nfs4
-#) 
+#)
 
 set_target_properties(tc_impl PROPERTIES POSITION_INDEPENDENT_CODE on)
 
@@ -68,6 +69,7 @@ set(test_LIB
   gtest_main
   gmock
   gmock_main
+  stdc++fs
   ${tc_LIBS}
 )
 
@@ -78,6 +80,7 @@ function (add_unittest TestName LibName)
 endfunction (add_unittest)
 
 add_unittest(tc_test tc_impl)
+add_unittest(tc_txn_test tc_impl)
 add_unittest(tc_datacache_test tc_impl)
 
 find_package(gflags REQUIRED)

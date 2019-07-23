@@ -35,6 +35,9 @@ constexpr size_t operator"" _GB(unsigned long long a) { return a << 30; }
 #define EXPECT_OK(x)                                                           \
 	EXPECT_TRUE(vokay(x)) << "Failed at " << x.index << ": "             \
 				<< strerror(x.err_no)
+#define EXPECT_FAIL(x) \
+  EXPECT_FALSE(vokay(x)) << "Expected to fail but succeed"
+
 #define EXPECT_NOTNULL(x) EXPECT_TRUE(x != NULL) << #x << " is NULL"
 
 char *getRandomBytes(int N);
