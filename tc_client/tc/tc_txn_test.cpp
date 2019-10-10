@@ -16,11 +16,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301 USA
  */
-#include <sys/types.h>
 #include <errno.h>
-#include <unistd.h>
-#include <stdarg.h>
 #include <fcntl.h>
+#include <stdarg.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -32,11 +32,11 @@
 #include <thread>
 #include <vector>
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include "tc_test.hpp"
 #include "tc_api_wrapper.hpp"
+#include "tc_test.hpp"
 
 namespace stdexp = std::experimental;
 namespace fs = stdexp::filesystem;
@@ -620,7 +620,116 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
 
   files = tc::vec_open_simple(paths, 0, 0);
   EXPECT_EQ(files, nullptr);
-  if (files) vec_close(files, paths.size());
+  if (files)
+    vec_close(files, paths.size());
+}
+
+TYPED_TEST_P(TcTxnTest, SerializabilityRW) {
+  const std::string dir("serializable-rw");
+  const std::vector<std::string> paths{
+      "serializable-rw/f1", "serializable-rw/f2", "serializable-rw/f3"};
+  const size_t max_data_len = 10 + 1 /* null char */;
+  const size_t n = paths.size();
+  const size_t buflen = n * max_data_len + 1;
+  const std::vector<std::string> write_set1{"apple", "banana", "mango"};
+  const std::vector<std::string> write_set2{"new york", "california", "texas"};
+
+  /* write count size should match paths size */
+  EXPECT_EQ(write_set1.size(), n);
+  EXPECT_EQ(write_set2.size(), n);
+
+  /* copy to fixed size buffer for easier comparison */
+  char *write_data1 = new char[buflen];
+  char *write_data2 = new char[buflen];
+
+  std::memset(write_data1, 0, buflen);
+  std::memset(write_data2, 0, buflen);
+
+  /* initialize the buffers */
+  for (size_t i = 0; i < n; i++) {
+    EXPECT_LT(write_set1[i].size(), max_data_len);
+    strcpy(write_data1 + i * max_data_len, write_set1[i].c_str());
+
+    EXPECT_LT(write_set2[i].size(), max_data_len);
+    strcpy(write_data2 + i * max_data_len, write_set2[i].c_str());
+  }
+  /* create base dir */
+  ASSERT_TRUE(tc::sca_mkdir(dir, 0777));
+
+  /* create files in paths[] and write from set1 */
+  vfile *files = tc::vec_open_simple(paths, O_CREAT | O_RDWR, 0666);
+  EXPECT_NOTNULL(files);
+  struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
+  ASSERT_TRUE(v);
+  for (int i = 0; i < n; ++i) {
+    viov2file(&v[i], &files[i], 0, write_set1[i].size() + 1,
+              write_data1 + i * max_data_len);
+  }
+  EXPECT_OK(vec_write(v, n, true));
+  EXPECT_OK(vec_close(files, n));
+  free(v);
+  /* write from set1 */
+  std::thread writer1([&]() {
+    struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
+    ASSERT_TRUE(v);
+    for (size_t t = 0; t < 50; t++) {
+      for (int i = 0; i < n; ++i) {
+        viov2path(&v[i], paths[i].c_str(), 0, write_set1[i].size() + 1,
+                  write_data1 + i * max_data_len);
+      }
+      EXPECT_OK(vec_write(v, n, true));
+    }
+    free(v);
+  });
+  /* write from set2 */
+  std::thread writer2([&]() {
+    struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
+    ASSERT_TRUE(v);
+    for (size_t t = 0; t < 50; t++) {
+      for (int i = 0; i < n; ++i) {
+        viov2path(&v[i], paths[i].c_str(), 0, write_set2[i].size() + 1,
+                  write_data2 + i * max_data_len);
+      }
+      EXPECT_OK(vec_write(v, n, true));
+    }
+    free(v);
+  });
+  /* read from files */
+  std::thread reader1([&]() {
+    struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
+    ASSERT_TRUE(v);
+    char *buffer = new char[n * max_data_len + 1];
+    for (size_t t = 0; t < 50; t++) {
+      std::memset(buffer, 0, n * max_data_len);
+      std::vector<std::string> read_set;
+      for (int i = 0; i < n; ++i) {
+        viov2path(&v[i], paths[i].c_str(), 0, max_data_len,
+                  buffer + i * max_data_len);
+      }
+      EXPECT_OK(vec_read(v, n, true));
+      bool is_expected = (memcmp(buffer, write_data1, buflen) == 0 ||
+                          memcmp(buffer, write_data2, buflen) == 0);
+
+      if (!is_expected) {
+        for (size_t i = 0; i < n; i++) {
+          std::cout << buffer + i * max_data_len << " ";
+        }
+        std::cout << "\n";
+        FAIL();
+      }
+    }
+    delete[] buffer;
+    free(v);
+  });
+
+  reader1.join();
+  writer1.join();
+  writer2.join();
+
+  /* clean up */
+  delete[] write_data1;
+  delete[] write_data2;
+  EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
 
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
@@ -628,7 +737,8 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
                            BadRemoveCheckContent, BadCreationWithExisting,
                            BadLink, BadSymLink, BadWrite, BadWriteMiddle,
                            BadWriteExpanding, UUIDOpenExclFlagCheck,
-                           UUIDOpenFlagCheck, UUIDReadFlagCheck);
+                           UUIDOpenFlagCheck, UUIDReadFlagCheck,
+                           SerializabilityRW);
 
 typedef ::testing::Types<TcNFS4Impl> TcTxnImpls;
 INSTANTIATE_TYPED_TEST_CASE_P(TC, TcTxnTest, TcTxnImpls);

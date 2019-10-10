@@ -30,12 +30,12 @@ fi
 echo "TC_SERVER_REMOTE: $TC_SERVER_REMOTE"
 
 if [ -z "$TC_SERVER_REPO" ]; then
-    TC_SERVER_REPO="tc-server";
+    TC_SERVER_REPO="nfs4tc-server";
 fi
 echo "TC_SERVER_REPO: $TC_SERVER_REPO"
 
 if [ -z "$TC_SERVER_BRANCH" ]; then
-    TC_SERVER_BRANCH="suwei/tc-txn-test";
+    TC_SERVER_BRANCH="tc_client";
 fi
 echo "TC_SERVER_BRANCH: $TC_SERVER_BRANCH";
 
