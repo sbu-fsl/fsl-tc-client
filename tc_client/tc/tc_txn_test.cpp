@@ -624,111 +624,128 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
     vec_close(files, paths.size());
 }
 
+template <size_t item_count, size_t max_item_size>
+void execute_create(
+    const std::vector<std::string> &paths,
+    const std::array<char[max_item_size], item_count> &write_data) {
+  vfile *files = tc::vec_open_simple(paths, O_CREAT | O_RDWR, 0666);
+  EXPECT_NOTNULL(files);
+  std::array<struct viovec, item_count> v;
+  for (int i = 0; i < item_count; ++i) {
+    viov2path(&v[i], paths[i].c_str(), 0, sizeof(write_data[i]),
+              (char *)write_data[i]);
+  }
+  EXPECT_OK(vec_write(v.data(), item_count, true));
+  EXPECT_OK(vec_close(files, item_count));
+}
+
+template <size_t item_count, size_t max_item_size>
+void execute_write(
+    const std::vector<std::string> &paths,
+    const std::array<char[max_item_size], item_count> &write_data,
+    const size_t iteration_count) {
+  std::array<struct viovec, item_count> v;
+  for (size_t t = 0; t < iteration_count; t++) {
+    for (size_t i = 0; i < item_count; ++i) {
+      viov2path(&v[i], paths[i].c_str(), 0, sizeof(write_data[i]),
+                (char *)write_data[i]);
+    }
+    EXPECT_OK(vec_write(v.data(), item_count, true));
+  }
+}
+
+template <size_t item_count, size_t max_item_size>
+void execute_read(
+    const std::vector<std::string> &paths,
+    const std::vector<std::array<char[max_item_size], item_count>> &write_sets,
+    const size_t iteration_count) {
+  std::array<struct viovec, item_count> v;
+  std::array<char[max_item_size], item_count> buffer{0};
+
+  const size_t buflen = item_count * max_item_size;
+
+  for (size_t t = 0; t < iteration_count; t++) {
+    std::vector<std::string> read_set;
+    for (size_t i = 0; i < item_count; ++i) {
+      viov2path(&v[i], paths[i].c_str(), 0, max_item_size, buffer[i]);
+    }
+    EXPECT_OK(vec_read(v.data(), item_count, true));
+
+    bool is_expected = false;
+    for (const auto &write_set : write_sets) {
+      is_expected |= (memcmp(buffer.data(), write_set.data(), buflen) == 0);
+    }
+
+    if (!is_expected) {
+      for (size_t i = 0; i < item_count; i++) {
+        std::cout << buffer[i] << " ";
+      }
+      std::cout << "\n";
+      FAIL();
+    }
+  }
+}
 TYPED_TEST_P(TcTxnTest, SerializabilityRW) {
   const std::string dir("serializable-rw");
-  const std::vector<std::string> paths{
-      "serializable-rw/f1", "serializable-rw/f2", "serializable-rw/f3"};
-  const size_t max_data_len = 10 + 1 /* null char */;
-  const size_t n = paths.size();
-  const size_t buflen = n * max_data_len + 1;
-  const std::vector<std::string> write_set1{"apple", "banana", "mango"};
-  const std::vector<std::string> write_set2{"new york", "california", "texas"};
 
-  /* write count size should match paths size */
-  EXPECT_EQ(write_set1.size(), n);
-  EXPECT_EQ(write_set2.size(), n);
+  /* max size of each write */
+  constexpr size_t max_write_size = 40;
 
-  /* copy to fixed size buffer for easier comparison */
-  char *write_data1 = new char[buflen];
-  char *write_data2 = new char[buflen];
+  /* number of files to be written */
+  constexpr size_t num_writes = 3;
 
-  std::memset(write_data1, 0, buflen);
-  std::memset(write_data2, 0, buflen);
-
-  /* initialize the buffers */
-  for (size_t i = 0; i < n; i++) {
-    EXPECT_LT(write_set1[i].size(), max_data_len);
-    strcpy(write_data1 + i * max_data_len, write_set1[i].c_str());
-
-    EXPECT_LT(write_set2[i].size(), max_data_len);
-    strcpy(write_data2 + i * max_data_len, write_set2[i].c_str());
+  std::vector<std::string> paths;
+  for (size_t i = 0; i < num_writes; i++) {
+    std::stringstream ss;
+    ss << dir << "/" << i;
+    paths.emplace_back(ss.str());
   }
+
+  EXPECT_EQ(paths.size(), num_writes);
+
+  /* number of writer threads */
+  constexpr size_t num_writer_threads = 2;
+
+  /* number of reader threads */
+  constexpr size_t num_reader_threads = 5;
+
+  /* each thread performs a write with values in the set */
+  const std::vector<std::array<char[max_write_size], num_writes>> write_sets{
+      std::array<char[max_write_size], num_writes>{"apple", "banana", "mango"},
+      std::array<char[max_write_size], num_writes>{"new york", "california",
+                                                   "texas"}};
+  EXPECT_EQ(write_sets.size(), num_writer_threads);
+
+  /* number of operations in each thread */
+  const size_t iteration_count = 50;
+
+  /* reader and writer threads */
+  std::vector<std::thread> threads;
+
   /* create base dir */
   ASSERT_TRUE(tc::sca_mkdir(dir, 0777));
 
   /* create files in paths[] and write from set1 */
-  vfile *files = tc::vec_open_simple(paths, O_CREAT | O_RDWR, 0666);
-  EXPECT_NOTNULL(files);
-  struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
-  ASSERT_TRUE(v);
-  for (int i = 0; i < n; ++i) {
-    viov2file(&v[i], &files[i], 0, write_set1[i].size() + 1,
-              write_data1 + i * max_data_len);
+  execute_create(paths, write_sets[0]);
+
+  /* start a thread performing VWrite with values in each write set */
+  for (const auto &write_set : write_sets) {
+    threads.emplace_back(execute_write<num_writes, max_write_size>,
+                         std::ref(paths), std::ref(write_set), iteration_count);
   }
-  EXPECT_OK(vec_write(v, n, true));
-  EXPECT_OK(vec_close(files, n));
-  free(v);
-  /* write from set1 */
-  std::thread writer1([&]() {
-    struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
-    ASSERT_TRUE(v);
-    for (size_t t = 0; t < 50; t++) {
-      for (int i = 0; i < n; ++i) {
-        viov2path(&v[i], paths[i].c_str(), 0, write_set1[i].size() + 1,
-                  write_data1 + i * max_data_len);
-      }
-      EXPECT_OK(vec_write(v, n, true));
-    }
-    free(v);
-  });
-  /* write from set2 */
-  std::thread writer2([&]() {
-    struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
-    ASSERT_TRUE(v);
-    for (size_t t = 0; t < 50; t++) {
-      for (int i = 0; i < n; ++i) {
-        viov2path(&v[i], paths[i].c_str(), 0, write_set2[i].size() + 1,
-                  write_data2 + i * max_data_len);
-      }
-      EXPECT_OK(vec_write(v, n, true));
-    }
-    free(v);
-  });
+
   /* read from files */
-  std::thread reader1([&]() {
-    struct viovec *v = (struct viovec *)calloc(n, sizeof(*v));
-    ASSERT_TRUE(v);
-    char *buffer = new char[n * max_data_len + 1];
-    for (size_t t = 0; t < 50; t++) {
-      std::memset(buffer, 0, n * max_data_len);
-      std::vector<std::string> read_set;
-      for (int i = 0; i < n; ++i) {
-        viov2path(&v[i], paths[i].c_str(), 0, max_data_len,
-                  buffer + i * max_data_len);
-      }
-      EXPECT_OK(vec_read(v, n, true));
-      bool is_expected = (memcmp(buffer, write_data1, buflen) == 0 ||
-                          memcmp(buffer, write_data2, buflen) == 0);
+  for (size_t i = 0; i < num_reader_threads; i++) {
+    threads.emplace_back(execute_read<num_writes, max_write_size>,
+                         std::ref(paths), std::ref(write_sets),
+                         iteration_count);
+  }
 
-      if (!is_expected) {
-        for (size_t i = 0; i < n; i++) {
-          std::cout << buffer + i * max_data_len << " ";
-        }
-        std::cout << "\n";
-        FAIL();
-      }
-    }
-    delete[] buffer;
-    free(v);
-  });
+  /* wait for threads */
+  for (auto &thread : threads) {
+    thread.join();
+  }
 
-  reader1.join();
-  writer1.join();
-  writer2.join();
-
-  /* clean up */
-  delete[] write_data1;
-  delete[] write_data2;
   EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
 
