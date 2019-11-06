@@ -32,9 +32,9 @@
 #include <thread>
 #include <vector>
 
+#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <gflags/gflags.h>
 
 #include "tc_api_wrapper.hpp"
 #include "tc_test.hpp"
@@ -631,7 +631,41 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
 
   files = tc::vec_open_simple(paths, 0, 0);
   EXPECT_EQ(files, nullptr);
-  if (files) vec_close(files, paths.size());
+  if (files)
+    vec_close(files, paths.size());
+}
+
+void execute_open(const std::vector<std::string> &paths,
+                  std::string &posix_base, const bool &writers_finished) {
+  while (!writers_finished) {
+    size_t count = 0;
+    for (auto &p : paths) {
+      if (posix_exists(posix_base, p)) {
+        count++;
+      }
+    }
+    EXPECT_TRUE(count == 0 || count == paths.size()) << "count: " << count;
+  }
+}
+
+template <size_t item_count, size_t max_item_size>
+void execute_create_remove(
+    const std::vector<std::string> &paths,
+    const std::array<char[max_item_size], item_count> &write_data,
+    const size_t iteration_count) {
+  for (size_t t = 0; t < iteration_count; t++) {
+    vfile *files = tc::vec_open_simple(paths, O_CREAT | O_RDWR, 0666);
+    EXPECT_NOTNULL(files);
+    std::array<struct viovec, item_count> v;
+    for (int i = 0; i < item_count; ++i) {
+      viov2file(&v[i], &files[i], 0, sizeof(write_data[i]),
+                (char *)write_data[i]);
+    }
+    EXPECT_OK(vec_write(v.data(), item_count, true));
+    EXPECT_OK(vec_close(files, item_count));
+
+    EXPECT_OK(vec_remove(files, item_count, true));
+  }
 }
 
 template <size_t item_count, size_t max_item_size>
@@ -757,13 +791,65 @@ TYPED_TEST_P(TcTxnTest, SerializabilityRW) {
   EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
 
+TYPED_TEST_P(TcTxnTest, SerializabilityCR) {
+  const std::string dir("serializable-cr");
+  std::srand(std::time(0));
+
+  /* max size of each write */
+  constexpr size_t max_write_size = 40;
+
+  /* number of files to be written, should be same as number of element in
+   * each write set */
+  constexpr size_t num_writes = 3;
+
+  std::vector<std::string> paths;
+  for (size_t i = 0; i < num_writes; i++) {
+    fs::path p = dir;
+    p = p / std::to_string(i);
+    paths.emplace_back(p.string());
+  }
+
+  EXPECT_EQ(paths.size(), num_writes);
+
+  /* each thread performs a write with values in the set */
+  std::array<char[max_write_size], num_writes> write_set{"apple", "banana",
+                                                         "mango"};
+  /* creator + remover and open threads */
+  std::thread create_remove_thread;
+  std::vector<std::thread> open_threads;
+
+  /* create base dir */
+  ASSERT_TRUE(tc::sca_mkdir(dir, 0777));
+  bool writers_finished = false;
+
+  /* create files in paths[] and write from set1 */
+  create_remove_thread = std::thread(
+      execute_create_remove<num_writes, max_write_size>, std::ref(paths),
+      std::ref(write_set), FLAGS_nwriter_iterations);
+
+  /* use posix api's to verify either all files exist or none */
+  for (size_t i = 0; i < FLAGS_nreader_threads; i++) {
+    open_threads.emplace_back(execute_open, std::ref(paths),
+                              std::ref(this->posix_base),
+                              std::ref(writers_finished));
+  }
+
+  /* wait for threads */
+  create_remove_thread.join();
+  writers_finished = true;
+  for (auto &thread : open_threads) {
+    thread.join();
+  }
+
+  EXPECT_OK(tc::sca_unlink_recursive(dir));
+}
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
                            BadFileCreation2, BadOpenWithTrunc, BadRemove,
                            BadRemoveCheckContent, BadCreationWithExisting,
                            BadLink, BadSymLink, BadWrite, BadWriteMiddle,
                            BadWriteExpanding, UUIDOpenExclFlagCheck,
                            UUIDOpenFlagCheck, UUIDReadFlagCheck,
-                           SerializabilityRW);
+                           SerializabilityRW, SerializabilityCR);
 
 typedef ::testing::Types<TcNFS4Impl> TcTxnImpls;
 int main(int argc, char **argv) {
