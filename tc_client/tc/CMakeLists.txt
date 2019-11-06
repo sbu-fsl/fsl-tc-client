@@ -70,6 +70,7 @@ set(test_LIB
   gmock
   gmock_main
   stdc++fs
+  gflags
   ${tc_LIBS}
 )
 

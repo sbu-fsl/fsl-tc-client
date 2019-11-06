@@ -16,11 +16,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301 USA
  */
-#include <sys/types.h>
 #include <errno.h>
-#include <unistd.h>
-#include <stdarg.h>
 #include <fcntl.h>
+#include <stdarg.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -32,14 +32,25 @@
 #include <thread>
 #include <vector>
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <gflags/gflags.h>
 
-#include "tc_test.hpp"
 #include "tc_api_wrapper.hpp"
+#include "tc_test.hpp"
 
 namespace stdexp = std::experimental;
 namespace fs = stdexp::filesystem;
+
+/* Flags for Serializability tests */
+/* number of writer threads */
+DEFINE_int32(nwriter_threads, 2, "Number of writer threads");
+
+/* number of reader threads */
+DEFINE_int32(nreader_threads, 5, "Number of reader threads");
+
+/* number of operations in writer thread */
+DEFINE_int32(nwriter_iterations, 50, "Number of iterations in writer thread");
 
 TYPED_TEST_CASE_P(TcTxnTest);
 
@@ -623,12 +634,145 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
   if (files) vec_close(files, paths.size());
 }
 
+template <size_t item_count, size_t max_item_size>
+void execute_create(
+    const std::vector<std::string> &paths,
+    const std::array<char[max_item_size], item_count> &write_data) {
+  vfile *files = tc::vec_open_simple(paths, O_CREAT | O_RDWR, 0666);
+  EXPECT_NOTNULL(files);
+  std::array<struct viovec, item_count> v;
+  for (int i = 0; i < item_count; ++i) {
+    viov2file(&v[i], &files[i], 0, sizeof(write_data[i]),
+              (char *)write_data[i]);
+  }
+  EXPECT_OK(vec_write(v.data(), item_count, true));
+  EXPECT_OK(vec_close(files, item_count));
+}
+
+template <size_t item_count, size_t max_item_size>
+void execute_write(
+    const std::vector<std::string> &paths,
+    const std::array<char[max_item_size], item_count> &write_data,
+    const size_t iteration_count) {
+  std::array<struct viovec, item_count> v;
+  for (size_t t = 0; t < iteration_count; t++) {
+    for (size_t i = 0; i < item_count; ++i) {
+      viov2path(&v[i], paths[i].c_str(), 0, sizeof(write_data[i]),
+                (char *)write_data[i]);
+    }
+    EXPECT_OK(vec_write(v.data(), item_count, true));
+  }
+}
+
+template <size_t item_count, size_t max_item_size>
+void execute_read(
+    const std::vector<std::string> &paths,
+    const std::vector<std::array<char[max_item_size], item_count>> &write_sets,
+    const bool &writers_finished) {
+  std::array<struct viovec, item_count> v;
+  std::array<char[max_item_size], item_count> buffer{0};
+
+  const size_t buflen = item_count * max_item_size;
+
+  while (!writers_finished) {
+    std::vector<std::string> read_set;
+    for (size_t i = 0; i < item_count; ++i) {
+      viov2path(&v[i], paths[i].c_str(), 0, max_item_size, buffer[i]);
+    }
+    EXPECT_OK(vec_read(v.data(), item_count, true));
+
+    bool is_expected = false;
+    for (const auto &write_set : write_sets) {
+      is_expected |= (memcmp(buffer.data(), write_set.data(), buflen) == 0);
+    }
+
+    if (!is_expected) {
+      for (size_t i = 0; i < item_count; i++) {
+        std::cout << buffer[i] << " ";
+      }
+      std::cout << "\n";
+      FAIL();
+    }
+  }
+}
+TYPED_TEST_P(TcTxnTest, SerializabilityRW) {
+  const std::string dir("serializable-rw");
+  std::srand(std::time(0));
+
+  /* max size of each write */
+  constexpr size_t max_write_size = 40;
+
+  /* number of files to be written, should be same as number of element in
+   * each write set */
+  constexpr size_t num_writes = 3;
+
+  std::vector<std::string> paths;
+  for (size_t i = 0; i < num_writes; i++) {
+    fs::path p = dir;
+    p = p / std::to_string(i);
+    paths.emplace_back(p.string());
+  }
+
+  EXPECT_EQ(paths.size(), num_writes);
+
+  /* each thread performs a write with values in the set */
+  const std::vector<std::array<char[max_write_size], num_writes>> write_sets{
+      std::array<char[max_write_size], num_writes>{"apple", "banana", "mango"},
+      std::array<char[max_write_size], num_writes>{"new york", "california",
+                                                   "texas"}};
+  /* reader and writer threads */
+  std::vector<std::thread> writer_threads, reader_threads;
+
+  /* create base dir */
+  ASSERT_TRUE(tc::sca_mkdir(dir, 0777));
+
+  /* create files in paths[] and write from set1 */
+  execute_create(paths, write_sets[0]);
+
+  bool writers_finished = false;
+  /* start a thread performing VWrite with values in each write set */
+  for (size_t i = 0; i < FLAGS_nwriter_threads; i++) {
+    const auto &write_set = write_sets[std::rand() % write_sets.size()];
+    writer_threads.emplace_back(execute_write<num_writes, max_write_size>,
+                                std::ref(paths), std::ref(write_set),
+                                FLAGS_nwriter_iterations);
+  }
+
+  /* read from files */
+  for (size_t i = 0; i < FLAGS_nreader_threads; i++) {
+    reader_threads.emplace_back(execute_read<num_writes, max_write_size>,
+                                std::ref(paths), std::ref(write_sets),
+                                std::ref(writers_finished));
+  }
+
+  /* wait for threads */
+  for (auto &thread : writer_threads) {
+    thread.join();
+  }
+  writers_finished = true;
+  for (auto &thread : reader_threads) {
+    thread.join();
+  }
+
+  EXPECT_OK(tc::sca_unlink_recursive(dir));
+}
+
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
                            BadFileCreation2, BadOpenWithTrunc, BadRemove,
                            BadRemoveCheckContent, BadCreationWithExisting,
                            BadLink, BadSymLink, BadWrite, BadWriteMiddle,
                            BadWriteExpanding, UUIDOpenExclFlagCheck,
-                           UUIDOpenFlagCheck, UUIDReadFlagCheck);
+                           UUIDOpenFlagCheck, UUIDReadFlagCheck,
+                           SerializabilityRW);
 
 typedef ::testing::Types<TcNFS4Impl> TcTxnImpls;
-INSTANTIATE_TYPED_TEST_CASE_P(TC, TcTxnTest, TcTxnImpls);
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+
+  gflags::SetUsageMessage(
+      "Note: Flags are only used for multi-threaded Serializability tests");
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  INSTANTIATE_TYPED_TEST_CASE_P(TC, TcTxnTest, TcTxnImpls);
+
+  return RUN_ALL_TESTS();
+}
