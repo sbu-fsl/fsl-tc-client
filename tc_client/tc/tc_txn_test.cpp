@@ -16,6 +16,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301 USA
  */
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -636,15 +637,25 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
 }
 
 void execute_posix_path_exists(const std::vector<std::string> &paths,
-                               std::string &posix_base,
+                               const std::string &posix_base,
                                const bool &writers_finished) {
+  EXPECT_GT(paths.size(), 0);
+  /* path to test directory */
+  auto base_dir = fs::path(paths[0]).parent_path();
+  /* Get absolute path to NFS directory on server */
+  auto abs_path = fs::absolute(posix_base) / base_dir;
   while (!writers_finished) {
     size_t count = 0;
-    for (auto &p : paths) {
-      if (posix_exists(posix_base, p)) {
-        count++;
-      }
+    DIR *dir = opendir(abs_path.c_str());
+    EXPECT_NOTNULL(dir);
+    struct dirent *entry = NULL;
+    while ((entry = readdir(dir)) != NULL) {
+      // ignore special directories
+      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+        continue;
+      count++;
     }
+    closedir(dir);
     EXPECT_TRUE(count == 0 || count == paths.size()) << "count: " << count;
   }
 }
