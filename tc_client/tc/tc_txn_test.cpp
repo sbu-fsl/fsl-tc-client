@@ -635,8 +635,9 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
     vec_close(files, paths.size());
 }
 
-void execute_open(const std::vector<std::string> &paths,
-                  std::string &posix_base, const bool &writers_finished) {
+void execute_posix_path_exists(const std::vector<std::string> &paths,
+                               std::string &posix_base,
+                               const bool &writers_finished) {
   while (!writers_finished) {
     size_t count = 0;
     for (auto &p : paths) {
@@ -647,9 +648,17 @@ void execute_open(const std::vector<std::string> &paths,
     EXPECT_TRUE(count == 0 || count == paths.size()) << "count: " << count;
   }
 }
+void execute_create_remove_dir(const std::vector<std::string> &paths,
+                               const size_t iteration_count) {
+  for (size_t t = 0; t < iteration_count; t++) {
+    EXPECT_TRUE(tc::vec_mkdir_simple(paths, 0777));
+
+    EXPECT_OK(tc::vec_unlink(paths));
+  }
+}
 
 template <size_t item_count, size_t max_item_size>
-void execute_create_remove(
+void execute_create_remove_file(
     const std::vector<std::string> &paths,
     const std::array<char[max_item_size], item_count> &write_data,
     const size_t iteration_count) {
@@ -791,9 +800,8 @@ TYPED_TEST_P(TcTxnTest, SerializabilityRW) {
   EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
 
-TYPED_TEST_P(TcTxnTest, SerializabilityCR) {
-  const std::string dir("serializable-cr");
-  std::srand(std::time(0));
+TYPED_TEST_P(TcTxnTest, SerializabilityFileCR) {
+  const std::string dir("serializable-file-cr");
 
   /* max size of each write */
   constexpr size_t max_write_size = 40;
@@ -824,12 +832,53 @@ TYPED_TEST_P(TcTxnTest, SerializabilityCR) {
 
   /* create files in paths[] and write from set1 */
   create_remove_thread = std::thread(
-      execute_create_remove<num_writes, max_write_size>, std::ref(paths),
+      execute_create_remove_file<num_writes, max_write_size>, std::ref(paths),
       std::ref(write_set), FLAGS_nwriter_iterations);
 
   /* use posix api's to verify either all files exist or none */
   for (size_t i = 0; i < FLAGS_nreader_threads; i++) {
-    open_threads.emplace_back(execute_open, std::ref(paths),
+    open_threads.emplace_back(execute_posix_path_exists, std::ref(paths),
+                              std::ref(this->posix_base),
+                              std::ref(writers_finished));
+  }
+
+  /* wait for threads */
+  create_remove_thread.join();
+  writers_finished = true;
+  for (auto &thread : open_threads) {
+    thread.join();
+  }
+
+  EXPECT_OK(tc::sca_unlink_recursive(dir));
+}
+TYPED_TEST_P(TcTxnTest, SerializabilityDirCR) {
+  const std::string dir("serializable-dir-cr");
+
+  /* number of directories */
+  constexpr size_t num_directories = 3;
+
+  std::vector<std::string> paths;
+  for (size_t i = 0; i < num_directories; i++) {
+    fs::path p = dir;
+    p = p / std::to_string(i);
+    paths.emplace_back(p.string());
+  }
+
+  /* creator + remover and open threads */
+  std::thread create_remove_thread;
+  std::vector<std::thread> open_threads;
+
+  /* create base dir */
+  ASSERT_TRUE(tc::sca_mkdir(dir, 0777));
+  bool writers_finished = false;
+
+  /* create files in paths[] and write from set1 */
+  create_remove_thread = std::thread(execute_create_remove_dir, std::ref(paths),
+                                     FLAGS_nwriter_iterations);
+
+  /* use posix api's to verify either all files exist or none */
+  for (size_t i = 0; i < FLAGS_nreader_threads; i++) {
+    open_threads.emplace_back(execute_posix_path_exists, std::ref(paths),
                               std::ref(this->posix_base),
                               std::ref(writers_finished));
   }
@@ -849,7 +898,8 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
                            BadLink, BadSymLink, BadWrite, BadWriteMiddle,
                            BadWriteExpanding, UUIDOpenExclFlagCheck,
                            UUIDOpenFlagCheck, UUIDReadFlagCheck,
-                           SerializabilityRW, SerializabilityCR);
+                           SerializabilityRW, SerializabilityFileCR,
+                           SerializabilityDirCR);
 
 typedef ::testing::Types<TcNFS4Impl> TcTxnImpls;
 int main(int argc, char **argv) {
