@@ -637,13 +637,13 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
 }
 
 void execute_posix_path_exists(const std::vector<std::string> &paths,
-                               const std::string &posix_base,
+                               const std::string &base,
                                const bool &writers_finished) {
   EXPECT_GT(paths.size(), 0);
   /* path to test directory */
   auto base_dir = fs::path(paths[0]).parent_path();
   /* Get absolute path to NFS directory on server */
-  auto abs_path = fs::absolute(posix_base) / base_dir;
+  auto abs_path = fs::absolute(base) / base_dir;
   while (!writers_finished) {
     size_t count = 0;
     DIR *dir = opendir(abs_path.c_str());
@@ -849,7 +849,7 @@ TYPED_TEST_P(TcTxnTest, SerializabilityFileCR) {
   /* use posix api's to verify either all files exist or none */
   for (size_t i = 0; i < FLAGS_nreader_threads; i++) {
     open_threads.emplace_back(execute_posix_path_exists, std::ref(paths),
-                              std::ref(this->posix_base),
+                              std::ref(this->nfs_base),
                               std::ref(writers_finished));
   }
 
@@ -890,7 +890,7 @@ TYPED_TEST_P(TcTxnTest, SerializabilityDirCR) {
   /* use posix api's to verify either all files exist or none */
   for (size_t i = 0; i < FLAGS_nreader_threads; i++) {
     open_threads.emplace_back(execute_posix_path_exists, std::ref(paths),
-                              std::ref(this->posix_base),
+                              std::ref(this->nfs_base),
                               std::ref(writers_finished));
   }
 
