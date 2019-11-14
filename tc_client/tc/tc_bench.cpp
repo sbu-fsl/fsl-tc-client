@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <gflags/gflags.h>
 #include <benchmark/benchmark.h>
 
 #include "tc_api.h"
@@ -34,6 +35,7 @@ using std::vector;
 using namespace benchmark;
 
 const size_t BUFSIZE = 4096;
+DEFINE_bool(tc, true, "Use vNFS compounding");
 
 static void ResetTestDirectory(const char *dir)
 {
@@ -590,8 +592,8 @@ static void TearDown(void *context)
 int main(int argc, char **argv)
 {
 	benchmark::Initialize(&argc, argv);
-	bool istc = argc > 1 && !strcmp("tc", argv[1]);
-	void *context = SetUp(istc);
+	gflags::ParseCommandLineFlags(&argc, &argv, true);
+	void *context = SetUp(FLAGS_tc);
 	sca_chdir("/vfs0");
 	benchmark::RunSpecifiedBenchmarks();
 	TearDown(context);
