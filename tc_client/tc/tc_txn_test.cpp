@@ -220,7 +220,6 @@ TYPED_TEST_P(TcTxnTest, BadOpenWithTrunc) {
   const int n = paths.size();
   struct viovec *v1 = (struct viovec *)calloc(n, sizeof(*v1));
   ASSERT_NE(v1, nullptr);
-
   for (int i = 0; i < n; ++i) {
     viov2file(&v1[i], &files[i], 0, datasize, getRandomBytes(datasize));
   }
@@ -903,6 +902,64 @@ TYPED_TEST_P(TcTxnTest, SerializabilityDirCR) {
 
   EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
+
+TYPED_TEST_P(TcTxnTest, MultipleWritesOnSameFile) {
+  const std::string dir("multiple-writes-on-same-file");
+  std::srand(std::time(0));
+
+  /* max size of each write */
+  constexpr size_t max_write_size = 256;
+
+  /* number of files to be written, should be same as number of element in
+   * each write set */
+  constexpr size_t num_writes = 3;
+  constexpr size_t total_data_size = 1024;
+  char *data = getRandomBytes(total_data_size);
+
+  std::vector<std::string> paths;
+  for (size_t i = 0; i < num_writes; i++) {
+    fs::path p = dir;
+    p = p / std::to_string(i);
+    paths.emplace_back(p.string());
+  }
+
+  std::array<size_t, num_writes> offsets{0};
+  size_t completed_files = 0;
+
+  std::vector<struct viovec> v;
+  while (completed_files < num_writes) {
+    for (size_t i = 0; i < num_writes; ++i) {
+      if (offsets[i] < total_data_size) {
+        /* random write size */
+        size_t write_size = std::min(std::rand() % max_write_size,
+                                     total_data_size - offsets[i]);
+        struct viovec iovec;
+        viov2path(&iovec, paths[i].c_str(), offsets[i], write_size,
+                  &data[offsets[i]]);
+        offsets[i] += write_size;
+
+        if (offsets[i] == total_data_size) {
+          completed_files++;
+        }
+        v.emplace_back(iovec);
+      }
+    }
+  }
+
+  EXPECT_OK(vec_write(v.data(), num_writes, true));
+
+  // all the files should have the same data
+  std::array<char[total_data_size], num_writes> buffer{0};
+
+  for (size_t i = 0; i < num_writes; ++i) {
+    viov2path(&v[i], paths[i].c_str(), 0, total_data_size, buffer[i]);
+  }
+  EXPECT_OK(vec_read(v.data(), num_writes, true));
+  for (size_t i = 0; i < num_writes; ++i) {
+    EXPECT_EQ(memcmp(buffer[i], data, total_data_size), 0);
+  }
+}
+
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
                            BadFileCreation2, BadOpenWithTrunc, BadRemove,
                            BadRemoveCheckContent, BadCreationWithExisting,
@@ -910,7 +967,7 @@ REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
                            BadWriteExpanding, UUIDOpenExclFlagCheck,
                            UUIDOpenFlagCheck, UUIDReadFlagCheck,
                            SerializabilityRW, SerializabilityFileCR,
-                           SerializabilityDirCR);
+                           SerializabilityDirCR, MultipleWritesOnSameFile);
 
 typedef ::testing::Types<TcNFS4Impl> TcTxnImpls;
 int main(int argc, char **argv) {
