@@ -56,8 +56,9 @@ static char *GetFilePath(const char *dir, int i) {
   return p;
 }
 
-void worker(const char *dir, int start_num, int nfiles, size_t file_size) {
+void worker(const char *dir, std::vector<int> &filenums, size_t file_size) {
   int files_finished = 0;
+  int nfiles = filenums.size();
   /* bytes_finished: Amount of data read/written */
   vector<size_t> bytes_finished(nfiles, 0);  // per file
   /* bytes_reading: Amount of data pending in iovec but not committed */
@@ -85,7 +86,7 @@ void worker(const char *dir, int start_num, int nfiles, size_t file_size) {
           kIoSizeThreshold, file_size - (bytes_finished[i] + bytes_reading[i]));
       iosize = std::min(iosize, kSizeLimit - bytes);
 
-      viov2path(&iov, GetFilePath(dir, i + start_num),
+      viov2path(&iov, GetFilePath(dir, filenums[i]),
                 bytes_finished[i] + bytes_reading[i], iosize, data + bytes);
       iovs.push_back(std::move(iov));
 
@@ -146,19 +147,37 @@ void Run(const char *dir) {
   size_t total_size = file_size * total_files;
   free(sample_path);
 
+  /* distribute tasks */
+  std::vector<std::vector<int> > worklist;
+  int filenum = 0;
+  bool has_leftover = (total_files % nthreads > 0);
+  for (int i = 0; i < nthreads; ++i) {
+    std::vector<int> tasks;
+    int ntasks = total_files / nthreads;
+    if (has_leftover && i == nthreads - 1) {
+      ntasks += total_files % nthreads;
+    }
+    for (int fn = 0; fn < ntasks; ++fn) {
+      tasks.push_back(fn + filenum);
+    }
+    worklist.push_back(tasks);
+    filenum += ntasks;
+
+    if (FLAGS_verbose) {
+      printf("thread %d: works: ", i);
+      for (int fn : tasks) {
+        printf("%d ", fn);
+      }
+      printf("\n");
+    }
+  }
+
   /* start timer */
   auto start = std::chrono::high_resolution_clock::now();
 
   /* apply threads */
-  int filenum = 0;
-  int files_per_thread = total_files / nthreads;
   for (int i = 0; i < nthreads; ++i) {
-    int nfiles = files_per_thread;
-    if (i == nthreads - 1 && total_files % nthreads > 0) {
-      nfiles += total_files % nthreads;
-    }
-    threads.emplace_back(worker, dir, filenum, nfiles, file_size);
-    filenum += nfiles;
+    threads.emplace_back(worker, dir, std::ref(worklist[i]), file_size);
   }
 
   /* wait for worker threads to finish */
