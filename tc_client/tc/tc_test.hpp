@@ -116,6 +116,7 @@ template <typename T>
 class TcTxnTest : public TcTest<T> {
 public:
   std::string posix_base;
+  std::string nfs_base;
 
   static void SetUpTestCase() {
     TcTest<T>::SetUpTestCase();
@@ -128,6 +129,7 @@ public:
   void SetUp() override {
     TcTest<T>::SetUp();
     posix_base = "/tcserver/tc_nfs4_test/";
+    nfs_base = "/vfs0/tc_nfs4_test/";
   }
 
   void TearDown() override {
