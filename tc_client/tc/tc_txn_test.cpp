@@ -906,13 +906,14 @@ TYPED_TEST_P(TcTxnTest, SerializabilityDirCR) {
 TYPED_TEST_P(TcTxnTest, MultipleWritesOnSameFile) {
   const std::string dir("multiple-writes-on-same-file");
   std::srand(std::time(0));
+  ASSERT_TRUE(tc::sca_mkdir(dir, 0777));
 
   /* max size of each write */
   constexpr size_t max_write_size = 256;
 
   /* number of files to be written, should be same as number of element in
    * each write set */
-  constexpr size_t num_writes = 3;
+  constexpr size_t num_writes = 5;
   constexpr size_t total_data_size = 1024;
   char *data = getRandomBytes(total_data_size);
 
@@ -924,14 +925,21 @@ TYPED_TEST_P(TcTxnTest, MultipleWritesOnSameFile) {
   }
 
   std::array<size_t, num_writes> offsets{0};
-  size_t completed_files = 0;
-
   std::vector<struct viovec> v;
+  size_t completed_files = 0;
+  /* create the files */
+  {
+    vfile *files = tc::vec_open_simple(paths, O_CREAT | O_RDWR, 0666);
+    EXPECT_NOTNULL(files);
+    vec_close(files, num_writes);
+  }
+
+  /* build vwrite compound */
   while (completed_files < num_writes) {
     for (size_t i = 0; i < num_writes; ++i) {
       if (offsets[i] < total_data_size) {
         /* random write size */
-        size_t write_size = std::min(std::rand() % max_write_size,
+        size_t write_size = std::min((std::rand() % max_write_size) + 1,
                                      total_data_size - offsets[i]);
         struct viovec iovec;
         viov2path(&iovec, paths[i].c_str(), offsets[i], write_size,
@@ -946,18 +954,22 @@ TYPED_TEST_P(TcTxnTest, MultipleWritesOnSameFile) {
     }
   }
 
-  EXPECT_OK(vec_write(v.data(), num_writes, true));
+  EXPECT_OK(vec_write(v.data(), v.size(), true));
 
-  // all the files should have the same data
+  /* all the files should have the same data */
   std::array<char[total_data_size], num_writes> buffer{0};
 
-  for (size_t i = 0; i < num_writes; ++i) {
-    viov2path(&v[i], paths[i].c_str(), 0, total_data_size, buffer[i]);
+  {
+    std::array<struct viovec, num_writes> v;
+    for (size_t i = 0; i < num_writes; ++i) {
+      viov2path(&v[i], paths[i].c_str(), 0, total_data_size, buffer[i]);
+    }
+    EXPECT_OK(vec_read(v.data(), num_writes, true));
   }
-  EXPECT_OK(vec_read(v.data(), num_writes, true));
   for (size_t i = 0; i < num_writes; ++i) {
     EXPECT_EQ(memcmp(buffer[i], data, total_data_size), 0);
   }
+  EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
 
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
