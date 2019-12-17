@@ -82,6 +82,7 @@ endfunction (add_unittest)
 
 add_unittest(tc_test tc_impl)
 add_unittest(tc_txn_test tc_impl)
+add_unittest(tc_lock_test tc_impl)
 add_unittest(tc_datacache_test tc_impl)
 
 find_package(gflags REQUIRED)
