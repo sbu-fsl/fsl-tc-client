@@ -669,42 +669,6 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck)
 		vec_close(files, paths.size());
 }
 
-void execute_posix_path_exists(const std::vector<std::string> &paths,
-			       const std::string &base,
-			       const bool &writers_finished)
-{
-	EXPECT_GT(paths.size(), 0);
-	/* path to test directory */
-	auto base_dir = fs::path(paths[0]).parent_path();
-	/* Get absolute path to NFS directory on server */
-	auto abs_path = fs::absolute(base) / base_dir;
-	while (!writers_finished) {
-		size_t count = 0;
-		DIR *dir = opendir(abs_path.c_str());
-		EXPECT_NOTNULL(dir);
-		struct dirent *entry = NULL;
-		while ((entry = readdir(dir)) != NULL) {
-			// ignore special directories
-			if (strcmp(entry->d_name, ".") == 0 ||
-			    strcmp(entry->d_name, "..") == 0)
-				continue;
-			count++;
-		}
-		closedir(dir);
-		EXPECT_TRUE(count == 0 || count == paths.size())
-		    << "count: " << count;
-	}
-}
-void execute_create_remove_dir(const std::vector<std::string> &paths,
-			       const size_t iteration_count)
-{
-	for (size_t t = 0; t < iteration_count; t++) {
-		EXPECT_TRUE(tc::vec_mkdir_simple(paths, 0777));
-
-		EXPECT_OK(tc::vec_unlink(paths));
-	}
-}
-
 REGISTER_TYPED_TEST_CASE_P(TcTxnTest, BadMkdir, BadMkdir2, BadFileCreation,
 			   BadFileCreation2, BadOpenWithTrunc, BadRemove,
 			   BadRemoveCheckContent, BadCreationWithExisting,

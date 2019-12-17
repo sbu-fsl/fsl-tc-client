@@ -54,6 +54,10 @@ DEFINE_int32(nreader_threads, 5, "Number of reader threads");
 /* number of operations in writer thread */
 DEFINE_int32(nwriter_iterations, 50, "Number of iterations in writer thread");
 
+DEFINE_bool(skip_test_setup, false,
+	    "Skip directory and file creation or removal. Needed for "
+	    "running tests across multiple process.");
+
 TYPED_TEST_CASE_P(TcLockTest);
 
 void execute_posix_path_exists(const std::vector<std::string> &paths,
@@ -213,11 +217,11 @@ TYPED_TEST_P(TcLockTest, SerializabilityRW)
 	std::vector<std::thread> writer_threads, reader_threads;
 
 	/* create base dir */
-	(tc::sca_mkdir(dir, 0777));
-
+	if (!FLAGS_skip_test_setup) {
+		EXPECT_TRUE(tc::sca_mkdir(dir, 0777));
+	}
 	/* create files in paths[] and write from set1 */
 	execute_create(paths, write_sets[0]);
-
 	bool writers_finished = false;
 	/* start a thread performing VWrite with values in each write set */
 	for (size_t i = 0; i < FLAGS_nwriter_threads; i++) {
@@ -244,7 +248,9 @@ TYPED_TEST_P(TcLockTest, SerializabilityRW)
 		thread.join();
 	}
 
-	EXPECT_OK(tc::sca_unlink_recursive(dir));
+	if (!FLAGS_skip_test_setup) {
+		EXPECT_OK(tc::sca_unlink_recursive(dir));
+	}
 }
 
 TYPED_TEST_P(TcLockTest, SerializabilityFileCR)
