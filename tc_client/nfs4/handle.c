@@ -52,6 +52,7 @@
 #include "nfs4_util.h"
 #include "tc_helper.h"
 #include "session_slots.h"
+#include "log.h"
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -303,6 +304,8 @@ static int nfsstat4_to_errno(nfsstat4 nfsstat)
 		return ESTALE;
         } else {
 		assert(nfsstat >= NFS4ERR_BADHANDLE); /* 10001 */
+		LogWarn(COMPONENT_NFS_V4, "NFS server status %d is converted"
+			"to EREMOTEIO as errno", nfsstat);
 		return EREMOTEIO;
         }
 }
@@ -3759,10 +3762,11 @@ void fattr4_to_vattrs(const fattr4 *attr4, struct vattrs *tca)
 {
         struct attrlist attrlist;
 
+	nfsstat4 status;
         /* FIXME: void the const cast */
-	if (nfs4_Fattr_To_FSAL_attr(&attrlist, (fattr4 *)attr4, NULL) !=
-	    NFS4_OK) {
-		NFS4_ERR("cannot decode NFS attributes");
+	status = nfs4_Fattr_To_FSAL_attr(&attrlist, (fattr4 *)attr4, NULL);
+	if (status != NFS4_OK) {
+		NFS4_ERR("cannot decode NFS attributes: %d", status);
                 assert(false);
         }
 
