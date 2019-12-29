@@ -44,6 +44,8 @@ DEFINE_int32(nfiles, 1000, "Number of files");
 
 DEFINE_int32(nthreads, 4, "Number of threads to r/w concurrently");
 
+DEFINE_int32(overlap, 0, "Percentage of access overlap (0-100)");
+
 using std::vector;
 
 const size_t kSizeLimit = (16 << 20);
@@ -150,18 +152,22 @@ void Run(const char *dir) {
   /* distribute tasks */
   std::vector<std::vector<int> > worklist;
   int filenum = 0;
-  bool has_leftover = (total_files % nthreads > 0);
+  int files_per_thread = total_files / nthreads;
+  int overlap_rate = FLAGS_overlap;
+  int commons = files_per_thread * overlap_rate / 100;
+  int independants = files_per_thread - commons;
   for (int i = 0; i < nthreads; ++i) {
     std::vector<int> tasks;
-    int ntasks = total_files / nthreads;
-    if (has_leftover && i == nthreads - 1) {
-      ntasks += total_files % nthreads;
-    }
-    for (int fn = 0; fn < ntasks; ++fn) {
+    /* Add independent tasks */
+    for (int fn = 0; fn < independants; ++fn) {
       tasks.push_back(fn + filenum);
     }
+    /* Add common/overlapping tasks */
+    for (int fn = total_files - 1; fn >= total_files - commons; --fn) {
+      tasks.push_back(fn);
+    }
     worklist.push_back(tasks);
-    filenum += ntasks;
+    filenum += independants;
 
     if (FLAGS_verbose) {
       printf("thread %d: works: ", i);
