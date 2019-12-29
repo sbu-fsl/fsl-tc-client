@@ -201,12 +201,25 @@ void Run(const char *dir) {
   TearDown(tcdata);
 }
 
+bool checkParameter(void) {
+    bool res = true;
+    if (FLAGS_overlap < 0 || FLAGS_overlap > 100) {
+        fprintf(stderr, "Overlap rate should be in range of 0-100.\n");
+        res = false;
+    }
+    return res;
+}
+
 int main(int argc, char *argv[]) {
   std::string usage("This program issues read requests to files.\nUsage: ");
   usage += argv[0];
   usage += "  <dir-path>";
   gflags::SetUsageMessage(usage);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
+  if (!checkParameter()) {
+      fprintf(stderr, "There is one or more error(s) in the CMD parameter.\n");
+      return 1;
+  }
   Run(argv[1]);
   return 0;
 }
