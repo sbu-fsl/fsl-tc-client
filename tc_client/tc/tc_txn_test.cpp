@@ -632,8 +632,7 @@ TYPED_TEST_P(TcTxnTest, UUIDReadFlagCheck) {
 
   files = tc::vec_open_simple(paths, 0, 0);
   EXPECT_EQ(files, nullptr);
-  if (files)
-    vec_close(files, paths.size());
+  if (files) vec_close(files, paths.size());
 }
 
 void execute_posix_path_exists(const std::vector<std::string> &paths,

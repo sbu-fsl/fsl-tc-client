@@ -47,8 +47,9 @@ DEFINE_int32(nthreads, 4, "Number of threads to r/w concurrently");
 
 DEFINE_int32(overlap, 0, "Percentage of access overlap (0-100)");
 
-DEFINE_string(overlap_style, "rear", "How to place overlap?"
-        "(front, rear, random)");
+DEFINE_string(overlap_style, "rear",
+              "How to place overlap?"
+              "(front, rear, random)");
 
 using std::vector;
 
@@ -141,47 +142,41 @@ void worker(const char *dir, std::vector<int> &filenums, size_t file_size) {
   free(data);
 }
 
-void arrangeTask(int indivStart, int indivEnd, int commonStart, int commonEnd, std::vector<int> &tasks, std::string style)
-{
-    if (style == "front") {
-        for (int i = commonStart; i < commonEnd; ++i)
-            tasks.push_back(i);
-        for (int i = indivStart; i < indivEnd; ++i)
-            tasks.push_back(i);
-    } else if (style == "rear") {
-        for (int i = indivStart; i < indivEnd; ++i)
-            tasks.push_back(i);
-        for (int i = commonStart; i < commonEnd; ++i)
-            tasks.push_back(i);
-    } else if (style == "random") {
-        int p1 = indivStart, p2 = commonStart;
-        int total = (indivEnd - indivStart) + (commonEnd - commonStart);
-        float commonProb = 1.0 * (commonEnd - commonStart) / total;
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> uniform_rand(0.0, 1.0);
-        while (p1 < indivEnd && p2 < commonEnd) {
-            float rn = uniform_rand(gen);
-            if (rn <= commonProb) {
-                /* Add a common task */
-                tasks.push_back(p2);
-                ++p2;
-            } else {
-                /* Add a individual task */
-                tasks.push_back(p1);
-                ++p1;
-            }
-        }
-        /* Add the rest if there are remainings */
-        if (p1 < indivEnd) {
-            for (int i = p1; i < indivEnd; ++i)
-                tasks.push_back(i);
-        }
-        if (p2 < commonEnd) {
-            for (int i = p2; i < commonEnd; ++i)
-                tasks.push_back(i);
-        }
+void arrangeTask(int indivStart, int indivEnd, int commonStart, int commonEnd,
+                 std::vector<int> &tasks, std::string style) {
+  if (style == "front") {
+    for (int i = commonStart; i < commonEnd; ++i) tasks.push_back(i);
+    for (int i = indivStart; i < indivEnd; ++i) tasks.push_back(i);
+  } else if (style == "rear") {
+    for (int i = indivStart; i < indivEnd; ++i) tasks.push_back(i);
+    for (int i = commonStart; i < commonEnd; ++i) tasks.push_back(i);
+  } else if (style == "random") {
+    int p1 = indivStart, p2 = commonStart;
+    int total = (indivEnd - indivStart) + (commonEnd - commonStart);
+    float commonProb = 1.0 * (commonEnd - commonStart) / total;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> uniform_rand(0.0, 1.0);
+    while (p1 < indivEnd && p2 < commonEnd) {
+      float rn = uniform_rand(gen);
+      if (rn <= commonProb) {
+        /* Add a common task */
+        tasks.push_back(p2);
+        ++p2;
+      } else {
+        /* Add a individual task */
+        tasks.push_back(p1);
+        ++p1;
+      }
     }
+    /* Add the rest if there are remainings */
+    if (p1 < indivEnd) {
+      for (int i = p1; i < indivEnd; ++i) tasks.push_back(i);
+    }
+    if (p2 < commonEnd) {
+      for (int i = p2; i < commonEnd; ++i) tasks.push_back(i);
+    }
+  }
 }
 
 void Run(const char *dir) {
@@ -205,7 +200,8 @@ void Run(const char *dir) {
   int independants = files_per_thread - commons;
   for (int i = 0; i < nthreads; ++i) {
     std::vector<int> tasks;
-    arrangeTask(filenum, filenum + independants, total_files - commons, total_files, tasks, FLAGS_overlap_style);
+    arrangeTask(filenum, filenum + independants, total_files - commons,
+                total_files, tasks, FLAGS_overlap_style);
     worklist.push_back(tasks);
     filenum += independants;
 
@@ -242,17 +238,17 @@ void Run(const char *dir) {
 }
 
 bool checkParameter(void) {
-    bool res = true;
-    if (FLAGS_overlap < 0 || FLAGS_overlap > 100) {
-        fprintf(stderr, "Overlap rate should be in range of 0-100.\n");
-        res = false;
-    }
-    if (FLAGS_overlap_style != "rear" && FLAGS_overlap_style != "front"
-            && FLAGS_overlap_style != "random") {
-        fprintf(stderr, "Overlap style can only be front, rear or random.\n");
-        res = false;
-    }
-    return res;
+  bool res = true;
+  if (FLAGS_overlap < 0 || FLAGS_overlap > 100) {
+    fprintf(stderr, "Overlap rate should be in range of 0-100.\n");
+    res = false;
+  }
+  if (FLAGS_overlap_style != "rear" && FLAGS_overlap_style != "front" &&
+      FLAGS_overlap_style != "random") {
+    fprintf(stderr, "Overlap style can only be front, rear or random.\n");
+    res = false;
+  }
+  return res;
 }
 
 int main(int argc, char *argv[]) {
@@ -262,8 +258,8 @@ int main(int argc, char *argv[]) {
   gflags::SetUsageMessage(usage);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   if (!checkParameter()) {
-      fprintf(stderr, "There is one or more error(s) in the CMD parameter.\n");
-      return 1;
+    fprintf(stderr, "There is one or more error(s) in the CMD parameter.\n");
+    return 1;
   }
   Run(argv[1]);
   return 0;
