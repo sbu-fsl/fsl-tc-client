@@ -97,6 +97,9 @@ target_link_libraries(tc_bench_cache gflags ${tc_LIBS} ${GBENCH_LIBRARIES})
 add_executable(tc_rw_files tc_rw_files.cpp tc_bench_util.cpp)
 target_link_libraries(tc_rw_files gflags ${tc_LIBS})
 
+add_executable(tc_rw_files2 tc_rw_files2.cpp tc_bench_util.cpp)
+target_link_libraries(tc_rw_files2 gflags ${tc_LIBS})
+
 add_executable(tc_append tc_append.cpp)
 target_link_libraries(tc_append gflags ${tc_LIBS})
 
