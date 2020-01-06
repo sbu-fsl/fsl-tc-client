@@ -28,6 +28,8 @@
 #include <cstdio>
 #include <experimental/filesystem>
 #include <experimental/random>
+#include <fstream>
+#include <iostream>
 #include <list>
 #include <random>
 #include <string>
@@ -145,7 +147,7 @@ void execute_write(
 template <size_t item_count, size_t max_item_size>
 void execute_read(
     const std::vector<std::string> &paths,
-    const std::vector<std::array<char[max_item_size], item_count> > &write_sets,
+    const std::vector<std::array<char[max_item_size], item_count>> &write_sets,
     const bool &writers_finished) {
   std::array<struct viovec, item_count> v;
   std::array<char[max_item_size], item_count> buffer{0};
@@ -196,7 +198,7 @@ TYPED_TEST_P(TcLockTest, SerializabilityRW) {
   EXPECT_EQ(paths.size(), num_writes);
 
   /* each thread performs a write with values in the set */
-  const std::vector<std::array<char[max_write_size], num_writes> > write_sets{
+  const std::vector<std::array<char[max_write_size], num_writes>> write_sets{
       std::array<char[max_write_size], num_writes>{"apple", "banana", "mango"},
       std::array<char[max_write_size], num_writes>{"new york", "california",
                                                    "texas"}};
@@ -290,6 +292,7 @@ TYPED_TEST_P(TcLockTest, SerializabilityFileCR) {
 
   EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
+
 TYPED_TEST_P(TcLockTest, SerializabilityDirCR) {
   const std::string dir("serializable-dir-cr");
 
@@ -401,16 +404,136 @@ TYPED_TEST_P(TcLockTest, MultipleWritesOnSameFile) {
   EXPECT_OK(tc::sca_unlink_recursive(dir));
 }
 
+/*
+ * 3 threads performing the following renames in order
+ * Below are the order of renames and expected outputs
+ * 0 -> 1
+ * 1 -> 2
+ * 2 -> 0
+ *
+ * 0 - {0}
+ *
+ * 0 -> 1
+ * 2 -> 0
+ * 1 -> 2
+ *
+ * 0 - {2} 2 - {0}
+ *
+ * 1 -> 2
+ * 0 -> 1
+ * 2 -> 0
+ *
+ * 0 - {1}, 1 - {0}
+ *
+ * 1 -> 2
+ * 2 -> 0
+ * 0 -> 1
+ *
+ * 1 - {1}
+ *
+ * 2 -> 0
+ * 1 -> 2
+ * 0 -> 1
+ *
+ * 1 - {2}, 2 - {1}
+ *
+ * 2 -> 0
+ * 0 -> 1
+ * 1 -> 2
+ *
+ * 2 - {2}
+ */
+TYPED_TEST_P(TcLockTest, RenameInSameDirectory) {
+  const std::string dir("rename-in-same-directory");
+  std::srand(std::time(0));
+
+  constexpr size_t num_files = 3;
+  std::vector<std::string> paths;
+  for (size_t i = 0; i < num_files; i++) {
+    fs::path p = dir;
+    p = p / std::to_string(i);
+    paths.emplace_back(p.string());
+  }
+  /* max size of each write */
+  constexpr size_t max_write_size = 64;
+
+  std::array<char[max_write_size], num_files> writes{"file0", "file1", "file2"};
+  EXPECT_TRUE(tc::sca_mkdir(dir, 0777));
+
+  /* create files in paths[] and write from set1 */
+  execute_create(paths, writes);
+  std::thread rename_thread1([&paths] {
+    std::vector<vfile_pair> pairs;
+    vfile_pair vfp;
+    vfp.src_file = vfile_from_path(paths[0].c_str());
+    vfp.dst_file = vfile_from_path(paths[1].c_str());
+    pairs.push_back(vfp);
+    std::this_thread::sleep_for(std::chrono::milliseconds(std::rand() % 200));
+    EXPECT_OK(vec_rename(pairs.data(), pairs.size(), true));
+  });
+  std::thread rename_thread2([&paths] {
+    std::vector<vfile_pair> pairs;
+    vfile_pair vfp;
+    vfp.src_file = vfile_from_path(paths[1].c_str());
+    vfp.dst_file = vfile_from_path(paths[2].c_str());
+    pairs.push_back(vfp);
+    std::this_thread::sleep_for(std::chrono::milliseconds(std::rand() % 200));
+    EXPECT_OK(vec_rename(pairs.data(), pairs.size(), true));
+  });
+  std::thread rename_thread3([&paths] {
+    std::vector<vfile_pair> pairs;
+    vfile_pair vfp;
+    vfp.src_file = vfile_from_path(paths[2].c_str());
+    vfp.dst_file = vfile_from_path(paths[0].c_str());
+    pairs.push_back(vfp);
+    std::this_thread::sleep_for(std::chrono::milliseconds(std::rand() % 200));
+    EXPECT_OK(vec_rename(pairs.data(), pairs.size(), true));
+  });
+
+  rename_thread1.join();
+  rename_thread2.join();
+  rename_thread3.join();
+
+  /* check the generated state is valid */
+  std::vector<std::array<int, 3>> cases{{0, -1, -1}, {-1, 1, -1}, {-1, -1, 2},
+                                        {2, -1, 0},  {1, 0, -1},  {-1, 2, 1}};
+  std::array<int, 3> result{-1};
+  for (size_t i = 0; i < paths.size(); i++) {
+    fs::path full_path(this->posix_base);
+    full_path /= paths[i];
+    if (fs::exists(full_path)) {
+      std::ifstream infile(full_path);
+      std::string line;
+      std::getline(infile, line, '\0');
+      // get the file content index
+      result[i] = stoi(line.substr(4));
+    } else {
+      result[i] = -1;
+    }
+  }
+
+  bool found = false;
+  for (size_t i = 0; i < cases.size(); i++) {
+    if (memcmp(cases[i].data(), result.data(), sizeof(result)) == 0) {
+      found = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found) << "invalid state! " << result[0] << " " << result[1]
+                     << " " << result[2] << std::endl;
+  EXPECT_OK(tc::sca_unlink_recursive(dir));
+}
+
 REGISTER_TYPED_TEST_CASE_P(TcLockTest, SerializabilityRW, SerializabilityFileCR,
-                           SerializabilityDirCR, MultipleWritesOnSameFile);
+                           SerializabilityDirCR, MultipleWritesOnSameFile,
+                           RenameInSameDirectory);
 
 typedef ::testing::Types<TcNFS4Impl> TcLockImpls;
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
 
-  gflags::SetUsageMessage(
-      "Note: Flags are only used for multi-threaded "
-      "Serializability tests");
+  gflags::SetUsageMessage("Note: Flags are only used for multi-threaded "
+                          "Serializability tests");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   INSTANTIATE_TYPED_TEST_CASE_P(TC, TcLockTest, TcLockImpls);
 
