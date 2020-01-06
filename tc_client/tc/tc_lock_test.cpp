@@ -268,7 +268,7 @@ TYPED_TEST_P(TcLockTest, SerializabilityFileCR) {
   std::vector<std::thread> open_threads;
 
   /* create base dir */
-  (tc::sca_mkdir(dir, 0777) || fs::exists(fs::path(dir)));
+  EXPECT_TRUE(tc::sca_mkdir(dir, 0777));
   bool writers_finished = false;
 
   /* create files in paths[] and write from set1 */
@@ -311,7 +311,7 @@ TYPED_TEST_P(TcLockTest, SerializabilityDirCR) {
   std::vector<std::thread> open_threads;
 
   /* create base dir */
-  (tc::sca_mkdir(dir, 0777) || fs::exists(fs::path(dir)));
+  EXPECT_TRUE(tc::sca_mkdir(dir, 0777));
   bool writers_finished = false;
 
   /* create files in paths[] and write from set1 */
@@ -338,7 +338,7 @@ TYPED_TEST_P(TcLockTest, SerializabilityDirCR) {
 TYPED_TEST_P(TcLockTest, MultipleWritesOnSameFile) {
   const std::string dir("multiple-writes-on-same-file");
   std::srand(std::time(0));
-  (tc::sca_mkdir(dir, 0777) || fs::exists(fs::path(dir)));
+  EXPECT_TRUE(tc::sca_mkdir(dir, 0777));
 
   /* max size of each write */
   constexpr size_t max_write_size = 256;
