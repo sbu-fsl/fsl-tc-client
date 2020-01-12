@@ -260,8 +260,6 @@ void Run(const char *dir) {
       arrangeTask(filenum, filenum + independants, total_files - commons,
                   total_files, tasks, FLAGS_overlap_style);
       worklist.push_back(tasks);
-      /* Recalculate total-size because nfiles is manually specified */
-      total_size = file_size * tasks.size();
 
       if (FLAGS_verbose) {
         printf("thread %d: works: ", i);
@@ -274,6 +272,10 @@ void Run(const char *dir) {
   } else {
     std::vector<int> tasks = parse_tasklist(FLAGS_tasks);
     worklist.push_back(tasks);
+
+    /* Recalculate total-size because nfiles is manually specified */
+    total_size = file_size * tasks.size();
+
     if (FLAGS_verbose) {
       printf("Task list: ");
       for (int fn : tasks) {
