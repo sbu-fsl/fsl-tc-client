@@ -46,6 +46,8 @@ DEFINE_int32(nthreads, 4, "Number of threads to r/w concurrently");
 
 DEFINE_int32(overlap, 0, "Percentage of access overlap (0-100)");
 
+DEFINE_string(tasks, "", "Manually specify the task list");
+
 using std::vector;
 
 const size_t kSizeLimit = (16 << 20);
@@ -137,11 +139,65 @@ void worker(const char *dir, std::vector<int> &filenums, size_t file_size) {
   free(data);
 }
 
+std::vector<std::string> splitstr(const std::string &str,
+                                  const std::string &&delim) {
+  std::vector<std::string> tokens;
+  size_t prev = 0, pos = 0;
+  do {
+    pos = str.find(delim, prev);
+    if (pos == std::string::npos) {
+      /* If no deliminator is found? */
+      pos = str.length();
+    }
+    std::string token = str.substr(prev, pos - prev);
+    if (!token.empty()) tokens.push_back(token);
+    prev = pos + delim.length();
+  } while (prev < str.length() && pos < str.length());
+
+  return tokens;
+}
+
+/**
+ * Parse --tasks option argument.
+ * --tasks allows users to manually specify the list of files that this
+ *  benchmark program will access. This is intended for performing
+ *  physical multi-client benchmarks. If --tasks is specified then we assume
+ *  --nthreads is 1.
+ *
+ * The format of task list:
+ * n1,n2,n3,n4,r1-r2,n5,...
+ *    - An element can be an individual task or a task range.
+ *    - n1,n2,...,nX are individual task number.
+ *    - r1-r2 denotes a range [r1, r2]
+ *    - Each element is separated by commas.
+ */
+std::vector<int> parse_tasklist(const std::string &arg) {
+  std::vector<int> tasks;
+  std::vector<std::string> elements;
+
+  elements = splitstr(arg, ",");
+  for (std::string el : elements) {
+    std::vector<std::string> range = splitstr(el, "-");
+    if (range.size() == 1) {
+      tasks.push_back(std::stoi(range[0]));
+    } else if (range.size() == 2) {
+      int begin = std::stoi(range[0]);
+      int end = std::stoi(range[1]);
+      for (int i = begin; i <= end; ++i) tasks.push_back(i);
+    }
+  }
+
+  return tasks;
+}
+
 void Run(const char *dir) {
   int total_files = FLAGS_nfiles;
   int nthreads = FLAGS_nthreads;
   std::vector<std::thread> threads;
   void *tcdata = SetUp(FLAGS_tc);
+
+  /* If --task is specified, assume nthreads = 1 */
+  if (!FLAGS_tasks.empty()) nthreads = 1;
 
   /* Assume all files are equally sized */
   char *sample_path = GetFilePath(dir, 0);
@@ -151,26 +207,38 @@ void Run(const char *dir) {
 
   /* distribute tasks */
   std::vector<std::vector<int> > worklist;
-  int filenum = 0;
-  int files_per_thread = total_files / nthreads;
-  int overlap_rate = FLAGS_overlap;
-  int commons = files_per_thread * overlap_rate / 100;
-  int independants = files_per_thread - commons;
-  for (int i = 0; i < nthreads; ++i) {
-    std::vector<int> tasks;
-    /* Add independent tasks */
-    for (int fn = 0; fn < independants; ++fn) {
-      tasks.push_back(fn + filenum);
-    }
-    /* Add common/overlapping tasks */
-    for (int fn = total_files - 1; fn >= total_files - commons; --fn) {
-      tasks.push_back(fn);
-    }
-    worklist.push_back(tasks);
-    filenum += independants;
+  if (FLAGS_tasks.empty()) {
+    int filenum = 0;
+    int files_per_thread = total_files / nthreads;
+    int overlap_rate = FLAGS_overlap;
+    int commons = files_per_thread * overlap_rate / 100;
+    int independants = files_per_thread - commons;
+    for (int i = 0; i < nthreads; ++i) {
+      std::vector<int> tasks;
+      /* Add independent tasks */
+      for (int fn = 0; fn < independants; ++fn) {
+        tasks.push_back(fn + filenum);
+      }
+      /* Add common/overlapping tasks */
+      for (int fn = total_files - 1; fn >= total_files - commons; --fn) {
+        tasks.push_back(fn);
+      }
+      worklist.push_back(tasks);
+      filenum += independants;
 
+      if (FLAGS_verbose) {
+        printf("thread %d: works: ", i);
+        for (int fn : tasks) {
+          printf("%d ", fn);
+        }
+        printf("\n");
+      }
+    }
+  } else {
+    std::vector<int> tasks = parse_tasklist(FLAGS_tasks);
+    worklist.push_back(tasks);
     if (FLAGS_verbose) {
-      printf("thread %d: works: ", i);
+      printf("Task list: ");
       for (int fn : tasks) {
         printf("%d ", fn);
       }
