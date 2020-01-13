@@ -262,11 +262,11 @@ void Run(const char *dir) {
       worklist.push_back(tasks);
 
       if (FLAGS_verbose) {
-        printf("thread %d: works: ", i);
+        fprintf(stderr, "thread %d: works: ", i);
         for (int fn : tasks) {
-          printf("%d ", fn);
+          fprintf(stderr, "%d ", fn);
         }
-        printf("\n");
+        fprintf(stderr, "\n");
       }
     }
   } else {
@@ -277,11 +277,11 @@ void Run(const char *dir) {
     total_size = file_size * tasks.size();
 
     if (FLAGS_verbose) {
-      printf("Task list: ");
+      fprintf(stderr, "Task list: ");
       for (int fn : tasks) {
-        printf("%d ", fn);
+        fprintf(stderr, "%d ", fn);
       }
-      printf("\n");
+      fprintf(stderr, "\n");
     }
   }
 
