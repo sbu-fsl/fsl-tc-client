@@ -29,6 +29,7 @@
 
 #include <gflags/gflags.h>
 
+#include <algorithm>
 #include <chrono>
 #include <random>
 #include <string>
@@ -46,6 +47,8 @@ DEFINE_int32(nfiles, 1000, "Number of files");
 DEFINE_int32(nthreads, 4, "Number of threads to r/w concurrently");
 
 DEFINE_int32(overlap, 0, "Percentage of access overlap (0-100)");
+
+DEFINE_int32(min_time, 30, "Minimum runtime in secs?");
 
 DEFINE_string(tasks, "", "Manually specify the task list");
 
@@ -65,7 +68,8 @@ static char *GetFilePath(const char *dir, int i) {
   return p;
 }
 
-void worker(const char *dir, std::vector<int> &filenums, size_t file_size) {
+void worker(const char *dir, std::vector<int> &filenums, size_t file_size,
+            double &throughput) {
   int files_finished = 0;
   int nfiles = filenums.size();
   /* bytes_finished: Amount of data read/written */
@@ -75,7 +79,9 @@ void worker(const char *dir, std::vector<int> &filenums, size_t file_size) {
   const size_t kIoSizeThreshold = 1 << 20;
 
   char *data = (char *)malloc(kSizeLimit);
-  size_t bytes = 0;
+  size_t bytes = 0, total_bytes = 0;
+  auto start = std::chrono::high_resolution_clock::now();
+  double time_elapsed = 0.0;
 
   while (files_finished < nfiles) {
     vector<viovec> iovs;
@@ -128,18 +134,31 @@ void worker(const char *dir, std::vector<int> &filenums, size_t file_size) {
         ++i;
       }
       bytes_finished[i] += iovs[j].length;
-      if (bytes_finished[i] == file_size && new_files_finished == i) {
-        if (++new_files_finished % 100 == 0 && FLAGS_verbose) {
-          fprintf(stderr, "Finished %d files\n", new_files_finished);
-        }
-      }
+      total_bytes += iovs[j].length;
+      if (bytes_finished[i] == file_size && new_files_finished == i)
+        ++new_files_finished;
+
       free((char *)iovs[j].file.path);
       bytes_reading[i] = 0;
     }
 
     files_finished = new_files_finished;
     bytes = 0;
+    if (files_finished >= nfiles) {
+      auto end = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> timediff = end - start;
+      time_elapsed = timediff.count();
+      /* Reset context variables to loop again if time did not reach limit */
+      if (time_elapsed < FLAGS_min_time) {
+        files_finished = 0;
+        iovs.clear();
+        std::fill(bytes_finished.begin(), bytes_finished.end(), 0);
+      }
+    }
   }
+
+  /* Calculate throughput of this thread (in MB/s) */
+  throughput = 1.0 * total_bytes / 1000 / 1000 / time_elapsed;
 
   free(data);
 }
@@ -244,7 +263,6 @@ void Run(const char *dir) {
   /* Assume all files are equally sized */
   char *sample_path = GetFilePath(dir, 0);
   size_t file_size = GetFileSize(sample_path);
-  size_t total_size = file_size * total_files;
   free(sample_path);
 
   /* distribute tasks */
@@ -273,9 +291,6 @@ void Run(const char *dir) {
     std::vector<int> tasks = parse_tasklist(FLAGS_tasks);
     worklist.push_back(tasks);
 
-    /* Recalculate total-size because nfiles is manually specified */
-    total_size = file_size * tasks.size();
-
     if (FLAGS_verbose) {
       fprintf(stderr, "Task list: ");
       for (int fn : tasks) {
@@ -285,12 +300,15 @@ void Run(const char *dir) {
     }
   }
 
+  /* Individual throughput number per thread */
+  std::vector<double> tp_per_thread(nthreads);
   /* start timer */
   auto start = std::chrono::high_resolution_clock::now();
 
   /* apply threads */
   for (int i = 0; i < nthreads; ++i) {
-    threads.emplace_back(worker, dir, std::ref(worklist[i]), file_size);
+    threads.emplace_back(worker, dir, std::ref(worklist[i]), file_size,
+                         std::ref(tp_per_thread[i]));
   }
 
   /* wait for worker threads to finish */
@@ -298,13 +316,17 @@ void Run(const char *dir) {
     th.join();
   }
 
-  /* end timer - calculate elapsed time and average throughput*/
+  /* end timer - calculate elapsed time and aggregated throughput*/
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed = end - start;
-  double throughput = total_size / elapsed.count();
+  double total_throughput = 0.0;
+  for (int n = 0; n < nthreads; ++n) {
+    total_throughput += tp_per_thread[n];
+    if (FLAGS_verbose)
+      fprintf(stderr, "Thread %d: %.2f MB/s\n", n, tp_per_thread[n]);
+  }
 
-  fprintf(stdout, "%.6f secs, %.2f MB/s\n", elapsed.count(),
-          throughput / 1048576);
+  fprintf(stdout, "%.6f secs, %.2f MB/s\n", elapsed.count(), total_throughput);
   TearDown(tcdata);
 }
 
@@ -323,6 +345,9 @@ bool checkParameter(void) {
 }
 
 int main(int argc, char *argv[]) {
+#ifndef NDEBUG
+  fprintf(stderr, "Warning: the benchmark program is built in DEBUG mode.\n");
+#endif
   std::string usage("This program issues read requests to files.\nUsage: ");
   usage += argv[0];
   usage += "  <dir-path>";
