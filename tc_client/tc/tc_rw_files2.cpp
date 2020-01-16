@@ -278,6 +278,7 @@ void Run(const char *dir) {
       arrangeTask(filenum, filenum + independants, total_files - commons,
                   total_files, tasks, FLAGS_overlap_style);
       worklist.push_back(tasks);
+      filenum += files_per_thread;
 
       if (FLAGS_verbose) {
         fprintf(stderr, "thread %d: works: ", i);
