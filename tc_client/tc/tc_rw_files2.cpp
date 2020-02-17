@@ -42,6 +42,8 @@ DEFINE_bool(read, true, "Read or write");
 
 DEFINE_bool(verbose, false, "Nag more about progress");
 
+DEFINE_bool(txn, true, "Use transaction?");
+
 DEFINE_int32(nfiles, 1000, "Number of files");
 
 DEFINE_int32(nthreads, 4, "Number of threads to r/w concurrently");
@@ -117,9 +119,9 @@ void worker(const char *dir, std::vector<int> &filenums, size_t file_size,
 
     /* Execute r/w operations */
     if (FLAGS_read) {
-      tcres = vec_read(iovs.data(), iovs.size(), false);
+      tcres = vec_read(iovs.data(), iovs.size(), FLAGS_txn);
     } else {
-      tcres = vec_write(iovs.data(), iovs.size(), false);
+      tcres = vec_write(iovs.data(), iovs.size(), FLAGS_txn);
     }
 
     if (!vokay(tcres)) {
