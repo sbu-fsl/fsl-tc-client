@@ -486,7 +486,7 @@ vres nfs4_do_writev(struct viovec *iovs, int write_count, bool istxn,
 	for (finished = 0; finished < write_count; finished += tcres.index) {
 		tcres = export->fsal_export->obj_ops->vec_write(
 		    iovs + finished, write_count - finished,
-		    old_attrs + finished, new_attrs + finished);
+		    old_attrs + finished, new_attrs + finished, istxn);
 		if (!vokay(tcres)) {
 			tcres.index += finished;
 			break;

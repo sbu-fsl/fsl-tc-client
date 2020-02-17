@@ -35,6 +35,8 @@ extern "C" {
 #define NFS4_MAXFILELEN 0xffffffffffffffff
 #define NFS4_MAXFILEOFF 0xfffffffffffffffe
 
+#define OPCODE_MASK 0x7fffffff
+
 	enum nfs_ftype4 {
 		NF4REG = 1,
 		NF4DIR = 2,
@@ -8001,7 +8003,7 @@ extern "C" {
 
 		if (!xdr_nfs_opnum4(xdrs, &objp->argop))
 			return false;
-		switch (objp->argop) {
+		switch (objp->argop & OPCODE_MASK) {
 		case NFS4_OP_ACCESS:
 			if (!xdr_ACCESS4args
 			    (xdrs, &objp->nfs_argop4_u.opaccess))
@@ -8330,7 +8332,7 @@ extern "C" {
 	{
 		if (!xdr_nfs_opnum4(xdrs, &objp->resop))
 			return false;
-		switch (objp->resop) {
+		switch (objp->resop & OPCODE_MASK) {
 		case NFS4_OP_ACCESS:
 			if (!xdr_ACCESS4res(xdrs, &objp->nfs_resop4_u.opaccess))
 				return false;

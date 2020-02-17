@@ -594,7 +594,7 @@ static void tc_update_sequence(nfs_argop4 *arg, nfs_resop4 *res, bool sent)
 	SEQUENCE4args *sa;
 	SEQUENCE4resok *sok;
 
-	if (arg->argop != NFS4_OP_SEQUENCE) {
+	if ((arg->argop & OPCODE_MASK) != NFS4_OP_SEQUENCE) {
 		return;
 	}
 	if (sent && res->nfs_resop4_u.opsequence.sr_status == NFS4_OK) {
@@ -640,7 +640,7 @@ static void tc_pthread_init(void)
 	}
 }
 
-static void vreset_compound(bool has_sequence)
+static void vreset_compound2(bool has_sequence, bool is_txn)
 {
 	SEQUENCE4args *sa;
 
@@ -655,7 +655,7 @@ static void vreset_compound(bool has_sequence)
 	 * but failed before sending the RPC.
 	 */
 	if (slot_allocated) {
-		assert(argoparray->argop == NFS4_OP_SEQUENCE);
+		assert((argoparray->argop & OPCODE_MASK) == NFS4_OP_SEQUENCE);
 		tc_update_sequence(argoparray, resoparray, false);
 		slot_allocated = false;
 	}
@@ -663,6 +663,8 @@ static void vreset_compound(bool has_sequence)
 	if (has_sequence) {
 		/* TODO: reuse sequence operation from previous compound? */
 		argoparray->argop = NFS4_OP_SEQUENCE;
+		if (!is_txn)
+			argoparray->argop |= 0x80000000;
 		sa = &argoparray->nfs_argop4_u.opsequence;
 		memcpy(&sa->sa_sessionid, &fs_sessionid, NFS4_SESSIONID_SIZE);
 		sa->sa_slotid = alloc_session_slot(
@@ -671,6 +673,11 @@ static void vreset_compound(bool has_sequence)
 		sa->sa_cachethis = false;
 		++opcnt;
 	}
+}
+
+static void vreset_compound(bool has_sequence)
+{
+	vreset_compound2(has_sequence, true);
 }
 
 static inline bool tc_has_enough_ops(int nops)
@@ -2554,7 +2561,8 @@ static inline bool tc_prepare_rdwr(struct viovec *iov, bool write,
  * Caller has to make sure iovs and fields inside are allocated and freed.
  */
 static vres tc_nfs4_writev(struct viovec *iovs, int count,
-			   struct vattrs *old_attrs, struct vattrs *new_attrs)
+			   struct vattrs *old_attrs, struct vattrs *new_attrs,
+			   bool is_txn)
 {
 	vres tcres = { 0 };
 	int rc;
@@ -2575,7 +2583,7 @@ static vres tc_nfs4_writev(struct viovec *iovs, int count,
 
 	LogDebug(COMPONENT_FSAL, "ktcwrite() called\n");
 
-        vreset_compound(true);
+        vreset_compound2(true, is_txn);
 
 	input_attr = calloc(count, sizeof(fattr4));
 
@@ -2607,8 +2615,8 @@ static vres tc_nfs4_writev(struct viovec *iovs, int count,
         tcres.index = count;
 	rc = fs_nfsv4_call(op_ctx->creds, &tcres.err_no);
 	if (rc != RPC_SUCCESS) {
-		NFS4_ERR("fs_nfsv4_call() returned error: %d (%s)\n", rc,
-			 strerror(rc));
+		NFS4_ERR("fs_nfsv4_call() returned error: %d (%s),"
+			 " nfs-errno: %d\n", rc, strerror(rc), tcres.err_no);
                 tcres = vfailure(0, rc);
                 goto exit;
 	}
