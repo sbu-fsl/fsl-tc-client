@@ -53,6 +53,7 @@
 #include <mntent.h>
 #endif
 #include <sys/statvfs.h>
+#include <sys/sysmacros.h>
 #include <sys/vfs.h>
 #include <os/quota.h>
 #include "ganesha_list.h"

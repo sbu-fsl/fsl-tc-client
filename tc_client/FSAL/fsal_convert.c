@@ -16,6 +16,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/resource.h>
+#include <sys/sysmacros.h>
 
 /**
  * posix2fsal_error :
